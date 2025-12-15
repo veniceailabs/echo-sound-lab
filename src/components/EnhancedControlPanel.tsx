@@ -27,15 +27,17 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({
     dynamicEq,
     setDynamicEq
 }) => {
-    const [activeTab, setActiveTab] = useState<'presets' | 'auto-master' | 'reference' | 'batch' | 'history' | 'plugins' | 'channel-eq' | 'parametric-eq'>('presets');
+    const [activeTab, setActiveTab] = useState<'plugins' | 'presets' | 'tools' | 'history'>('plugins');
+    const [activePluginTab, setActivePluginTab] = useState<'channel-eq' | 'parametric-eq' | 'wam'>('channel-eq');
+    const [activeToolTab, setActiveToolTab] = useState<'auto-master' | 'reference' | 'batch'>('auto-master');
 
     return (
         <div className="bg-slate-900 rounded-3xl p-6 shadow-lg">
             <h2 className="text-xl font-bold text-white mb-4">Advanced Tools</h2>
 
-            {/* Tab Navigation */}
+            {/* Main Tab Navigation */}
             <div className="flex gap-2 mb-4 overflow-x-auto">
-                {(['presets', 'auto-master', 'reference', 'batch', 'history', 'channel-eq', 'parametric-eq', 'plugins'] as const).map(tab => (
+                {(['plugins', 'presets', 'tools', 'history'] as const).map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -45,38 +47,83 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({
                                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                         }`}
                     >
+                        {tab === 'plugins' && '🎚️ Plugins'}
                         {tab === 'presets' && 'Presets'}
-                        {tab === 'auto-master' && 'Auto Master'}
-                        {tab === 'reference' && 'Reference Match'}
-                        {tab === 'batch' && 'Batch Process'}
+                        {tab === 'tools' && '⚙️ Tools'}
                         {tab === 'history' && 'History'}
-                        {tab === 'channel-eq' && 'Channel EQ'}
-                        {tab === 'parametric-eq' && 'Parametric EQ'}
-                        {tab === 'plugins' && 'Plugins (WAM)'}
                     </button>
                 ))}
             </div>
 
+            {/* Sub-tab Navigation for Plugins */}
+            {activeTab === 'plugins' && (
+                <div className="flex gap-2 mb-4 border-b border-slate-700 pb-3">
+                    {(['channel-eq', 'parametric-eq', 'wam'] as const).map(subTab => (
+                        <button
+                            key={subTab}
+                            onClick={() => setActivePluginTab(subTab)}
+                            className={`px-3 py-1.5 text-sm rounded transition-all ${
+                                activePluginTab === subTab
+                                    ? 'bg-slate-700 text-white'
+                                    : 'text-slate-400 hover:text-slate-300'
+                            }`}
+                        >
+                            {subTab === 'channel-eq' && 'Channel EQ'}
+                            {subTab === 'parametric-eq' && 'Parametric EQ'}
+                            {subTab === 'wam' && 'WAM Plugins'}
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {/* Sub-tab Navigation for Tools */}
+            {activeTab === 'tools' && (
+                <div className="flex gap-2 mb-4 border-b border-slate-700 pb-3">
+                    {(['auto-master', 'reference', 'batch'] as const).map(subTab => (
+                        <button
+                            key={subTab}
+                            onClick={() => setActiveToolTab(subTab)}
+                            className={`px-3 py-1.5 text-sm rounded transition-all ${
+                                activeToolTab === subTab
+                                    ? 'bg-slate-700 text-white'
+                                    : 'text-slate-400 hover:text-slate-300'
+                            }`}
+                        >
+                            {subTab === 'auto-master' && 'Auto Master'}
+                            {subTab === 'reference' && 'Reference Match'}
+                            {subTab === 'batch' && 'Batch Process'}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {/* Tab Content */}
             <div className="min-h-[300px]">
-                {activeTab === 'presets' && <PresetManager onConfigApply={onConfigApply} />}
-                {activeTab === 'auto-master' && <AutoMasterPanel onConfigApply={onConfigApply} />}
-                {activeTab === 'reference' && <ReferenceMatchPanel onConfigApply={onConfigApply} />}
-                {activeTab === 'batch' && <BatchProcessPanel currentConfig={currentConfig} />}
-                {activeTab === 'history' && <HistoryPanel onConfigApply={onConfigApply} />}
-                {activeTab === 'channel-eq' && eqSettings && setEqSettings && (
+                {/* Plugins Tab */}
+                {activeTab === 'plugins' && activePluginTab === 'channel-eq' && eqSettings && setEqSettings && (
                     <ChannelEQPanel
                         eqSettings={eqSettings}
                         onEQChange={setEqSettings}
                     />
                 )}
-                {activeTab === 'parametric-eq' && dynamicEq && setDynamicEq && (
+                {activeTab === 'plugins' && activePluginTab === 'parametric-eq' && dynamicEq && setDynamicEq && (
                     <ParametricEQPanel
                         dynamicEq={dynamicEq}
                         onDynamicEQChange={setDynamicEq}
                     />
                 )}
-                {activeTab === 'plugins' && <WAMPluginRack />}
+                {activeTab === 'plugins' && activePluginTab === 'wam' && <WAMPluginRack />}
+
+                {/* Presets Tab */}
+                {activeTab === 'presets' && <PresetManager onConfigApply={onConfigApply} />}
+
+                {/* Tools Tab */}
+                {activeTab === 'tools' && activeToolTab === 'auto-master' && <AutoMasterPanel onConfigApply={onConfigApply} />}
+                {activeTab === 'tools' && activeToolTab === 'reference' && <ReferenceMatchPanel onConfigApply={onConfigApply} />}
+                {activeTab === 'tools' && activeToolTab === 'batch' && <BatchProcessPanel currentConfig={currentConfig} />}
+
+                {/* History Tab */}
+                {activeTab === 'history' && <HistoryPanel onConfigApply={onConfigApply} />}
             </div>
         </div>
     );
