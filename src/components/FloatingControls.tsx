@@ -2,8 +2,8 @@ import React from 'react';
 
 const blinkStyle = `
   @keyframes blink {
-    0%, 49% { opacity: 1; border-color: rgb(251, 146, 60); }
-    50%, 100% { opacity: 0.3; border-color: rgb(251, 146, 60 / 0.1); }
+    0%, 100% { opacity: 0.3; border-color: rgb(251, 146, 60 / 0.1); }
+    50% { opacity: 1; border-color: rgb(251, 146, 60); }
   }
 `;
 
