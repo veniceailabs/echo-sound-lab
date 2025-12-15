@@ -17,7 +17,7 @@ export const FeedbackButton: React.FC<{ onClick?: () => void }> = ({ onClick }) 
   return (
     <button
       onClick={handleClick}
-      className="fixed bottom-16 right-4 z-40 bg-slate-900 text-orange-400 border border-slate-700/50 backdrop-blur-sm px-4 py-2 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6)] hover:text-orange-300 transition-all hover:scale-105 active:scale-95 flex items-center gap-2 group"
+      className="fixed bottom-[62px] right-4 z-40 bg-slate-900 text-orange-400 border border-slate-700/50 backdrop-blur-sm px-4 py-2 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6)] hover:text-orange-300 transition-all hover:scale-105 active:scale-95 flex items-center gap-2 group"
     >
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
