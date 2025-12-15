@@ -133,6 +133,7 @@ export const WAMPluginRack: React.FC<WAMPluginRackProps> = ({ onPluginChange }) 
       setActivePluginId(null);
       setParameters([]);
       setShowPluginUI(false);
+      wamPluginService.clearAvailabilityCache();
       refreshPlugins();
       onPluginChange?.();
     }
