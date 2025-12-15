@@ -86,6 +86,15 @@ export const WAM_PLUGIN_REGISTRY: WAMPluginInfo[] = [
     url: '/wam/gold-reel/index.js',
     isLoaded: false,
   },
+  {
+    id: 'stereo-width',
+    name: 'Stereo Width',
+    vendor: 'Echo Sound Lab',
+    category: 'effect',
+    description: 'Phase-coherent stereo widening for mastering. Mono-safe.',
+    url: '/wam/stereo-width/index.js',
+    isLoaded: false,
+  },
 ];
 
 // Loaded plugin instances
