@@ -1,12 +1,5 @@
 import React from 'react';
 
-const blinkStyle = `
-  @keyframes blink {
-    0%, 49% { opacity: 1; border-color: rgb(251, 146, 60); }
-    50%, 100% { opacity: 0.3; border-color: rgb(251, 146, 60 / 0.1); }
-  }
-`;
-
 interface FloatingControlsProps {
   isPlaying: boolean;
   onTogglePlayback: () => void;
@@ -47,9 +40,7 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
   };
 
   return (
-    <>
-      <style>{blinkStyle}</style>
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-slate-900/90 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 fade-in duration-500">
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-slate-900/90 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 fade-in duration-500">
 
       {/* Time Display */}
       <div className="font-mono text-xs text-slate-400 min-w-[80px] text-center hidden sm:block">
@@ -73,15 +64,15 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
         onClick={onTogglePlayback}
         className="relative w-14 h-14 flex items-center justify-center group"
       >
-        {/* Halo Ring - Blinks when playing */}
-        <div className={`absolute inset-0 rounded-full border border-[#FB923C]/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3),inset_0_-1px_1px_rgba(255,255,255,0.08)] transition-all duration-500 ${
+        {/* Halo Ring - Subtle, pulses when playing */}
+        <div className={`absolute inset-0 rounded-full border border-[#FB923C]/30 transition-all duration-500 ${
           isPlaying
-            ? 'animate-[blink_3s_infinite]'
+            ? 'animate-[pulse_2s_ease-in-out_infinite] border-[#FB923C]/40'
             : ''
         }`} />
 
         {/* Core Button */}
-        <div className="absolute inset-2 rounded-full bg-[#FB923C] shadow-[0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_2px_rgba(255,255,255,0.2)] group-hover:bg-[#FFA855] group-hover:shadow-[0_2px_6px_rgba(0,0,0,0.4),inset_0_1px_3px_rgba(0,0,0,0.15),inset_0_-1px_2px_rgba(255,255,255,0.1)] group-hover:scale-[0.98] group-active:shadow-[inset_0_2px_6px_rgba(0,0,0,0.25)] group-active:scale-95 transition-all duration-150 ease-out" />
+        <div className="absolute inset-2 rounded-full bg-[#FB923C] shadow-[0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_2px_rgba(255,255,255,0.2)] group-hover:bg-[#FFA855] group-hover:shadow-[0_3px_10px_rgba(0,0,0,0.5),inset_0_1px_2px_rgba(255,255,255,0.25)] group-active:shadow-[inset_0_2px_6px_rgba(0,0,0,0.25)] group-active:scale-95 transition-all duration-150 ease-out" />
 
         {/* Icon - Morphs between play and pause */}
         {isPlaying ? (
@@ -125,6 +116,5 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
         {isAbComparing ? 'Original' : 'Processed'}
       </button>
     </div>
-    </>
   );
 };
