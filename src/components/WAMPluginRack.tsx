@@ -417,7 +417,14 @@ export const WAMPluginRack: React.FC<WAMPluginRackProps> = ({ onPluginChange }) 
                   <p className="text-[10px] text-slate-500 mt-1">{plugin.vendor}</p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  {!plugin.isLoaded && plugin.availability === 'available' && (
+                  {plugin.isLoaded ? (
+                    <button
+                      onClick={handleUnloadPlugin}
+                      className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold rounded-lg border border-red-500/30 transition-all"
+                    >
+                      Unload
+                    </button>
+                  ) : plugin.availability === 'available' && (
                     <button
                       onClick={() => handleLoadPlugin(plugin.id)}
                       disabled={isLoading}

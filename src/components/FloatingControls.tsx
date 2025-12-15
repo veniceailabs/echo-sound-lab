@@ -49,7 +49,7 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
   return (
     <>
       <style>{blinkStyle}</style>
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-slate-900/90 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 fade-in duration-500">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3 bg-slate-900/90 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 fade-in duration-500">
 
       {/* Time Display */}
       <div className="font-mono text-xs text-slate-400 min-w-[80px] text-center hidden sm:block">
