@@ -325,8 +325,8 @@ export const WAMPluginRack: React.FC<WAMPluginRackProps> = ({ onPluginChange }) 
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Parameters</span>
                 <div className="h-px flex-1 bg-gradient-to-l from-white/10 to-transparent" />
               </div>
-              <div className="grid gap-3 max-h-[200px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
-                {parameters.slice(0, 10).map(param => (
+              <div className="grid gap-3 max-h-[400px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
+                {parameters.map(param => (
                   <div key={param.id} className="space-y-1.5">
                     <div className="flex justify-between text-xs">
                       <span className="text-slate-300 font-medium">{param.label}</span>
