@@ -76,7 +76,7 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
         {/* Halo Ring - Blinks when playing */}
         <div className={`absolute inset-0 rounded-full border border-[#FB923C]/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3),inset_0_-1px_1px_rgba(255,255,255,0.08)] transition-all duration-500 ${
           isPlaying
-            ? 'animate-[blink_3s_infinite]'
+            ? 'animate-[blink_5s_infinite]'
             : ''
         }`} />
 
