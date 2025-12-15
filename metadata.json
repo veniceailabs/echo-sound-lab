@@ -1,0 +1,7 @@
+{
+  "name": "Echo Sound Lab (v2.1 Professional Mixing and Mastering Suite)",
+  "description": "A minimal, blank React project structure for Echo Sound Lab.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

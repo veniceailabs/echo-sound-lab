@@ -1,0 +1,83 @@
+{
+  "appName": "Echo Sound Lab",
+  "loading": "로딩 중...",
+  "error": "오류",
+  "success": "성공",
+
+  "settings": {
+    "title": "설정",
+    "language": "언어",
+    "languageDesc": "선호하는 언어를 선택하세요",
+    "systemDefault": "시스템 기본값",
+    "theme": "테마",
+    "themeDesc": "컬러 테마를 선택하세요"
+  },
+
+  "controls": {
+    "play": "재생",
+    "pause": "일시정지",
+    "stop": "정지",
+    "upload": "오디오 업로드",
+    "export": "내보내기",
+    "process": "처리",
+    "analyze": "믹스 분석"
+  },
+
+  "processing": {
+    "analyzing": "오디오 분석 중...",
+    "processing": "처리 중...",
+    "rendering": "최종 믹스 렌더링 중...",
+    "complete": "처리 완료",
+    "failed": "처리 실패"
+  },
+
+  "meters": {
+    "lufs": "LUFS",
+    "peak": "피크",
+    "rms": "RMS",
+    "phaseCorrelation": "위상 상관관계",
+    "stereoWidth": "스테레오 폭",
+    "truePeak": "트루 피크"
+  },
+
+  "report": {
+    "title": "Echo 리포트",
+    "generating": "리포트 생성 중...",
+    "verdict": "평가",
+    "suggestions": "제안",
+    "share": "공유",
+    "download": "리포트 다운로드"
+  },
+
+  "modes": {
+    "single": "단일 트랙",
+    "multi": "멀티 스템",
+    "reference": "레퍼런스 매칭",
+    "ai": "AI 스튜디오"
+  },
+
+  "upload": {
+    "title": "Upload Your Track",
+    "description": "Drop your audio file to begin mastering",
+    "analyzingAudio": "Analyzing Audio",
+    "extractingMetrics": "Extracting metrics and signatures..."
+  },
+
+  "session": {
+    "restoreTitle": "Restore Session?",
+    "previousFound": "Previous session found:",
+    "mode": "Mode",
+    "suggestionsApplied": "suggestions applied",
+    "restoreNote": "Your DSP settings will be restored. You'll need to re-upload the audio file.",
+    "startFresh": "Start Fresh",
+    "restore": "Restore"
+  },
+
+  "ab": {
+    "noChanges": "A/B (No Changes)",
+    "original": "A (Original)",
+    "processed": "B (Processed)"
+  },
+
+  "waveform": "Waveform"
+}

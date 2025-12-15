@@ -1,0 +1,83 @@
+{
+  "appName": "Echo Sound Lab",
+  "loading": "กำลังโหลด...",
+  "error": "ข้อผิดพลาด",
+  "success": "สำเร็จ",
+
+  "settings": {
+    "title": "การตั้งค่า",
+    "language": "ภาษา",
+    "languageDesc": "เลือกภาษาที่คุณต้องการ",
+    "systemDefault": "ค่าเริ่มต้นของระบบ",
+    "theme": "ธีม",
+    "themeDesc": "เลือกธีมสีของคุณ"
+  },
+
+  "controls": {
+    "play": "เล่น",
+    "pause": "หยุดชั่วคราว",
+    "stop": "หยุด",
+    "upload": "อัปโหลดเสียง",
+    "export": "ส่งออก",
+    "process": "ประมวลผล",
+    "analyze": "วิเคราะห์การผสม"
+  },
+
+  "processing": {
+    "analyzing": "กำลังวิเคราะห์เสียง...",
+    "processing": "กำลังประมวลผล...",
+    "rendering": "กำลังเรนเดอร์การผสมสุดท้าย...",
+    "complete": "ประมวลผลเสร็จสิ้น",
+    "failed": "ประมวลผลล้มเหลว"
+  },
+
+  "meters": {
+    "lufs": "LUFS",
+    "peak": "พีค",
+    "rms": "RMS",
+    "phaseCorrelation": "ความสัมพันธ์เฟส",
+    "stereoWidth": "ความกว้างสเตอริโอ",
+    "truePeak": "พีคจริง"
+  },
+
+  "report": {
+    "title": "รายงาน Echo",
+    "generating": "กำลังสร้างรายงาน...",
+    "verdict": "คำตัดสิน",
+    "suggestions": "คำแนะนำ",
+    "share": "แชร์",
+    "download": "ดาวน์โหลดรายงาน"
+  },
+
+  "modes": {
+    "single": "แทร็กเดียว",
+    "multi": "หลายสเต็ม",
+    "reference": "การจับคู่อ้างอิง",
+    "ai": "สตูดิโอ AI"
+  },
+
+  "upload": {
+    "title": "Upload Your Track",
+    "description": "Drop your audio file to begin mastering",
+    "analyzingAudio": "Analyzing Audio",
+    "extractingMetrics": "Extracting metrics and signatures..."
+  },
+
+  "session": {
+    "restoreTitle": "Restore Session?",
+    "previousFound": "Previous session found:",
+    "mode": "Mode",
+    "suggestionsApplied": "suggestions applied",
+    "restoreNote": "Your DSP settings will be restored. You'll need to re-upload the audio file.",
+    "startFresh": "Start Fresh",
+    "restore": "Restore"
+  },
+
+  "ab": {
+    "noChanges": "A/B (No Changes)",
+    "original": "A (Original)",
+    "processed": "B (Processed)"
+  },
+
+  "waveform": "Waveform"
+}

@@ -1,0 +1,83 @@
+{
+  "appName": "Echo Sound Lab",
+  "loading": "読み込み中...",
+  "error": "エラー",
+  "success": "成功",
+
+  "settings": {
+    "title": "設定",
+    "language": "言語",
+    "languageDesc": "お好みの言語を選択してください",
+    "systemDefault": "システムデフォルト",
+    "theme": "テーマ",
+    "themeDesc": "カラーテーマを選択してください"
+  },
+
+  "controls": {
+    "play": "再生",
+    "pause": "一時停止",
+    "stop": "停止",
+    "upload": "オーディオをアップロード",
+    "export": "エクスポート",
+    "process": "処理",
+    "analyze": "ミックスを分析"
+  },
+
+  "processing": {
+    "analyzing": "オーディオを分析中...",
+    "processing": "処理中...",
+    "rendering": "最終ミックスをレンダリング中...",
+    "complete": "処理完了",
+    "failed": "処理に失敗しました"
+  },
+
+  "meters": {
+    "lufs": "LUFS",
+    "peak": "ピーク",
+    "rms": "RMS",
+    "phaseCorrelation": "位相相関",
+    "stereoWidth": "ステレオ幅",
+    "truePeak": "トゥルーピーク"
+  },
+
+  "report": {
+    "title": "Echoレポート",
+    "generating": "レポートを生成中...",
+    "verdict": "判定",
+    "suggestions": "提案",
+    "share": "共有",
+    "download": "レポートをダウンロード"
+  },
+
+  "modes": {
+    "single": "シングルトラック",
+    "multi": "マルチステム",
+    "reference": "リファレンスマッチング",
+    "ai": "AIスタジオ"
+  },
+
+  "upload": {
+    "title": "Upload Your Track",
+    "description": "Drop your audio file to begin mastering",
+    "analyzingAudio": "Analyzing Audio",
+    "extractingMetrics": "Extracting metrics and signatures..."
+  },
+
+  "session": {
+    "restoreTitle": "Restore Session?",
+    "previousFound": "Previous session found:",
+    "mode": "Mode",
+    "suggestionsApplied": "suggestions applied",
+    "restoreNote": "Your DSP settings will be restored. You'll need to re-upload the audio file.",
+    "startFresh": "Start Fresh",
+    "restore": "Restore"
+  },
+
+  "ab": {
+    "noChanges": "A/B (No Changes)",
+    "original": "A (Original)",
+    "processed": "B (Processed)"
+  },
+
+  "waveform": "Waveform"
+}

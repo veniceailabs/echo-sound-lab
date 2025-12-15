@@ -1,0 +1,83 @@
+{
+  "appName": "Echo Sound Lab",
+  "loading": "加载中...",
+  "error": "错误",
+  "success": "成功",
+
+  "settings": {
+    "title": "设置",
+    "language": "语言",
+    "languageDesc": "选择您的首选语言",
+    "systemDefault": "系统默认",
+    "theme": "主题",
+    "themeDesc": "选择您的颜色主题"
+  },
+
+  "controls": {
+    "play": "播放",
+    "pause": "暂停",
+    "stop": "停止",
+    "upload": "上传音频",
+    "export": "导出",
+    "process": "处理",
+    "analyze": "分析混音"
+  },
+
+  "processing": {
+    "analyzing": "正在分析音频...",
+    "processing": "正在处理...",
+    "rendering": "正在渲染最终混音...",
+    "complete": "处理完成",
+    "failed": "处理失败"
+  },
+
+  "meters": {
+    "lufs": "LUFS",
+    "peak": "峰值",
+    "rms": "RMS",
+    "phaseCorrelation": "相位相关性",
+    "stereoWidth": "立体声宽度",
+    "truePeak": "真实峰值"
+  },
+
+  "report": {
+    "title": "Echo 报告",
+    "generating": "正在生成报告...",
+    "verdict": "评估",
+    "suggestions": "建议",
+    "share": "分享",
+    "download": "下载报告"
+  },
+
+  "modes": {
+    "single": "单轨",
+    "multi": "多轨",
+    "reference": "参考匹配",
+    "ai": "AI 工作室"
+  },
+
+  "upload": {
+    "title": "Upload Your Track",
+    "description": "Drop your audio file to begin mastering",
+    "analyzingAudio": "Analyzing Audio",
+    "extractingMetrics": "Extracting metrics and signatures..."
+  },
+
+  "session": {
+    "restoreTitle": "Restore Session?",
+    "previousFound": "Previous session found:",
+    "mode": "Mode",
+    "suggestionsApplied": "suggestions applied",
+    "restoreNote": "Your DSP settings will be restored. You'll need to re-upload the audio file.",
+    "startFresh": "Start Fresh",
+    "restore": "Restore"
+  },
+
+  "ab": {
+    "noChanges": "A/B (No Changes)",
+    "original": "A (Original)",
+    "processed": "B (Processed)"
+  },
+
+  "waveform": "Waveform"
+}

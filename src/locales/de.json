@@ -1,0 +1,83 @@
+{
+  "appName": "Echo Sound Lab",
+  "loading": "Wird geladen...",
+  "error": "Fehler",
+  "success": "Erfolg",
+
+  "settings": {
+    "title": "Einstellungen",
+    "language": "Sprache",
+    "languageDesc": "Wählen Sie Ihre bevorzugte Sprache",
+    "systemDefault": "Systemstandard",
+    "theme": "Design",
+    "themeDesc": "Wählen Sie Ihr Farbschema"
+  },
+
+  "controls": {
+    "play": "Abspielen",
+    "pause": "Pause",
+    "stop": "Stoppen",
+    "upload": "Audio Hochladen",
+    "export": "Exportieren",
+    "process": "Verarbeiten",
+    "analyze": "Mix Analysieren"
+  },
+
+  "processing": {
+    "analyzing": "Audio wird analysiert...",
+    "processing": "Verarbeitung läuft...",
+    "rendering": "Finaler Mix wird gerendert...",
+    "complete": "Verarbeitung abgeschlossen",
+    "failed": "Verarbeitung fehlgeschlagen"
+  },
+
+  "meters": {
+    "lufs": "LUFS",
+    "peak": "Spitze",
+    "rms": "RMS",
+    "phaseCorrelation": "Phasenkorrelation",
+    "stereoWidth": "Stereobreite",
+    "truePeak": "Wahre Spitze"
+  },
+
+  "report": {
+    "title": "Echo Bericht",
+    "generating": "Bericht wird erstellt...",
+    "verdict": "Urteil",
+    "suggestions": "Vorschläge",
+    "share": "Teilen",
+    "download": "Bericht Herunterladen"
+  },
+
+  "modes": {
+    "single": "Einzelspur",
+    "multi": "Mehrspurig",
+    "reference": "Referenzabgleich",
+    "ai": "KI Studio"
+  },
+
+  "upload": {
+    "title": "Upload Your Track",
+    "description": "Drop your audio file to begin mastering",
+    "analyzingAudio": "Analyzing Audio",
+    "extractingMetrics": "Extracting metrics and signatures..."
+  },
+
+  "session": {
+    "restoreTitle": "Restore Session?",
+    "previousFound": "Previous session found:",
+    "mode": "Mode",
+    "suggestionsApplied": "suggestions applied",
+    "restoreNote": "Your DSP settings will be restored. You'll need to re-upload the audio file.",
+    "startFresh": "Start Fresh",
+    "restore": "Restore"
+  },
+
+  "ab": {
+    "noChanges": "A/B (No Changes)",
+    "original": "A (Original)",
+    "processed": "B (Processed)"
+  },
+
+  "waveform": "Waveform"
+}
