@@ -933,40 +933,63 @@ export const EchoReportPanel: React.FC<EchoReportPanelProps> = ({
       {/* Summary */}
       <div className="bg-slate-800/50 rounded-2xl p-5 border border-slate-700/50">
         <p className="text-slate-200 text-lg leading-relaxed font-light">{echoReport.summary}</p>
-        
+
         {echoReport.explanation && echoReport.explanation.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-slate-700/50">
-            <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Analysis Details</h4>
-            <ul className="space-y-1">
+          <ExpandableSection
+            title="Analysis Details"
+            itemCount={echoReport.explanation.length}
+            defaultOpen={false}
+          >
+            <ul className="space-y-2">
               {echoReport.explanation.map((item, i) => (
                 <li key={i} className="text-slate-300 text-sm flex items-start gap-2">
-                  <span className="text-amber-500/50 mt-1">•</span>
-                  {item}
+                  <span className="text-amber-500/50 mt-1 flex-shrink-0">•</span>
+                  <span>{item}</span>
                 </li>
               ))}
             </ul>
-          </div>
+          </ExpandableSection>
         )}
       </div>
 
       {/* Recommended Actions */}
       {echoReport.recommended_actions && echoReport.recommended_actions.length > 0 && (
-        <div>
-          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-            Recommended Fixes
-            <span className="bg-amber-500 text-black text-[10px] px-1.5 py-0.5 rounded-full">
-              {echoReport.recommended_actions.length}
-            </span>
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {echoReport.recommended_actions.map((action) => (
-              <EchoActionCard
-                key={action.id}
-                action={action}
-                onApply={(vals) => onApplyEchoAction(action, vals)}
-                isProcessing={isProcessing}
-              />
-            ))}
+        <div className="space-y-4">
+          {/* Workflow Guidance Card */}
+          <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border border-blue-500/30 rounded-xl p-4">
+            <div className="flex gap-3">
+              <div className="flex-shrink-0">
+                <svg className="w-5 h-5 text-blue-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-blue-300 mb-1">Next Steps</h4>
+                <p className="text-xs text-slate-300">
+                  Choose from the recommendations below to improve your track. Apply fixes one at a time, use A/B comparison to hear the difference, then commit to save the changes.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Recommended Actions Grid */}
+          <div>
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+              Recommended Fixes
+              <span className="bg-amber-500 text-black text-[10px] px-1.5 py-0.5 rounded-full">
+                {echoReport.recommended_actions.length}
+              </span>
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {echoReport.recommended_actions.map((action) => (
+                <EchoActionCard
+                  key={action.id}
+                  action={action}
+                  onApply={(vals) => onApplyEchoAction(action, vals)}
+                  isProcessing={isProcessing}
+                />
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -978,6 +1001,52 @@ export const EchoReportPanel: React.FC<EchoReportPanelProps> = ({
           onClose={() => setShowShareModal(false)}
           nudgeText="Show off those stats!"
         />
+      )}
+    </div>
+  );
+};
+
+/**
+ * Expandable Section Component
+ * Shows a collapsible section with a summary and count badge
+ * Reduces visual clutter by hiding details by default
+ */
+const ExpandableSection: React.FC<{
+  title: string;
+  itemCount?: number;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}> = ({ title, itemCount, defaultOpen = false, children }) => {
+  const [isOpen, setIsOpen] = React.useState(defaultOpen);
+
+  return (
+    <div className="mt-4 pt-4 border-t border-slate-700/50">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between hover:bg-slate-800/30 rounded-lg px-2 py-1.5 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider">{title}</h4>
+          {itemCount && (
+            <span className="text-xs bg-slate-700/50 text-slate-300 px-1.5 py-0.5 rounded-full">
+              {itemCount}
+            </span>
+          )}
+        </div>
+        <svg
+          className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div className="mt-3 ml-1 animate-in fade-in-50 duration-200">
+          {children}
+        </div>
       )}
     </div>
   );
