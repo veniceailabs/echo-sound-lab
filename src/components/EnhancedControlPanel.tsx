@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProcessingPreset, ProcessingConfig, HistoryEntry, BatchProcessingJob } from '../types';
+import { ProcessingPreset, ProcessingConfig, HistoryEntry, BatchProcessingJob, EQSettings, DynamicEQConfig } from '../types';
 import { presetManager } from '../services/presetManager';
 import { historyManager } from '../services/historyManager';
 import { batchProcessor } from '../services/batchProcessor';
@@ -7,14 +7,27 @@ import { autoMasteringService } from '../services/autoMastering';
 import { referenceMatchingService } from '../services/referenceMatching';
 import { audioEngine } from '../services/audioEngine';
 import { WAMPluginRack } from './WAMPluginRack';
+import { ChannelEQPanel } from './ChannelEQPanel';
+import { ParametricEQPanel } from './ParametricEQPanel';
 
 interface EnhancedControlPanelProps {
     onConfigApply: (config: ProcessingConfig) => void;
     currentConfig: ProcessingConfig;
+    eqSettings?: EQSettings;
+    setEqSettings?: (settings: EQSettings) => void;
+    dynamicEq?: DynamicEQConfig;
+    setDynamicEq?: (config: DynamicEQConfig) => void;
 }
 
-export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({ onConfigApply, currentConfig }) => {
-    const [activeTab, setActiveTab] = useState<'presets' | 'auto-master' | 'reference' | 'batch' | 'history' | 'plugins'>('presets');
+export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({
+    onConfigApply,
+    currentConfig,
+    eqSettings,
+    setEqSettings,
+    dynamicEq,
+    setDynamicEq
+}) => {
+    const [activeTab, setActiveTab] = useState<'presets' | 'auto-master' | 'reference' | 'batch' | 'history' | 'plugins' | 'channel-eq' | 'parametric-eq'>('presets');
 
     return (
         <div className="bg-slate-900 rounded-3xl p-6 shadow-lg">
@@ -22,7 +35,7 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({ onCo
 
             {/* Tab Navigation */}
             <div className="flex gap-2 mb-4 overflow-x-auto">
-                {(['presets', 'auto-master', 'reference', 'batch', 'history', 'plugins'] as const).map(tab => (
+                {(['presets', 'auto-master', 'reference', 'batch', 'history', 'channel-eq', 'parametric-eq', 'plugins'] as const).map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -37,6 +50,8 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({ onCo
                         {tab === 'reference' && 'Reference Match'}
                         {tab === 'batch' && 'Batch Process'}
                         {tab === 'history' && 'History'}
+                        {tab === 'channel-eq' && 'Channel EQ'}
+                        {tab === 'parametric-eq' && 'Parametric EQ'}
                         {tab === 'plugins' && 'Plugins (WAM)'}
                     </button>
                 ))}
@@ -49,6 +64,18 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({ onCo
                 {activeTab === 'reference' && <ReferenceMatchPanel onConfigApply={onConfigApply} />}
                 {activeTab === 'batch' && <BatchProcessPanel currentConfig={currentConfig} />}
                 {activeTab === 'history' && <HistoryPanel onConfigApply={onConfigApply} />}
+                {activeTab === 'channel-eq' && eqSettings && setEqSettings && (
+                    <ChannelEQPanel
+                        eqSettings={eqSettings}
+                        onEQChange={setEqSettings}
+                    />
+                )}
+                {activeTab === 'parametric-eq' && dynamicEq && setDynamicEq && (
+                    <ParametricEQPanel
+                        dynamicEq={dynamicEq}
+                        onDynamicEQChange={setDynamicEq}
+                    />
+                )}
                 {activeTab === 'plugins' && <WAMPluginRack />}
             </div>
         </div>

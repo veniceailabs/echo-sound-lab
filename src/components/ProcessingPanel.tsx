@@ -17,6 +17,11 @@ interface ProcessingPanelProps {
   onTogglePlayback: () => void;
   onExportComplete?: () => void; // V.E.N.U.M. hook
   hasAppliedChanges?: boolean;
+  // EQ state (lifted from local state in App.tsx)
+  eqSettings: EQSettings;
+  setEqSettings: (settings: EQSettings) => void;
+  dynamicEq: DynamicEQConfig;
+  setDynamicEq: (config: DynamicEQConfig) => void;
 }
 
 export const ProcessingPanel: React.FC<ProcessingPanelProps> = ({
@@ -32,22 +37,15 @@ export const ProcessingPanel: React.FC<ProcessingPanelProps> = ({
   onTogglePlayback,
   onExportComplete,
   hasAppliedChanges = false,
+  eqSettings,
+  setEqSettings,
+  dynamicEq,
+  setDynamicEq,
 }) => {
   const [compression, setCompression] = useState<Partial<CompressionPreset>>({ threshold: -24, ratio: 3, attack: 0.003, release: 0.25, makeupGain: 0 });
   const [multiband, setMultiband] = useState<MultibandCompressionConfig>({ low: {}, mid: {}, high: {}, crossovers: [150, 4000] });
   const [transient, setTransient] = useState<TransientShaperConfig>({ attack: 0, sustain: 0, mix: 1 });
   const [deEsser, setDeEsser] = useState<DeEsserConfig>({ frequency: 7000, threshold: -20, amount: 0 });
-  const [eqSettings, setEqSettings] = useState<EQSettings>([
-      { frequency: 60, gain: 0, type: 'lowshelf' },
-      { frequency: 250, gain: 0, type: 'peaking' },
-      { frequency: 1000, gain: 0, type: 'peaking' },
-      { frequency: 4000, gain: 0, type: 'peaking' },
-      { frequency: 12000, gain: 0, type: 'highshelf' },
-  ]);
-  const [dynamicEq, setDynamicEq] = useState<DynamicEQConfig>([
-      { id: 'dyn-eq-1', frequency: 200, gain: 0, q: 1, threshold: -20, attack: 0.01, release: 0.1, type: 'peaking', mode: 'compress', enabled: false },
-      { id: 'dyn-eq-2', frequency: 4000, gain: 0, q: 1, threshold: -20, attack: 0.01, release: 0.1, type: 'peaking', mode: 'compress', enabled: false }
-  ]);
   const [saturation, setSaturation] = useState<SaturationConfig>({ type: 'tape', amount: 0, mix: 1 });
   const [reverb, setReverb] = useState<ReverbConfig>({ mix: 0, decay: 2.0, preDelay: 0.01, motion: { bpm: 120, depth: 0 }, duckingAmount: 0 });
   const [imager, setImager] = useState<StereoImagerConfig>({ lowWidth: 1, midWidth: 1, highWidth: 1, crossovers: [300, 5000] });

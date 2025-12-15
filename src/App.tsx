@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AppState, AudioMetrics, ProcessingConfig, Suggestion, EchoReport, RevisionEntry, ReferenceTrack, MixSignature, GeneratedSong, Stem } from './types';
+import { AppState, AudioMetrics, ProcessingConfig, Suggestion, EchoReport, RevisionEntry, ReferenceTrack, MixSignature, GeneratedSong, Stem, EQSettings, DynamicEQConfig } from './types';
 import { audioEngine } from './services/audioEngine';
 import { mixAnalysisService } from './services/mixAnalysis';
 import Visualizer from './components/Visualizer';
@@ -108,6 +108,26 @@ const App: React.FC = () => {
   const dismissNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
+
+  // EQ state (lifted from ProcessingPanel for use in EnhancedControlPanel)
+  // DESIGN PRINCIPLE: All defaults bias toward inaudibility, not effect
+  // - Channel EQ: All gains at 0dB (no processing by default)
+  // - Parametric EQ: Disabled by default (completely inaudible)
+  const [eqSettings, setEqSettings] = useState<EQSettings>([
+    { frequency: 60, gain: 0, type: 'lowshelf' },      // Inaudible: 0dB
+    { frequency: 250, gain: 0, type: 'peaking' },      // Inaudible: 0dB
+    { frequency: 1000, gain: 0, type: 'peaking' },     // Inaudible: 0dB
+    { frequency: 4000, gain: 0, type: 'peaking' },     // Inaudible: 0dB
+    { frequency: 12000, gain: 0, type: 'highshelf' },  // Inaudible: 0dB
+  ]);
+  const [dynamicEq, setDynamicEq] = useState<DynamicEQConfig>([
+    // Band 1: Disabled by default (completely inaudible)
+    // When enabled: conservative threshold (-20dB), moderate Q (1.0), neutral gain (0dB)
+    { id: 'dyn-eq-1', frequency: 200, gain: 0, q: 1, threshold: -20, attack: 0.01, release: 0.1, type: 'peaking', mode: 'compress', enabled: false },
+    // Band 2: Disabled by default (completely inaudible)
+    // When enabled: same conservative defaults as Band 1
+    { id: 'dyn-eq-2', frequency: 4000, gain: 0, q: 1, threshold: -20, attack: 0.01, release: 0.1, type: 'peaking', mode: 'compress', enabled: false }
+  ]);
 
   // Diagnostics overlay (~ key toggle)
   const { isVisible: showDiagnostics, setIsVisible: setShowDiagnostics } = useDiagnosticsToggle();
@@ -1299,6 +1319,10 @@ const App: React.FC = () => {
                 onTogglePlayback={handleTogglePlayback}
                 onExportComplete={() => setShowExportSharePrompt(true)}
                 hasAppliedChanges={hasAppliedChanges}
+                eqSettings={eqSettings}
+                setEqSettings={setEqSettings}
+                dynamicEq={dynamicEq}
+                setDynamicEq={setDynamicEq}
               />
             </div>
           )}
@@ -1382,6 +1406,10 @@ const App: React.FC = () => {
               <EnhancedControlPanel
                 onConfigApply={handleEnhancedConfigApply}
                 currentConfig={currentConfig}
+                eqSettings={eqSettings}
+                setEqSettings={setEqSettings}
+                dynamicEq={dynamicEq}
+                setDynamicEq={setDynamicEq}
               />
             </div>
           </div>
