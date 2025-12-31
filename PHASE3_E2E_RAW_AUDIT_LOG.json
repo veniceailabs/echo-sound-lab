@@ -1,0 +1,245 @@
+[
+  {
+    "type": "SESSION_STARTED",
+    "timestamp": 1767035444280,
+    "data": {
+      "sessionId": "session-1767035444280",
+      "appId": "com.echo-sound-lab.app",
+      "pid": 820342,
+      "launchTimestamp": 1767035444280
+    },
+    "sequence": 0
+  },
+  {
+    "type": "AUTHORITY_GRANTED",
+    "timestamp": 1767035444280,
+    "data": {
+      "preset": "CREATIVE_MIXING",
+      "ttl": 14400000,
+      "grantCount": 5
+    },
+    "sequence": 1
+  },
+  {
+    "type": "CAPABILITY_VISIBLE",
+    "timestamp": 1767035444280,
+    "data": {
+      "capabilities": [
+        "UI_NAVIGATION",
+        "TEXT_INPUT_SAFE",
+        "PARAMETER_ADJUSTMENT",
+        "TRANSPORT_CONTROL",
+        "RENDER_EXPORT"
+      ],
+      "count": 5
+    },
+    "sequence": 2
+  },
+  {
+    "type": "CAPABILITY_CHECK",
+    "timestamp": 1767035444280,
+    "data": {
+      "capability": "PARAMETER_ADJUSTMENT",
+      "reason": "Adjust EQ parameters"
+    },
+    "sequence": 3
+  },
+  {
+    "type": "CAPABILITY_ALLOWED",
+    "timestamp": 1767035444280,
+    "data": {
+      "capability": "PARAMETER_ADJUSTMENT",
+      "grantId": "grant-param-001"
+    },
+    "sequence": 4
+  },
+  {
+    "type": "EXECUTION_STARTED",
+    "timestamp": 1767035444280,
+    "data": {
+      "action": "PARAMETER_ADJUSTMENT",
+      "actionId": "param-adjust-001"
+    },
+    "sequence": 5
+  },
+  {
+    "type": "EXECUTION_COMPLETED",
+    "timestamp": 1767035444382,
+    "data": {
+      "action": "PARAMETER_ADJUSTMENT",
+      "actionId": "param-adjust-001",
+      "result": "success"
+    },
+    "sequence": 6
+  },
+  {
+    "type": "AUDIT_LOG_APPEND",
+    "timestamp": 1767035444382,
+    "data": {
+      "action": "PARAMETER_ADJUSTMENT",
+      "timestamp": 1767035444382
+    },
+    "sequence": 7
+  },
+  {
+    "type": "CAPABILITY_CHECK",
+    "timestamp": 1767035444382,
+    "data": {
+      "capability": "RENDER_EXPORT",
+      "reason": "Export mix to WAV"
+    },
+    "sequence": 8
+  },
+  {
+    "type": "CAPABILITY_REQUIRES_ACC",
+    "timestamp": 1767035444382,
+    "data": {
+      "capability": "RENDER_EXPORT",
+      "grantId": "grant-export-001"
+    },
+    "sequence": 9
+  },
+  {
+    "type": "ACC_ISSUED",
+    "timestamp": 1767035444383,
+    "data": {
+      "accId": "acc-1767035444382",
+      "challenge": "confirm-export-001",
+      "expiresAt": 1767035744382
+    },
+    "sequence": 10
+  },
+  {
+    "type": "EXECUTION_HALTED_PENDING_ACC",
+    "timestamp": 1767035444383,
+    "data": {
+      "action": "RENDER_EXPORT",
+      "reason": "Awaiting ACC confirmation"
+    },
+    "sequence": 11
+  },
+  {
+    "type": "ACC_RESPONSE_RECEIVED",
+    "timestamp": 1767035444384,
+    "data": {
+      "accId": "acc-1767035444382",
+      "response": "confirm-export-001"
+    },
+    "sequence": 12
+  },
+  {
+    "type": "ACC_VALIDATED",
+    "timestamp": 1767035444384,
+    "data": {
+      "accId": "acc-1767035444382",
+      "result": "valid"
+    },
+    "sequence": 13
+  },
+  {
+    "type": "ACC_TOKEN_CONSUMED",
+    "timestamp": 1767035444384,
+    "data": {
+      "accId": "acc-1767035444382"
+    },
+    "sequence": 14
+  },
+  {
+    "type": "EXECUTION_STARTED",
+    "timestamp": 1767035444384,
+    "data": {
+      "action": "RENDER_EXPORT",
+      "actionId": "export-001",
+      "resumeAfterAcc": true
+    },
+    "sequence": 15
+  },
+  {
+    "type": "FILE_WRITE_ATTEMPT",
+    "timestamp": 1767035444384,
+    "data": {
+      "filePath": "/tmp/export-001.wav",
+      "size": 5242880
+    },
+    "sequence": 16
+  },
+  {
+    "type": "FILE_WRITE_ALLOWED",
+    "timestamp": 1767035444384,
+    "data": {
+      "filePath": "/tmp/export-001.wav",
+      "grantId": "grant-export-001"
+    },
+    "sequence": 17
+  },
+  {
+    "type": "EXECUTION_COMPLETED",
+    "timestamp": 1767035444535,
+    "data": {
+      "action": "RENDER_EXPORT",
+      "actionId": "export-001",
+      "result": "success",
+      "outputPath": "/tmp/export-001.wav"
+    },
+    "sequence": 18
+  },
+  {
+    "type": "AUDIT_LOG_APPEND",
+    "timestamp": 1767035444535,
+    "data": {
+      "action": "RENDER_EXPORT",
+      "timestamp": 1767035444535,
+      "outputPath": "/tmp/export-001.wav"
+    },
+    "sequence": 19
+  },
+  {
+    "type": "SESSION_END_REQUESTED",
+    "timestamp": 1767035444535,
+    "data": {
+      "sessionId": "session-1767035444280"
+    },
+    "sequence": 20
+  },
+  {
+    "type": "REVOKE_ALL_AUTHORITIES",
+    "timestamp": 1767035444535,
+    "data": {
+      "count": 5
+    },
+    "sequence": 21
+  },
+  {
+    "type": "CAPABILITY_GRANTS_CLEARED",
+    "timestamp": 1767035444535,
+    "data": {
+      "remainingGrants": 0
+    },
+    "sequence": 22
+  },
+  {
+    "type": "ACC_TOKENS_INVALIDATED",
+    "timestamp": 1767035444535,
+    "data": {
+      "tokensInvalidated": 1
+    },
+    "sequence": 23
+  },
+  {
+    "type": "SESSION_INACTIVE",
+    "timestamp": 1767035444535,
+    "data": {
+      "sessionId": "session-1767035444280"
+    },
+    "sequence": 24
+  },
+  {
+    "type": "CAPABILITY_DENIED",
+    "timestamp": 1767035444536,
+    "data": {
+      "capability": "RENDER_EXPORT",
+      "reason": "Session inactive"
+    },
+    "sequence": 25
+  }
+]

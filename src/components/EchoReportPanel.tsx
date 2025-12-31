@@ -45,6 +45,7 @@ const PluginIcon: React.FC<{ type: string }> = ({ type }) => {
 
       case 'Compression':
       case 'Dynamics':
+      case 'Multiband Dynamics':
         return (
           <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
             {/* Compression curve with threshold */}
@@ -119,16 +120,6 @@ const PluginIcon: React.FC<{ type: string }> = ({ type }) => {
           <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
             {/* Sharp transient spike */}
             <path d="M2 20 L 8 16 L 12 4 L 14 20 L 22 20" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        );
-
-      case 'Multiband Dynamics':
-        return (
-          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            {/* Multiple compression curves */}
-            <path d="M2 20 L 6 14" strokeLinecap="round"/>
-            <path d="M8 20 L 12 10 L 14 8" strokeLinecap="round"/>
-            <path d="M16 20 L 20 12 L 22 10" strokeLinecap="round"/>
           </svg>
         );
 
@@ -322,7 +313,7 @@ const CompressorPluginUI: React.FC<{
           key={i}
           className={`rounded-xl p-3 transition-all ${
             enabledParams[i]
-              ? 'bg-purple-500/10 border border-purple-500/30'
+              ? 'bg-orange-500/10 border border-orange-500/30'
               : 'bg-slate-800/30 border border-slate-700/30 opacity-50'
           }`}
         >
@@ -330,7 +321,7 @@ const CompressorPluginUI: React.FC<{
             <button
               onClick={() => onToggle(i)}
               className={`w-5 h-5 rounded flex items-center justify-center transition-all ${
-                enabledParams[i] ? 'bg-purple-500' : 'bg-slate-700'
+                enabledParams[i] ? 'bg-orange-500' : 'bg-slate-700'
               }`}
             >
               {enabledParams[i] && <span className="text-white text-[10px] font-bold">✓</span>}
@@ -346,9 +337,9 @@ const CompressorPluginUI: React.FC<{
                 step={param.step || 1}
                 value={typeof paramValues[i] === 'number' ? paramValues[i] : (param.value as number)}
                 onChange={(e) => onValueChange(i, parseFloat(e.target.value))}
-                className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
               />
-              <div className="text-center text-sm font-mono text-purple-400 mt-1">
+              <div className="text-center text-sm font-mono text-orange-400 mt-1">
                 {typeof paramValues[i] === 'number' ? (paramValues[i] as number).toFixed(2) : param.value}
                 {param.unit || ''}
               </div>
@@ -571,13 +562,22 @@ const EchoActionCard: React.FC<{
   action: EchoAction;
   onApply: (updatedValues: any) => Promise<boolean>;
   isProcessing: boolean;
-}> = ({ action, onApply, isProcessing }) => {
+  isAppliedByApplyAll?: boolean;
+  onApplied?: (action: EchoAction, updatedValues: any) => void;
+}> = ({ action, onApply, isProcessing, isAppliedByApplyAll = false, onApplied }) => {
   const [expanded, setExpanded] = useState(false);
   const [enabledBands, setEnabledBands] = useState<Record<number, boolean>>({});
   const [bandValues, setBandValues] = useState<Record<number, { freqHz: number; gainDb: number; q?: number }>>({});
   const [enabledParams, setEnabledParams] = useState<Record<number, boolean>>({});
   const [paramValues, setParamValues] = useState<Record<number, number | string>>({});
   const [isApplied, setIsApplied] = useState(false);
+
+  // Update isApplied when applied via Apply All button
+  useEffect(() => {
+    if (isAppliedByApplyAll) {
+      setIsApplied(true);
+    }
+  }, [isAppliedByApplyAll]);
 
   // Initialize state from action defaults
   useEffect(() => {
@@ -615,6 +615,7 @@ const EchoActionCard: React.FC<{
     if (success) {
         setIsApplied(true);
         setExpanded(false);
+        onApplied?.(action, updatedValues);
     }
   };
 
@@ -623,18 +624,22 @@ const EchoActionCard: React.FC<{
     return 'from-slate-800/60 to-slate-900/80 border-slate-700/50';
   };
 
+  const normalizedType = action.type === 'Multiband Compression' || action.type === 'Multiband Dynamics'
+    ? 'Compression'
+    : action.type;
+
   return (
-    <div className={`bg-gradient-to-br ${getCardColor(action.type)} rounded-2xl p-4 transition-all hover:scale-[1.01] duration-300 border backdrop-blur-sm relative overflow-hidden group`}>
+    <div className={`bg-gradient-to-br ${getCardColor(normalizedType)} rounded-2xl p-4 transition-all hover:scale-[1.01] duration-300 border backdrop-blur-sm relative overflow-hidden group`}>
       <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-        <PluginIcon type={action.type} />
+        <PluginIcon type={normalizedType} />
       </div>
 
       <div className="flex items-start justify-between mb-3 relative z-10">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <PluginIcon type={action.type} />
+            <PluginIcon type={normalizedType} />
             <span className="text-xs font-bold bg-black/30 px-2 py-0.5 rounded text-white/80 border border-white/10 uppercase tracking-wide backdrop-blur-md">
-              {action.type}
+              {normalizedType}
             </span>
             <h4 className="font-bold text-white text-lg tracking-tight">{action.label}</h4>
             {isApplied && <span className="text-green-400 font-bold ml-2 text-sm flex items-center gap-1">✓ Applied</span>}
@@ -681,17 +686,8 @@ const EchoActionCard: React.FC<{
               onValueChange={(i, v) => setParamValues(prev => ({ ...prev, [i]: v }))}
             />
           )}
-          {action.type === 'Multiband Compression' && action.bands && (
-            <EQPluginUI
-              bands={action.bands}
-              enabledBands={enabledBands}
-              onToggle={(i) => setEnabledBands(prev => ({ ...prev, [i]: !prev[i] }))}
-              bandValues={bandValues}
-              onValueChange={(i, f, v) => setBandValues(prev => ({ ...prev, [i]: { ...prev[i], [f]: v } }))}
-            />
-          )}
           {/* Fallback/Generic UI */}
-          {!['EQ', 'Compression', 'Dynamics', 'Saturation', 'Stereo', 'Imaging', 'Multiband Compression'].includes(action.type) && action.params && (
+          {!['EQ', 'Compression', 'Dynamics', 'Saturation', 'Stereo', 'Imaging'].includes(action.type) && action.params && (
             <GenericPluginUI
               params={action.params}
               enabledParams={enabledParams}
@@ -754,6 +750,162 @@ export const EchoReportPanel: React.FC<EchoReportPanelProps> = ({
 }) => {
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareCard, setShareCard] = useState<ShareableCard | null>(null);
+  const [isApplyingAll, setIsApplyingAll] = useState(false);
+  const [appliedActionIds, setAppliedActionIds] = useState<Set<string>>(new Set());
+  const [appliedActionSummaries, setAppliedActionSummaries] = useState<Record<string, string>>({});
+  const [lastProcessingConfig, setLastProcessingConfig] = useState<ProcessingConfig | undefined>(processedConfig);
+  const [configChanged, setConfigChanged] = useState(false);
+
+  const formatParamLabel = (name: string) => name.replace(/_/g, ' ');
+  const formatParamValue = (value: any, unit?: string) => {
+    if (typeof value !== 'number') return `${value ?? ''}${unit ?? ''}`.trim();
+    if (unit === 's') {
+      return value < 1 ? `${Math.round(value * 1000)}ms` : `${value.toFixed(2)}s`;
+    }
+    if (unit === 'dB') return `${value.toFixed(1)}dB`;
+    if (unit === ':1') return `${value.toFixed(2)}:1`;
+    if (unit) return `${value}${unit}`;
+    return value.toFixed(2);
+  };
+
+  const describeAction = (action: EchoAction) => {
+    switch (action.type) {
+      case 'Compression':
+      case 'Dynamics':
+        return 'Gentle compression to tame peaks';
+      case 'Limiter':
+        return 'Limiter to protect the loudest hits';
+      case 'EQ':
+        return 'Tone shaping to balance frequencies';
+      case 'Saturation':
+        return 'Subtle warmth and density';
+      case 'Stereo':
+      case 'Imaging':
+        return 'Stereo width adjustment';
+      default:
+        return 'Targeted mix adjustment';
+    }
+  };
+
+  const buildActionSummary = (action: EchoAction, updatedValues?: any) => {
+    const parts: string[] = [];
+
+    const bands = updatedValues?.bands?.length
+      ? updatedValues.bands
+      : action.bands?.filter(b => b.enabledByDefault) ?? [];
+    if (bands.length > 0) {
+      const bandSummary = bands
+        .map((band: any) => {
+          const gain = typeof band.gainDb === 'number' ? band.gainDb : band.gain;
+          const gainLabel = typeof gain === 'number' ? `${gain >= 0 ? '+' : ''}${gain.toFixed(1)}dB` : '';
+          const qLabel = band.q ? ` Q${Number(band.q).toFixed(2)}` : '';
+          return `${Math.round(band.freqHz)}Hz ${gainLabel}${qLabel}`.trim();
+        })
+        .join(', ');
+      parts.push(`Bands: ${bandSummary}`);
+    }
+
+    const params = updatedValues?.params?.length
+      ? updatedValues.params
+      : action.params?.filter(p => p.enabledByDefault).map(p => ({ name: p.name, value: p.value, unit: p.unit })) ?? [];
+    if (params.length > 0) {
+      const paramSummary = params
+        .map((param: any) => `${formatParamLabel(param.name)} ${formatParamValue(param.value, param.unit)}`)
+        .join(', ');
+      parts.push(paramSummary);
+    }
+
+    const details = parts.length > 0 ? parts.join(' · ') : action.description;
+    return `${describeAction(action)}${details ? ` (${details})` : ''}`;
+  };
+
+  // Detect when processing config has changed significantly
+  useEffect(() => {
+    if (!processedConfig || !lastProcessingConfig) return;
+
+    // Check if any significant parameters have changed
+    const configsDiffer = JSON.stringify(processedConfig) !== JSON.stringify(lastProcessingConfig);
+    if (configsDiffer && echoReport) {
+      setConfigChanged(true);
+    }
+  }, [processedConfig, lastProcessingConfig, echoReport]);
+
+  const handleApplyAll = async () => {
+    if (!echoReport?.recommended_actions || echoReport.recommended_actions.length === 0) {
+      return;
+    }
+
+    setIsApplyingAll(true);
+    let successCount = 0;
+    let failureCount = 0;
+    const newAppliedIds = new Set(appliedActionIds);
+
+    for (const action of echoReport.recommended_actions) {
+      try {
+        const success = await onApplyEchoAction(action, {});
+        if (success) {
+          successCount++;
+          newAppliedIds.add(action.id);
+          setAppliedActionSummaries(prev => ({
+            ...prev,
+            [action.id]: buildActionSummary(action, {})
+          }));
+        } else {
+          failureCount++;
+        }
+      } catch (error) {
+        console.error(`Failed to apply ${action.label}:`, error);
+        failureCount++;
+      }
+    }
+
+    setIsApplyingAll(false);
+    setAppliedActionIds(newAppliedIds);
+
+    // Update the last processing config after applying changes
+    setLastProcessingConfig(processedConfig);
+    setConfigChanged(false);
+
+    // Show summary notification
+    if (failureCount === 0) {
+      console.log(`[Echo] Successfully applied all ${successCount} recommendations`);
+    } else {
+      console.warn(`[Echo] Applied ${successCount} recommendations, ${failureCount} failed`);
+    }
+  };
+
+  const handleActionApplied = (action: EchoAction, updatedValues: any) => {
+    setAppliedActionIds(prev => new Set([...prev, action.id]));
+    setAppliedActionSummaries(prev => ({
+      ...prev,
+      [action.id]: buildActionSummary(action, updatedValues)
+    }));
+  };
+
+  const getListeningNote = (actions: EchoAction[], hasPitch: boolean) => {
+    if (actions.length === 0 && !hasPitch) return 'No processing applied.';
+    const types = new Set(actions.map(action => action.type));
+    const onlyLevel = [...types].every(type => ['Compression', 'Dynamics', 'Limiter'].includes(type));
+    if (onlyLevel && !hasPitch) {
+      return 'You may mostly hear a level change because only dynamics/limiting were applied.';
+    }
+    const notes: string[] = [];
+    if (types.has('EQ')) notes.push('tone balance');
+    if (types.has('Compression') || types.has('Dynamics')) notes.push('dynamics');
+    if (types.has('Limiter')) notes.push('peak protection');
+    if (types.has('Saturation')) notes.push('harmonic warmth');
+    if (types.has('Stereo') || types.has('Imaging')) notes.push('stereo width');
+    if (hasPitch) notes.push('pitch stabilization');
+    return notes.length > 0
+      ? `You should hear changes in ${notes.join(', ')}.`
+      : 'Processing applied.';
+  };
+
+  const handleRefreshReport = () => {
+    onRetryEchoReport();
+    setLastProcessingConfig(processedConfig);
+    setConfigChanged(false);
+  };
 
   const handleCreateShareCard = async () => {
     if (echoReport && beforeMetrics && afterMetrics) {
@@ -853,11 +1005,15 @@ export const EchoReportPanel: React.FC<EchoReportPanelProps> = ({
             nudge="Viral potential!"
           />
           <button
-            onClick={() => onRetryEchoReport()}
-            className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
-            title="Refresh Analysis"
+            onClick={handleRefreshReport}
+            className={`p-2 rounded-lg transition-colors ${
+              configChanged
+                ? 'text-amber-400 hover:text-amber-300 bg-amber-950/30 hover:bg-amber-900/50 border border-amber-700/50'
+                : 'text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700'
+            }`}
+            title={configChanged ? 'Score may have changed - refresh to update' : 'Refresh Analysis'}
           >
-            Refresh
+            {configChanged ? '⚡ Refresh' : 'Refresh'}
           </button>
         </div>
       </div>
@@ -886,7 +1042,7 @@ export const EchoReportPanel: React.FC<EchoReportPanelProps> = ({
           {/* Score Grade */}
           <div className="text-center py-2 px-4 rounded-lg bg-slate-950/50 border border-slate-800">
             <span className={`text-sm font-bold uppercase tracking-widest ${
-              echoReport.score.total >= 90 ? 'text-purple-400' :
+              echoReport.score.total >= 90 ? 'text-orange-400' :
               echoReport.score.total >= 80 ? 'text-green-400' :
               echoReport.score.total >= 70 ? 'text-cyan-400' :
               echoReport.score.total >= 60 ? 'text-blue-400' :
@@ -907,8 +1063,8 @@ export const EchoReportPanel: React.FC<EchoReportPanelProps> = ({
             {[
               { name: 'Recording Quality', value: echoReport.score.recordingQuality, max: 25, color: 'bg-blue-500' },
               { name: 'Stem Quality', value: echoReport.score.stemQuality, max: 20, color: 'bg-cyan-500' },
-              { name: 'Genre Accuracy', value: echoReport.score.genreAccuracy, max: 25, color: 'bg-purple-500' },
-              { name: 'Vocal-Beat Relationship', value: echoReport.score.vocalBeatRelationship, max: 20, color: 'bg-pink-500' },
+              { name: 'Genre Accuracy', value: echoReport.score.genreAccuracy, max: 25, color: 'bg-sky-500' },
+              { name: 'Vocal-Beat Relationship', value: echoReport.score.vocalBeatRelationship, max: 20, color: 'bg-orange-500' },
               { name: 'Creative Excellence', value: echoReport.score.creativeExcellence, max: 10, color: 'bg-amber-500' }
             ].map(pillar => (
               <div key={pillar.name} className="space-y-1.5">
@@ -952,6 +1108,75 @@ export const EchoReportPanel: React.FC<EchoReportPanelProps> = ({
         )}
       </div>
 
+      {/* Processing Summary */}
+      <div className="bg-slate-800/40 rounded-2xl p-5 border border-slate-700/40">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">What Changed</h3>
+          <span className="text-xs text-slate-500">
+            {appliedActionIds.size > 0 ? `${appliedActionIds.size} applied` : 'No changes yet'}
+          </span>
+        </div>
+        {echoReport.recommended_actions && (appliedActionIds.size > 0 || processedConfig?.pitch?.enabled) && (
+          <p className="text-xs text-slate-400 mb-3">
+            {getListeningNote(
+              echoReport.recommended_actions.filter(action => appliedActionIds.has(action.id)),
+              !!processedConfig?.pitch?.enabled
+            )}
+          </p>
+        )}
+        {(echoReport.recommended_actions && appliedActionIds.size > 0) || processedConfig?.pitch?.enabled ? (
+          <ul className="space-y-2">
+            {echoReport.recommended_actions
+              .filter(action => appliedActionIds.has(action.id))
+              .map(action => (
+                <li key={action.id} className="text-sm text-slate-200">
+                  <span className="font-semibold text-slate-100">{action.label}:</span>{' '}
+                  <span className="text-slate-300">{appliedActionSummaries[action.id] || action.description}</span>
+                </li>
+              ))}
+            {processedConfig?.pitch?.enabled && (
+              <li className="text-sm text-slate-200">
+                <span className="font-semibold text-slate-100">Vocal Tune:</span>{' '}
+                <span className="text-slate-300">
+                  {processedConfig.pitch.mode === 'scale'
+                    ? `Key-locked correction in ${processedConfig.pitch.key ?? 'C'} ${processedConfig.pitch.scale ?? 'major'}`
+                    : 'Chromatic pitch assist with gentle stabilization'}
+                  .
+                </span>
+              </li>
+            )}
+            {processedConfig?.gateExpander?.enabled && (
+              <li className="text-sm text-slate-200">
+                <span className="font-semibold text-slate-100">Gate/Expander:</span>{' '}
+                <span className="text-slate-300">
+                  Reduced low-level noise below {processedConfig.gateExpander.threshold}dB.
+                </span>
+              </li>
+            )}
+            {processedConfig?.truePeakLimiter?.enabled && (
+              <li className="text-sm text-slate-200">
+                <span className="font-semibold text-slate-100">True-Peak Limiter:</span>{' '}
+                <span className="text-slate-300">
+                  Final ceiling set to {processedConfig.truePeakLimiter.ceiling}dB.
+                </span>
+              </li>
+            )}
+            {processedConfig?.clipper?.enabled && (
+              <li className="text-sm text-slate-200">
+                <span className="font-semibold text-slate-100">Soft Clipper:</span>{' '}
+                <span className="text-slate-300">
+                  Gentle saturation above {processedConfig.clipper.threshold}dB.
+                </span>
+              </li>
+            )}
+          </ul>
+        ) : (
+          <p className="text-sm text-slate-400">
+            Apply a recommendation to see the exact changes logged here.
+          </p>
+        )}
+      </div>
+
       {/* Recommended Actions */}
       {echoReport.recommended_actions && echoReport.recommended_actions.length > 0 && (
         <div className="space-y-4">
@@ -966,7 +1191,7 @@ export const EchoReportPanel: React.FC<EchoReportPanelProps> = ({
               <div className="flex-1">
                 <h4 className="text-sm font-semibold text-blue-300 mb-1">Next Steps</h4>
                 <p className="text-xs text-slate-300">
-                  Choose from the recommendations below to improve your track. Apply fixes one at a time, use A/B comparison to hear the difference, then commit to save the changes.
+                  After applying the AI recommendations, review your Echo Report Card and apply any final adjustments it suggests to refine your track. Use the Processed and Original buttons to compare before and after. For additional control, open Advanced Tools to access more plugins and options.
                 </p>
               </div>
             </div>
@@ -974,12 +1199,35 @@ export const EchoReportPanel: React.FC<EchoReportPanelProps> = ({
 
           {/* Recommended Actions Grid */}
           <div>
-            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-              Recommended Fixes
-              <span className="bg-amber-500 text-black text-[10px] px-1.5 py-0.5 rounded-full">
-                {echoReport.recommended_actions.length}
-              </span>
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                Recommended Fixes
+                <span className="bg-amber-500 text-black text-[10px] px-1.5 py-0.5 rounded-full">
+                  {echoReport.recommended_actions.length}
+                </span>
+              </h3>
+              <button
+                onClick={handleApplyAll}
+                disabled={isApplyingAll || isProcessing || appliedActionIds.size === echoReport.recommended_actions.length}
+                className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold uppercase tracking-wider rounded-lg transition-all duration-200 shadow-lg hover:shadow-orange-500/50"
+              >
+                {isApplyingAll ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+                      <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Applying...
+                  </span>
+                ) : appliedActionIds.size === echoReport.recommended_actions.length ? (
+                  <span className="flex items-center gap-2">
+                    <span>✓</span> All Applied
+                  </span>
+                ) : (
+                  'Apply All'
+                )}
+              </button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {echoReport.recommended_actions.map((action) => (
                 <EchoActionCard
@@ -987,6 +1235,8 @@ export const EchoReportPanel: React.FC<EchoReportPanelProps> = ({
                   action={action}
                   onApply={(vals) => onApplyEchoAction(action, vals)}
                   isProcessing={isProcessing}
+                  isAppliedByApplyAll={appliedActionIds.has(action.id)}
+                  onApplied={handleActionApplied}
                 />
               ))}
             </div>

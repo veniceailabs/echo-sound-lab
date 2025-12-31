@@ -1,0 +1,20 @@
+GHOST REVIEW REQUEST — ESL Authority Stack (Breakage Pass)
+
+Below is the ESL authority stack for breakage review: ADAM (locked), Self Session (v0 skeleton + acceptance tests, paused), and AEL (conceptual only).
+
+ADAM is finite and terminal by contract (consent → route → deliver → stop).
+Self Session is the human-in-loop execution runtime with continuous reaffirmation (ACC), halt/pause symmetry, and zero pressure on silence.
+AEL is longitudinal, read-only observation with suggestions only—no execution—invoking ADAM or Self Session only via new, explicit consent.
+
+Implementation is frozen pending your review.
+
+Question to break:
+Can you find any path—technical or psychological—where the system continues acting, pressures continuation, or creates coercion over time?
+
+Four attack surfaces are marked in the packet. Please target those. We're looking for specific paths, violated invariants, and the smallest fixes required.
+
+This is a breakage review, not validation.
+
+---
+
+Attached: GHOST_REVIEW_PACKET.md (full briefing packet with documents, attack surfaces, and freeze policy)

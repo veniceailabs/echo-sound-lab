@@ -4,7 +4,8 @@
  */
 
 // Base glass card with depth (enhanced shadows)
-export const glassCard = 'bg-gradient-to-br from-slate-800/80 to-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-700/50 shadow-[6px_6px_12px_#090e1a,-6px_-6px_12px_#15203a]';
+export const glassCard =
+  'bg-gradient-to-br from-slate-800/85 to-slate-900/95 backdrop-blur-md rounded-2xl border border-slate-700/50 shadow-[6px_6px_12px_#090e1a,-6px_-6px_12px_#15203a] transition-all duration-500 ease-out hover:border-slate-100/30 hover:shadow-[10px_10px_20px_rgba(15,118,110,0.2),-10px_-10px_20px_rgba(130,201,255,0.15)] hover:from-slate-800/90 hover:to-slate-900/70';
 
 // Primary card with neon accent
 export const neonCard = 'bg-gradient-to-br from-cyan-500/5 to-blue-500/10 backdrop-blur-xl rounded-3xl border border-cyan-500/20 shadow-[0_0_30px_rgba(6,182,212,0.15)]';
@@ -19,10 +20,11 @@ export const neomorphButton = 'bg-slate-900 rounded-2xl shadow-[inset_6px_6px_12
 export const neomorphButtonRaised = 'bg-slate-900 rounded-2xl shadow-[6px_6px_12px_#050710,-6px_-6px_12px_#0f1828] border border-slate-800/30 hover:shadow-[8px_8px_16px_#050710,-8px_-8px_16px_#0f1828] active:shadow-[inset_4px_4px_8px_#050710,inset_-4px_-4px_8px_#0f1828]';
 
 // Primary action button with neumorphic style (Second Light OS)
-export const glowButton = 'bg-slate-900 text-orange-400 font-bold rounded-xl shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03),_0_0_20px_rgba(251,146,60,0.15)] hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02),_0_0_25px_rgba(251,146,60,0.25)] hover:text-orange-300 active:shadow-[inset_3px_3px_8px_rgba(0,0,0,0.9),inset_-1px_-1px_2px_rgba(255,255,255,0.01)] active:translate-y-[1px] transition-all duration-200';
+export const glowButton = 'bg-slate-900 text-orange-400 font-bold rounded-xl shadow-[4px_4px_12px_rgba(0,0,0,0.5),_0_0_16px_rgba(245,158,11,0.12)] hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),_0_0_22px_rgba(245,158,11,0.2)] hover:text-orange-300 active:shadow-[inset_3px_3px_8px_rgba(0,0,0,0.9)] active:translate-y-[1px] transition-all duration-200';
 
 // Secondary action button (outlined style)
 export const secondaryButton = 'bg-transparent hover:bg-slate-800/30 backdrop-blur-md text-slate-300 font-semibold rounded-xl border border-slate-600/50 hover:border-orange-500/50 shadow-md active:scale-[0.98] transition-all duration-300';
+export const secondaryButtonGlass = 'bg-white/5 hover:bg-white/10 backdrop-blur-lg text-white font-semibold rounded-2xl border border-white/20 hover:border-white/40 shadow-[0_8px_18px_rgba(15,118,110,0.25)] transition-all duration-500 hover:scale-[1.01]';
 
 // Danger button (outlined red)
 export const dangerButton = 'bg-transparent hover:bg-red-500/10 text-red-400 font-semibold rounded-xl border border-red-500/30 hover:border-red-500/50 shadow-md active:scale-[0.98] transition-all duration-300';
@@ -37,7 +39,7 @@ export const glassInput = 'bg-slate-900/70 backdrop-blur-md text-slate-200 round
 export const sliderTrack = 'bg-gradient-to-r from-slate-800 to-slate-900 rounded-full shadow-inner border border-slate-700/30';
 
 // Slider thumb with glow (orange gradient)
-export const sliderThumb = 'bg-gradient-to-br from-orange-400 to-pink-500 rounded-full shadow-[0_0_12px_rgba(251,146,60,0.6)] border-2 border-white/20';
+export const sliderThumb = 'bg-gradient-to-br from-orange-400 to-blue-500 rounded-full shadow-[0_0_12px_rgba(251,146,60,0.6)] border-2 border-white/20';
 
 // Badge with subtle glow
 export const glowBadge = 'px-3 py-1 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-cyan-300 rounded-full text-xs font-bold border border-cyan-500/30 shadow-[0_0_10px_rgba(6,182,212,0.2)]';
@@ -135,8 +137,8 @@ export const colors = {
   neon: {
     cyan: '#06b6d4',
     blue: '#3b82f6',
-    purple: '#a855f7',
-    pink: '#ec4899',
+    purple: '#3b82f6',
+    pink: '#f97316',
     orange: '#f97316',
   },
   glass: {

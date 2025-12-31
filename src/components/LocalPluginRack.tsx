@@ -78,11 +78,11 @@ export const LocalPluginRack: React.FC<LocalPluginRackProps> = ({ onPluginChange
 
   const getCategoryColor = (category: LocalPluginDefinition['category']) => {
     switch (category) {
-      case 'delay': return 'from-cyan-500 to-blue-600';
-      case 'reverb': return 'from-purple-500 to-indigo-600';
-      case 'modulation': return 'from-pink-500 to-rose-600';
+      case 'delay': return 'from-sky-500 to-blue-600';
+      case 'reverb': return 'from-blue-500 to-indigo-600';
+      case 'modulation': return 'from-orange-500 to-amber-600';
       case 'dynamics': return 'from-amber-500 to-orange-600';
-      case 'filter': return 'from-emerald-500 to-green-600';
+      case 'filter': return 'from-cyan-500 to-sky-600';
       default: return 'from-slate-500 to-slate-600';
     }
   };

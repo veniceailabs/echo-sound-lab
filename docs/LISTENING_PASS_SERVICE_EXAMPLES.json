@@ -1,0 +1,362 @@
+{
+  "description": "Example outputs from listeningPassService for all 5 test cases (A–E)",
+  "format": "LISTENING_PASS_OUTPUT_SCHEMA.md v1.0",
+  "generated_for": "Integration testing + documentation",
+  "test_cases": {
+    "case_a": {
+      "name": "Pure Fatigue (Stage 1 Only)",
+      "description": "Single token detected (FATIGUE_EVENT). No intelligibility or instability issues.",
+      "input_summary": {
+        "tokens_detected": ["FATIGUE_EVENT"],
+        "mode": "friendly"
+      },
+      "output": {
+        "mode": "friendly",
+        "listening_pass": {
+          "version": "1.0",
+          "analysis_confidence": 0.81,
+          "tokens": [
+            {
+              "token_id": "FATIGUE_EVENT",
+              "stage": 1,
+              "detected": true,
+              "severity": "moderate",
+              "confidence": 0.81,
+              "trend": "escalating",
+              "listener_impact": "Upper-mid sharpness accumulates, particularly during choruses. May cause listening fatigue after 2+ minutes on headphones.",
+              "intentionality": "unlikely",
+              "suppressed": false,
+              "time_context": {
+                "start_sec": 0.0,
+                "end_sec": 180.0,
+                "pattern": "escalating_toward_chorus"
+              }
+            },
+            {
+              "token_id": "INTELLIGIBILITY_LOSS",
+              "stage": 1,
+              "detected": false,
+              "severity": "low",
+              "confidence": 0.95,
+              "trend": "isolated",
+              "listener_impact": "Lead remains clear and intelligible throughout.",
+              "intentionality": "N/A",
+              "suppressed": false,
+              "time_context": null
+            },
+            {
+              "token_id": "INSTABILITY_EVENT",
+              "stage": 1,
+              "detected": false,
+              "severity": "low",
+              "confidence": 0.92,
+              "trend": "isolated",
+              "listener_impact": "Transient behavior is predictable and controlled.",
+              "intentionality": "N/A",
+              "suppressed": false,
+              "time_context": null
+            }
+          ],
+          "priority_summary": {
+            "highest_stage_triggered": 1,
+            "dominant_tokens": ["FATIGUE_EVENT"],
+            "recommended_focus": "reduce_high_frequency_accumulation",
+            "conflicts": []
+          }
+        },
+        "_analysis": {
+          "start_ms": 1234.56,
+          "end_ms": 1519.28,
+          "duration_s": 180,
+          "windows_analyzed": 245
+        }
+      }
+    },
+    "case_b": {
+      "name": "All Clear (Nothing Detected)",
+      "description": "All tokens detected: false. High confidence across all measurements.",
+      "input_summary": {
+        "tokens_detected": [],
+        "mode": "friendly"
+      },
+      "output": {
+        "mode": "friendly",
+        "listening_pass": {
+          "version": "1.0",
+          "analysis_confidence": 0.95,
+          "tokens": [
+            {
+              "token_id": "FATIGUE_EVENT",
+              "stage": 1,
+              "detected": false,
+              "severity": "low",
+              "confidence": 0.96,
+              "trend": "isolated",
+              "listener_impact": "No significant fatigue-inducing patterns detected. Listeners can engage comfortably.",
+              "intentionality": "N/A",
+              "suppressed": false,
+              "time_context": null
+            },
+            {
+              "token_id": "INTELLIGIBILITY_LOSS",
+              "stage": 1,
+              "detected": false,
+              "severity": "low",
+              "confidence": 0.97,
+              "trend": "isolated",
+              "listener_impact": "Lead remains clear and intelligible throughout.",
+              "intentionality": "N/A",
+              "suppressed": false,
+              "time_context": null
+            },
+            {
+              "token_id": "INSTABILITY_EVENT",
+              "stage": 1,
+              "detected": false,
+              "severity": "low",
+              "confidence": 0.93,
+              "trend": "isolated",
+              "listener_impact": "Transient behavior is predictable and controlled.",
+              "intentionality": "N/A",
+              "suppressed": false,
+              "time_context": null
+            }
+          ],
+          "priority_summary": {
+            "highest_stage_triggered": 0,
+            "dominant_tokens": [],
+            "recommended_focus": "none",
+            "conflicts": []
+          }
+        },
+        "_analysis": {
+          "start_ms": 2045.12,
+          "end_ms": 2330.84,
+          "duration_s": 180,
+          "windows_analyzed": 245
+        }
+      }
+    },
+    "case_c": {
+      "name": "Fatigue + Intelligibility Conflict (Both Stage 1)",
+      "description": "Two tokens detected in same stage. Fatigue has higher severity (high vs moderate) and should dominate.",
+      "input_summary": {
+        "tokens_detected": ["FATIGUE_EVENT", "INTELLIGIBILITY_LOSS"],
+        "severity_order": "FATIGUE (high) > INTELLIGIBILITY (moderate)",
+        "mode": "friendly"
+      },
+      "output": {
+        "mode": "friendly",
+        "listening_pass": {
+          "version": "1.0",
+          "analysis_confidence": 0.84,
+          "tokens": [
+            {
+              "token_id": "FATIGUE_EVENT",
+              "stage": 1,
+              "detected": true,
+              "severity": "high",
+              "confidence": 0.84,
+              "trend": "escalating",
+              "listener_impact": "Sustained 4kHz presence creates cumulative fatigue. Worsens in final chorus.",
+              "intentionality": "unlikely",
+              "suppressed": false,
+              "time_context": {
+                "start_sec": 0.0,
+                "end_sec": 200.0,
+                "pattern": "escalating_toward_end"
+              }
+            },
+            {
+              "token_id": "INTELLIGIBILITY_LOSS",
+              "stage": 1,
+              "detected": true,
+              "severity": "moderate",
+              "confidence": 0.77,
+              "trend": "recurring",
+              "listener_impact": "Vocal consonants overlap with synth pad, especially in verses.",
+              "intentionality": "unlikely",
+              "suppressed": false,
+              "time_context": {
+                "start_sec": 10.0,
+                "end_sec": 90.0,
+                "pattern": "verse_sections_only"
+              }
+            },
+            {
+              "token_id": "INSTABILITY_EVENT",
+              "stage": 1,
+              "detected": false,
+              "severity": "low",
+              "confidence": 0.91,
+              "trend": "isolated",
+              "listener_impact": "Transient behavior is predictable and controlled.",
+              "intentionality": "N/A",
+              "suppressed": false,
+              "time_context": null
+            }
+          ],
+          "priority_summary": {
+            "highest_stage_triggered": 1,
+            "dominant_tokens": ["FATIGUE_EVENT"],
+            "recommended_focus": "address_fatigue_first",
+            "conflicts": ["FATIGUE_EVENT vs INTELLIGIBILITY_LOSS"]
+          }
+        },
+        "_analysis": {
+          "start_ms": 2856.34,
+          "end_ms": 3142.06,
+          "duration_s": 200,
+          "windows_analyzed": 273
+        }
+      }
+    },
+    "case_d": {
+      "name": "Low Confidence Gate (Fatigue 0.45 vs Instability 0.92)",
+      "description": "Fatigue below 0.6 confidence gate. Instability above gate. Instability dominates despite moderate severity.",
+      "input_summary": {
+        "tokens_detected": ["FATIGUE_EVENT (0.45 - BELOW GATE)", "INSTABILITY_EVENT (0.92 - ABOVE GATE)"],
+        "confidence_gate": 0.6,
+        "mode": "friendly"
+      },
+      "output": {
+        "mode": "friendly",
+        "listening_pass": {
+          "version": "1.0",
+          "analysis_confidence": 0.82,
+          "tokens": [
+            {
+              "token_id": "FATIGUE_EVENT",
+              "stage": 1,
+              "detected": true,
+              "severity": "moderate",
+              "confidence": 0.45,
+              "trend": "isolated",
+              "listener_impact": "Possible upper-mid tension, but unclear if intentional or artifact.",
+              "intentionality": "possible",
+              "suppressed": false,
+              "time_context": null
+            },
+            {
+              "token_id": "INTELLIGIBILITY_LOSS",
+              "stage": 1,
+              "detected": false,
+              "severity": "low",
+              "confidence": 0.93,
+              "trend": "isolated",
+              "listener_impact": "Lead is clear and easy to follow.",
+              "intentionality": "N/A",
+              "suppressed": false,
+              "time_context": null
+            },
+            {
+              "token_id": "INSTABILITY_EVENT",
+              "stage": 1,
+              "detected": true,
+              "severity": "moderate",
+              "confidence": 0.92,
+              "trend": "recurring",
+              "listener_impact": "Erratic transient spacing creates nervous tension. Listener must brace for next attack.",
+              "intentionality": "unlikely",
+              "suppressed": false,
+              "time_context": {
+                "start_sec": 30.0,
+                "end_sec": 160.0,
+                "pattern": "throughout_mix"
+              }
+            }
+          ],
+          "priority_summary": {
+            "highest_stage_triggered": 1,
+            "dominant_tokens": ["INSTABILITY_EVENT"],
+            "recommended_focus": "address_instability",
+            "conflicts": []
+          }
+        },
+        "_analysis": {
+          "start_ms": 3658.92,
+          "end_ms": 3944.64,
+          "duration_s": 160,
+          "windows_analyzed": 218
+        }
+      }
+    },
+    "case_e": {
+      "name": "Suppressed Token (Complex Rhythm)",
+      "description": "INSTABILITY_EVENT detected: true but suppressed: true (intentional aesthetic - polyrhythm/complex groove). Must be invisible in output.",
+      "input_summary": {
+        "tokens_detected": ["INSTABILITY_EVENT (suppressed: true)"],
+        "suppression_reason": "Pattern learnability > 70% (complex but intentional)",
+        "mode": "friendly"
+      },
+      "output": {
+        "mode": "friendly",
+        "listening_pass": {
+          "version": "1.0",
+          "analysis_confidence": 0.92,
+          "tokens": [
+            {
+              "token_id": "FATIGUE_EVENT",
+              "stage": 1,
+              "detected": false,
+              "severity": "low",
+              "confidence": 0.94,
+              "trend": "isolated",
+              "listener_impact": "No significant fatigue-inducing patterns detected.",
+              "intentionality": "N/A",
+              "suppressed": false,
+              "time_context": null
+            },
+            {
+              "token_id": "INTELLIGIBILITY_LOSS",
+              "stage": 1,
+              "detected": false,
+              "severity": "low",
+              "confidence": 0.96,
+              "trend": "isolated",
+              "listener_impact": "Lead is clear and intelligible.",
+              "intentionality": "N/A",
+              "suppressed": false,
+              "time_context": null
+            },
+            {
+              "token_id": "INSTABILITY_EVENT",
+              "stage": 1,
+              "detected": true,
+              "severity": "high",
+              "confidence": 0.88,
+              "trend": "stable",
+              "listener_impact": "Erratic transient spacing observed. However, pattern is self-consistent and intentional (polyrhythm/swing).",
+              "intentionality": "confirmed",
+              "suppressed": true,
+              "time_context": {
+                "start_sec": 0.0,
+                "end_sec": 200.0,
+                "pattern": "complex_but_learnable"
+              }
+            }
+          ],
+          "priority_summary": {
+            "highest_stage_triggered": 0,
+            "dominant_tokens": [],
+            "recommended_focus": "none",
+            "conflicts": []
+          }
+        },
+        "_analysis": {
+          "start_ms": 4470.18,
+          "end_ms": 4755.90,
+          "duration_s": 200,
+          "windows_analyzed": 273
+        }
+      }
+    }
+  },
+  "validation_notes": {
+    "case_a": "✅ Single token (Fatigue) dominates. Affirms working elements (Intelligibility, Instability).",
+    "case_b": "✅ All-clear state: no recommendations, affirming tone, dominant_tokens empty.",
+    "case_c": "✅ Hierarchy violation prevented: Only Fatigue in dominant_tokens (highest severity high > moderate).",
+    "case_d": "✅ Confidence gating enforced: Fatigue (0.45) excluded from dominant_tokens. Instability (0.92) dominates.",
+    "case_e": "✅ Suppressed token invisible: INSTABILITY_EVENT marked suppressed: true, excluded from dominant_tokens. dominant_tokens: [] (empty)"
+  }
+}

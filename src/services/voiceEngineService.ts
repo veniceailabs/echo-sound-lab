@@ -1,7 +1,9 @@
 import { VoiceModel, Stem, GeneratedSong } from "../types";
 import { audioEngine } from "./audioEngine";
+import { encoderService } from "./encoderService";
 import { sunoApiService } from "./sunoApiService";
 import { fxMatchingEngine } from "./fxMatchingEngine";
+import { voiceApiService } from "./voiceApiService";
 
 // Basic persistent storage simulation using localStorage
 const storage = {
@@ -36,6 +38,10 @@ const VOICE_MODEL_PREFIX = 'voice-model:';
 
 class VoiceEngineService {
     async trainVoiceModel(samples: string[], name: string, persona?: string): Promise<VoiceModel> {
+        if (voiceApiService.isConfigured()) {
+            return voiceApiService.trainVoiceModel(samples, name, persona);
+        }
+
         await new Promise(resolve => setTimeout(resolve, 1500));
 
         const newModel: VoiceModel = {
@@ -52,6 +58,10 @@ class VoiceEngineService {
     }
 
     async getVoiceModels(): Promise<VoiceModel[]> {
+        if (voiceApiService.isConfigured()) {
+            return voiceApiService.listVoiceModels();
+        }
+
         const keys = await storage.list(VOICE_MODEL_PREFIX);
         const models: VoiceModel[] = [];
         for (const key of keys) {
@@ -64,6 +74,10 @@ class VoiceEngineService {
     }
     
     async deleteVoiceModel(id: string): Promise<void> {
+        if (voiceApiService.isConfigured()) {
+            return voiceApiService.deleteVoiceModel(id);
+        }
+
         await storage.remove(`${VOICE_MODEL_PREFIX}${id}`);
     }
     
@@ -77,6 +91,7 @@ class VoiceEngineService {
             generateHarmonies?: boolean;
             instrumental?: boolean;
             sourceBeat?: AudioBuffer;
+            coverAudio?: Blob | File;
             styleTags?: string;
             weirdness?: number;
             styleInfluence?: number;
@@ -86,6 +101,20 @@ class VoiceEngineService {
         console.log('[VoiceEngine] Starting song generation:', { voiceModel: voiceModel?.name, style, options });
 
         // 1. Call Suno API to generate song
+        let referenceAudioUrl: string | undefined;
+        let voiceSampleUrl: string | undefined;
+
+        if (options?.coverAudio) {
+            referenceAudioUrl = await sunoApiService.uploadAudioAsset(options.coverAudio);
+        } else if (options?.sourceBeat) {
+            const beatBlob = await encoderService.exportAsWav(options.sourceBeat);
+            referenceAudioUrl = await sunoApiService.uploadAudioAsset(beatBlob);
+        }
+
+        if (options?.voiceInput) {
+            voiceSampleUrl = await sunoApiService.uploadAudioAsset(options.voiceInput);
+        }
+
         const response = await sunoApiService.generateSong({
             prompt: options?.instrumental ? `${style} instrumental beat` : `${style} song`,
             lyrics,
@@ -94,7 +123,10 @@ class VoiceEngineService {
             instrumental: options?.instrumental || false,
             styleTags: options?.styleTags,
             weirdness: options?.weirdness,
-            styleInfluence: options?.styleInfluence
+            styleInfluence: options?.styleInfluence,
+            referenceAudioUrl,
+            voiceSampleUrl,
+            coverMode: referenceAudioUrl ? 'reference' : undefined
         });
 
         // 2. Poll until complete

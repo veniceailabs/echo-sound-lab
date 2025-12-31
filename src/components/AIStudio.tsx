@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { VoiceModel, GeneratedSong } from '../types';
+import { VoiceModel, GeneratedSong, HookAsset, AnimateArtRequest } from '../types';
 import { voiceEngineService } from '../services/voiceEngineService';
 import { useRecorder } from '../hooks/useRecorder';
+import { animateArtService } from '../services/animateArtService';
 import { glassCard, glowButton, secondaryButton, sectionHeader, gradientDivider, cn } from '../utils/secondLightStyles';
 import SongGenerationWizard from './SongGenerationWizard';
 
@@ -13,14 +14,60 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated }) => {
     const [view, setView] = useState<'library' | 'training' | 'generate'>('library');
     const [models, setModels] = useState<VoiceModel[]>([]);
     const [selectedModel, setSelectedModel] = useState<VoiceModel | null>(null);
+    const [coverArtFile, setCoverArtFile] = useState<File | null>(null);
+    const [coverArtUrl, setCoverArtUrl] = useState<string | null>(null);
+    const [hooks, setHooks] = useState<HookAsset[]>([]);
+    const [hookStyle, setHookStyle] = useState<AnimateArtRequest['style']>('cinematic');
+    const [hookDuration, setHookDuration] = useState<number>(12);
+    const [hookPrompt, setHookPrompt] = useState<string>('');
+    const [isAnimating, setIsAnimating] = useState(false);
 
     useEffect(() => {
         loadModels();
+        setHooks(animateArtService.getHooks());
     }, []);
 
     const loadModels = async () => {
         const loaded = await voiceEngineService.getVoiceModels();
         setModels(loaded);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (coverArtUrl) {
+                URL.revokeObjectURL(coverArtUrl);
+            }
+        };
+    }, [coverArtUrl]);
+
+    const handleCoverArtUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (coverArtUrl) {
+            URL.revokeObjectURL(coverArtUrl);
+        }
+        setCoverArtFile(file);
+        setCoverArtUrl(URL.createObjectURL(file));
+    };
+
+    const handleAnimateArt = async () => {
+        if (!coverArtUrl) {
+            alert('Upload cover art before animating.');
+            return;
+        }
+        setIsAnimating(true);
+        const request: AnimateArtRequest = {
+            sourceImageUrl: coverArtUrl,
+            durationSeconds: hookDuration,
+            style: hookStyle,
+            prompt: hookPrompt || undefined,
+        };
+        try {
+            const newHooks = await animateArtService.generateHooks(request, 2);
+            setHooks(prev => [...newHooks, ...prev]);
+        } finally {
+            setIsAnimating(false);
+        }
     };
 
     const handleTrainingComplete = async (samples: string[], name: string, persona?: string) => {
@@ -38,6 +85,62 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated }) => {
 
     return (
         <div className="w-full space-y-6">
+            <div className={cn(glassCard, 'p-6')}>
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <h2 className={cn(sectionHeader, 'text-3xl mb-2')}>AI Studio</h2>
+                        <p className="text-sm text-slate-400">
+                            Clone voice, craft a custom song or cover, and build a full release-ready track.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {(['library', 'training', 'generate'] as const).map((tab) => (
+                            <button
+                                key={tab}
+                                onClick={() => setView(tab)}
+                                className={cn(
+                                    'px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all',
+                                    view === tab
+                                        ? 'bg-orange-500 text-white border border-orange-400/50 shadow-[0_0_20px_rgba(249,115,22,0.2)]'
+                                        : 'bg-slate-800 text-slate-400 border border-slate-700/50 hover:text-blue-300 hover:border-blue-400/40'
+                                )}
+                            >
+                                {tab === 'library' && 'Voice Library'}
+                                {tab === 'training' && 'Clone Voice'}
+                                {tab === 'generate' && 'Generate'}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+                <div className={cn(gradientDivider, 'mt-6')} />
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                        {
+                            title: 'Clone Voice',
+                            description: 'Train a model from clean vocal samples and define a vocal persona.',
+                            accent: 'from-orange-500/20 to-orange-600/10 border-orange-500/30',
+                        },
+                        {
+                            title: 'Generate Song',
+                            description: 'Create a full song or cover with your AI voice and reference input.',
+                            accent: 'from-sky-500/20 to-blue-500/10 border-sky-500/30',
+                        },
+                        {
+                            title: 'Finish & Export',
+                            description: 'Refine stems, mix, and export a ready-to-release master.',
+                            accent: 'from-white/10 to-slate-200/10 border-white/20',
+                        },
+                    ].map((item) => (
+                        <div
+                            key={item.title}
+                            className={`rounded-2xl border p-4 bg-gradient-to-br ${item.accent}`}
+                        >
+                            <h3 className="text-sm font-bold text-white mb-2">{item.title}</h3>
+                            <p className="text-xs text-slate-400">{item.description}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
             {view === 'library' && (
                 <VoiceModelLibrary
                     models={models}
@@ -60,6 +163,125 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated }) => {
                     onCancel={() => setView('library')}
                 />
             )}
+            <div className={cn(glassCard, 'p-6')}>
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div>
+                        <h3 className="text-lg font-bold text-white mb-1">Animate Art and Hooks</h3>
+                        <p className="text-sm text-slate-400">
+                            Turn cover art into hook-ready visuals for your community to remix.
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleAnimateArt}
+                        disabled={isAnimating}
+                        className={cn(
+                            glowButton,
+                            'px-6 py-3 text-sm',
+                            isAnimating && 'opacity-60 cursor-not-allowed'
+                        )}
+                    >
+                        {isAnimating ? 'Animating...' : 'Animate Art'}
+                    </button>
+                </div>
+
+                <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <label className="block bg-slate-900/60 rounded-2xl border border-slate-700/40 p-4 cursor-pointer hover:border-orange-500/40 transition-all">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Cover Art</span>
+                            <span className="text-[10px] text-orange-300 uppercase tracking-wider">Upload</span>
+                        </div>
+                        <div className="mt-4 h-36 rounded-xl border border-dashed border-slate-700/60 bg-slate-950/60 flex items-center justify-center overflow-hidden">
+                            {coverArtUrl ? (
+                                <img src={coverArtUrl} alt={coverArtFile?.name || 'Cover art'} className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="text-center text-slate-500 text-xs">
+                                    Drop PNG/JPG
+                                </div>
+                            )}
+                        </div>
+                        <input type="file" accept="image/*" onChange={handleCoverArtUpload} className="hidden" />
+                    </label>
+
+                    <div className="bg-slate-900/60 rounded-2xl border border-slate-700/40 p-4">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Hook Controls</span>
+                            <span className="text-[10px] text-sky-300 uppercase tracking-wider">Friendly</span>
+                        </div>
+                        <div className="mt-4 space-y-4">
+                            <div>
+                                <div className="text-xs text-slate-400 mb-2">Style</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {(['cinematic', 'abstract', 'lyric', 'performance'] as const).map(style => (
+                                        <button
+                                            key={style}
+                                            onClick={() => setHookStyle(style)}
+                                            className={cn(
+                                                'px-3 py-1.5 rounded-full text-[10px] uppercase tracking-wider transition-all border',
+                                                hookStyle === style
+                                                    ? 'bg-orange-500/20 text-orange-200 border-orange-500/40'
+                                                    : 'bg-slate-900/60 text-slate-400 border-slate-700/40 hover:text-slate-200'
+                                            )}
+                                        >
+                                            {style}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex items-center justify-between text-xs text-slate-400">
+                                    <span>Duration</span>
+                                    <span className="text-slate-200">{hookDuration}s</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={6}
+                                    max={18}
+                                    step={1}
+                                    value={hookDuration}
+                                    onChange={(e) => setHookDuration(parseFloat(e.target.value))}
+                                    className="w-full mt-2"
+                                />
+                            </div>
+                            <div>
+                                <div className="text-xs text-slate-400 mb-2">Prompt</div>
+                                <input
+                                    type="text"
+                                    value={hookPrompt}
+                                    onChange={(e) => setHookPrompt(e.target.value)}
+                                    placeholder="Warm neon, cinematic zoom, rhythmic cuts"
+                                    className="w-full bg-slate-950/70 border border-slate-700/50 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder:text-slate-500"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-900/60 rounded-2xl border border-slate-700/40 p-4">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Hooks</span>
+                            <span className="text-[10px] text-orange-300 uppercase tracking-wider">{hooks.length} ready</span>
+                        </div>
+                        <div className="mt-4 space-y-3 max-h-44 overflow-y-auto pr-1">
+                            {hooks.length === 0 ? (
+                                <div className="text-xs text-slate-500 text-center py-8">
+                                    No hooks yet. Animate art to generate.
+                                </div>
+                            ) : (
+                                hooks.map(hook => (
+                                    <div key={hook.id} className="flex items-center justify-between gap-3 bg-slate-950/60 border border-slate-700/50 rounded-xl px-3 py-2">
+                                        <div>
+                                            <div className="text-xs text-slate-200 font-semibold">{hook.title}</div>
+                                            <div className="text-[10px] text-slate-500">{hook.durationSeconds}s • {hook.status}</div>
+                                        </div>
+                                        <button className="text-[10px] uppercase tracking-wider text-sky-300 border border-sky-500/30 px-2 py-1 rounded-full">
+                                            Preview
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };
@@ -81,7 +303,16 @@ const VoiceModelLibrary: React.FC<{
                     <p className="text-sm text-slate-400">Train custom voice models for AI-powered vocal generation</p>
                 </div>
                 <div className="flex gap-3">
-                    <button onClick={onGenerateSong} className={cn(glowButton, 'px-6 py-3 text-base')}>
+                    <button
+                        onClick={onGenerateSong}
+                        disabled={models.length === 0}
+                        className={cn(
+                            glowButton,
+                            'px-6 py-3 text-base',
+                            models.length === 0 && 'opacity-50 cursor-not-allowed'
+                        )}
+                        title={models.length === 0 ? 'Create a voice model to generate a song' : 'Generate a song'}
+                    >
                         Generate Song
                     </button>
                     <button onClick={onTrainNew} className={cn(secondaryButton, 'px-6 py-3 text-base')}>
@@ -96,7 +327,7 @@ const VoiceModelLibrary: React.FC<{
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {models.length === 0 ? (
                     <div className="col-span-full text-center py-16">
-                        <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center border border-purple-500/30">
+                        <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-orange-500/20 to-blue-500/15 flex items-center justify-center border border-orange-500/30">
                             <span className="text-4xl">🎙️</span>
                         </div>
                         <h3 className="text-lg font-bold text-slate-300 mb-2">No voice models yet</h3>
@@ -119,7 +350,7 @@ const VoiceModelLibrary: React.FC<{
                         >
                             <div className="flex items-start justify-between mb-4">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg">
+                                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-blue-600 flex items-center justify-center shadow-lg">
                                         <span className="text-2xl">🎙️</span>
                                     </div>
                                     <div>
@@ -265,8 +496,8 @@ const VoiceTrainingWizard: React.FC<{
                                         onClick={() => setPersona(p.value === persona ? '' : p.value)}
                                         className={cn(
                                             'p-4 rounded-xl border transition-all duration-300 text-left',
-                                            persona === p.value
-                                                ? 'bg-purple-500/20 border-purple-500/50 shadow-[0_0_15px_rgba(168,85,247,0.2)]'
+                                                persona === p.value
+                                                ? 'bg-orange-500/20 border-orange-500/50 shadow-[0_0_15px_rgba(249,115,22,0.2)]'
                                                 : 'bg-slate-800/50 border-slate-700/30 hover:border-slate-600/50'
                                         )}
                                     >
@@ -298,7 +529,7 @@ const VoiceTrainingWizard: React.FC<{
                         <div className="bg-slate-900/50 rounded-2xl p-8 border border-slate-700/30 text-center">
                             {recordingState === 'idle' && (
                                 <div className="space-y-6">
-                                    <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.3)]">
+                                    <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-orange-500 to-blue-600 flex items-center justify-center shadow-[0_0_30px_rgba(59,130,246,0.25)]">
                                         <span className="text-4xl">🎙️</span>
                                     </div>
                                     <div>
@@ -309,7 +540,7 @@ const VoiceTrainingWizard: React.FC<{
                                     </div>
                                     <button
                                         onClick={startRecording}
-                                        className="bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-400 hover:to-pink-500 text-white font-bold py-4 px-8 rounded-2xl shadow-[0_0_25px_rgba(239,68,68,0.4)] hover:shadow-[0_0_35px_rgba(239,68,68,0.6)] transition-all duration-300"
+                                        className="bg-gradient-to-r from-orange-500 to-blue-600 hover:from-orange-400 hover:to-blue-500 text-white font-bold py-4 px-8 rounded-2xl shadow-[0_0_25px_rgba(59,130,246,0.35)] hover:shadow-[0_0_35px_rgba(59,130,246,0.5)] transition-all duration-300"
                                     >
                                         Start Recording
                                     </button>

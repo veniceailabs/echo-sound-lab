@@ -54,6 +54,16 @@ export const ParametricEQPanel: React.FC<ParametricEQPanelProps> = ({ dynamicEq,
     return `${(freq / 1000).toFixed(2)}kHz`;
   };
 
+  const handleCurveChange = (bandIndex: number, updates: { frequency?: number, gain?: number } | number) => {
+    const isNumber = typeof updates === 'number';
+    const enabledBands = dynamicEq.filter(b => b.enabled);
+    if (bandIndex < enabledBands.length) {
+      const band = enabledBands[bandIndex];
+      const updateObj = isNumber ? { gain: updates } : updates;
+      handleBandChange(band.id, updateObj);
+    }
+  };
+
   return (
     <div className={`${glassCard} space-y-6`}>
       <style>{`
@@ -122,6 +132,7 @@ export const ParametricEQPanel: React.FC<ParametricEQPanelProps> = ({ dynamicEq,
 
       {/* EQ Curve Visualization */}
       <div>
+        <p className="text-xs text-slate-400 mb-2">Drag the orange dots on the curve or adjust controls below</p>
         <EQCurveVisualizer
           bands={dynamicEq
             .filter(b => b.enabled)
@@ -130,6 +141,8 @@ export const ParametricEQPanel: React.FC<ParametricEQPanelProps> = ({ dynamicEq,
           height={120}
           showGrid={true}
           showLabels={true}
+          onBandChange={handleCurveChange}
+          interactive={true}
         />
       </div>
 
@@ -312,7 +325,7 @@ export const ParametricEQPanel: React.FC<ParametricEQPanelProps> = ({ dynamicEq,
                       onClick={() => handleBandChange(band.id, { mode: 'expand' })}
                       className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${
                         band.mode === 'expand'
-                          ? 'bg-gradient-to-br from-purple-500/30 to-purple-600/20 text-purple-400 border border-purple-500/50 shadow-[0_2px_8px_rgba(168,85,247,0.2)]'
+                          ? 'bg-gradient-to-br from-sky-500/30 to-blue-600/20 text-blue-300 border border-blue-500/50 shadow-[0_2px_8px_rgba(59,130,246,0.2)]'
                           : 'bg-slate-700/40 text-slate-400 border border-white/10 hover:bg-slate-700/50'
                       }`}
                     >

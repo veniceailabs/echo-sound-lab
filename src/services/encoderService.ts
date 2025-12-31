@@ -1,14 +1,15 @@
 import { ExportRequest, EncoderResult } from '../types';
-// @ts-ignore - lamejs doesn't have types
-import lamejs from 'lamejs';
+// @ts-ignore - @breezystack/lamejs doesn't have types
+import { Mp3Encoder } from '@breezystack/lamejs';
 
 export type Mp3Quality = 128 | 192 | 256 | 320;
 
-// Real MP3 encoder using lamejs
+// MP3 encoder using @breezystack/lamejs
 const encodeBufferToMp3 = async (buffer: AudioBuffer, kbps: Mp3Quality = 320): Promise<Blob> => {
+
     const numChannels = buffer.numberOfChannels;
     const sampleRate = buffer.sampleRate;
-    const mp3encoder = new lamejs.Mp3Encoder(numChannels, sampleRate, kbps);
+    const mp3encoder = new Mp3Encoder(numChannels, sampleRate, kbps);
 
     const left = buffer.getChannelData(0);
     const right = numChannels > 1 ? buffer.getChannelData(1) : left;
@@ -45,7 +46,7 @@ const encodeBufferToMp3 = async (buffer: AudioBuffer, kbps: Mp3Quality = 320): P
         mp3Data.push(new Int8Array(mp3buf));
     }
 
-    return new Blob(mp3Data, { type: 'audio/mp3' });
+    return new Blob(mp3Data, { type: 'audio/mpeg' });
 };
 
 class EncoderService {
@@ -119,14 +120,25 @@ class EncoderService {
 
     private async encodeToMp3(request: ExportRequest): Promise<EncoderResult> {
         try {
+            // Try to encode as MP3
             const blob = await encodeBufferToMp3(request.buffer);
             return { success: true, blob };
-        } catch (e) {
-            console.error("MP3 encoding failed", e);
-            return { 
-                success: false, 
-                errorMessage: "MP3 encoding failed." 
-            };
+        } catch (e: any) {
+            console.error("MP3 encoding failed, falling back to WAV", e);
+            // Fallback to WAV if MP3 fails
+            try {
+                const blob = this.bufferToWavBlob(request.buffer);
+                return {
+                    success: true,
+                    blob,
+                    note: "MP3 encoding unavailable - exported as WAV instead"
+                };
+            } catch (fallbackError) {
+                return {
+                    success: false,
+                    errorMessage: "Both MP3 and WAV encoding failed. Try again later."
+                };
+            }
         }
     }
 
@@ -206,7 +218,7 @@ export const encodeToMp3 = async (buffer: AudioBuffer, quality: Mp3Quality = 320
     try {
         const blob = await encodeBufferToMp3(buffer, quality);
         return { success: true, blob };
-    } catch (e) {
-        return { success: false, errorMessage: 'MP3 encoding failed' };
+    } catch (e: any) {
+        return { success: false, errorMessage: e.message || 'MP3 encoding failed' };
     }
 };

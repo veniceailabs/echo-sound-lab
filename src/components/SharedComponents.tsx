@@ -6,7 +6,26 @@ export const FeedbackButton: React.FC<{ onClick?: () => void }> = ({ onClick }) 
   const handleClick = () => {
     const email = 'liveconsciouslyllc@gmail.com';
     const subject = encodeURIComponent('Echo Sound Lab Feedback');
-    const body = encodeURIComponent(`What's on your mind?
+    const body = encodeURIComponent(`Hey! 👋
+
+What's up? Tell us what's on your mind:
+
+[ ] Something's broken
+[ ] Cool idea
+[ ] Just a question
+[ ] Other
+
+---
+
+So what happened?
+
+
+What were you doing when it happened?
+
+
+Anything else we should know?
+
+Browser & device info:
 
 `);
 
@@ -17,7 +36,7 @@ export const FeedbackButton: React.FC<{ onClick?: () => void }> = ({ onClick }) 
   return (
     <button
       onClick={handleClick}
-      className="fixed bottom-[62px] right-4 z-40 bg-slate-900 text-orange-400 border border-orange-500/40 backdrop-blur-sm px-3.5 py-1.5 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6)] hover:text-orange-300 transition-all hover:scale-105 active:scale-95 flex items-center gap-2 group"
+      className="fixed bottom-[62px] right-4 z-40 bg-slate-900 text-orange-400 border border-orange-500/40 backdrop-blur-sm px-3.5 py-1.5 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6)] hover:text-orange-300 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 group"
     >
       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -93,7 +112,7 @@ export const RevisionLogModal: React.FC<{ revisionLog: RevisionLog; onRevert: (e
                 <div key={entry.id} className="bg-slate-800 p-4 rounded mb-2">
                     <div className="flex justify-between"><span className="font-bold text-blue-400">{entry.id}</span><span className="text-xs text-slate-500">{new Date(entry.timestamp).toLocaleTimeString()}</span></div>
                     <p className="text-sm text-slate-300">{entry.summary}</p>
-                    <button onClick={() => { onRevert(entry); onClose(); }} className="mt-2 text-xs bg-purple-600 text-white px-2 py-1 rounded">Revert</button>
+                    <button onClick={() => { onRevert(entry); onClose(); }} className="mt-2 text-xs bg-orange-600 text-white px-2 py-1 rounded">Revert</button>
                 </div>
             ))}
             <button onClick={onClose} className="w-full mt-4 bg-slate-700 text-white p-2 rounded">Close</button>

@@ -42,7 +42,7 @@ const LOCAL_PLUGINS: LocalPluginDefinition[] = [
     description: 'Tempo-synced delay with feedback and filtering',
     category: 'delay',
     processorName: 'echo-delay-processor',
-    processorUrl: 'echo-delay-processor.js',
+    processorUrl: '/worklets/echo-delay-processor.js',
     parameters: [
       { id: 'delayTime', label: 'Delay Time', minValue: 0.01, maxValue: 2.0, defaultValue: 0.25, unit: 's' },
       { id: 'feedback', label: 'Feedback', minValue: 0, maxValue: 0.95, defaultValue: 0.4 },
@@ -58,7 +58,7 @@ const LOCAL_PLUGINS: LocalPluginDefinition[] = [
     description: 'Algorithmic reverb with early reflections and tail',
     category: 'reverb',
     processorName: 'echo-reverb-processor',
-    processorUrl: 'echo-reverb-processor.js',
+    processorUrl: '/worklets/echo-reverb-processor.js',
     parameters: [
       { id: 'roomSize', label: 'Room Size', minValue: 0.1, maxValue: 1.0, defaultValue: 0.5 },
       { id: 'decay', label: 'Decay', minValue: 0.1, maxValue: 10.0, defaultValue: 2.0, unit: 's' },
@@ -74,7 +74,7 @@ const LOCAL_PLUGINS: LocalPluginDefinition[] = [
     description: 'Rich stereo chorus with multiple voices',
     category: 'modulation',
     processorName: 'echo-chorus-processor',
-    processorUrl: 'echo-chorus-processor.js',
+    processorUrl: '/worklets/echo-chorus-processor.js',
     parameters: [
       { id: 'rate', label: 'Rate', minValue: 0.1, maxValue: 10.0, defaultValue: 1.0, unit: 'Hz' },
       { id: 'depth', label: 'Depth', minValue: 0, maxValue: 1, defaultValue: 0.5 },

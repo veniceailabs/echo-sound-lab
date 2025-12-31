@@ -203,7 +203,7 @@ export const ReferenceMixingPanel: React.FC<ReferenceMixingPanelProps> = ({ onPr
                     <div className="text-xs text-slate-500 uppercase">Space</div>
                   </div>
                   <div className="bg-slate-800/50 p-4 rounded-xl text-center">
-                    <div className="text-lg font-bold text-purple-400 capitalize">{referenceAnalysis.overallCharacter.energy}</div>
+                    <div className="text-lg font-bold text-blue-400 capitalize">{referenceAnalysis.overallCharacter.energy}</div>
                     <div className="text-xs text-slate-500 uppercase">Energy</div>
                   </div>
                 </div>
@@ -267,8 +267,8 @@ export const ReferenceMixingPanel: React.FC<ReferenceMixingPanelProps> = ({ onPr
 
                 {/* Sidechain Analysis */}
                 {referenceAnalysis.sidechain.detected && (
-                  <div className="bg-purple-500/10 border border-purple-500/30 p-4 rounded-xl">
-                    <h4 className="text-sm font-bold text-purple-400 uppercase mb-2">Sidechain Detected</h4>
+                  <div className="bg-orange-500/10 border border-orange-500/30 p-4 rounded-xl">
+                    <h4 className="text-sm font-bold text-orange-400 uppercase mb-2">Sidechain Detected</h4>
                     <p className="text-sm text-slate-300">
                       {referenceAnalysis.sidechain.amount.toFixed(1)}dB ducking with {referenceAnalysis.sidechain.releaseMs}ms release
                     </p>

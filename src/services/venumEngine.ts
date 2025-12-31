@@ -195,6 +195,7 @@ export const generateEchoReportCard = async (
   options: GenerateEchoReportCardOptions
 ): Promise<ShareableCard> => {
   const { trackName, report, genreProfile, beforeMetrics, afterMetrics, processedConfig } = options;
+  const safeTrackName = trackName && trackName.trim().length > 0 ? trackName : 'Untitled Track';
   const canvas = document.createElement('canvas');
   canvas.width = 1080;
   canvas.height = 1350; // Instagram portrait
@@ -223,7 +224,7 @@ export const generateEchoReportCard = async (
   // Track name
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 44px system-ui';
-  const displayName = trackName.length > 30 ? trackName.slice(0, 27) + '...' : trackName;
+  const displayName = safeTrackName.length > 30 ? safeTrackName.slice(0, 27) + '...' : safeTrackName;
   ctx.fillText(displayName, 540, 150);
 
   // Processed On Date/Time
@@ -332,7 +333,7 @@ export const generateEchoReportCard = async (
   const appliedTools = new Set<string>();
   if (processedConfig) {
       if (processedConfig.eq && processedConfig.eq.some(b => b.gain !== 0)) appliedTools.add('Frequency Shaping');
-      if (processedConfig.compression || processedConfig.multibandCompression) appliedTools.add('Dynamic Processing');
+      if (processedConfig.compression) appliedTools.add('Dynamic Processing');
       if (processedConfig.saturation) appliedTools.add('Harmonic Enhancement');
       if (processedConfig.stereoImager) appliedTools.add('Stereo Imaging');
       if (processedConfig.limiter) appliedTools.add('Loudness Control');
@@ -407,7 +408,7 @@ export const generateEchoReportCard = async (
   return {
     type: 'echo_report',
     imageDataUrl,
-    caption: `Just mastered "${trackName}" with Echo Sound Lab ${genreProfile ? `// ${genreProfile.name} vibe` : ''}`,
+    caption: `Just mastered "${safeTrackName}" with Echo Sound Lab ${genreProfile ? `// ${genreProfile.name} vibe` : ''}`,
     hashtags: ['#mixing', '#mastering', '#producer', '#musicproduction', '#echosoundlab', genreProfile ? `#${genreProfile.id.replace('-', '')}` : ''].filter(Boolean),
   };
 };

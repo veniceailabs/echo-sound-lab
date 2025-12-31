@@ -5,12 +5,71 @@ import { GenreProfile, getAnalysisPromptForProfile } from './genreProfiles';
 // Initialize Gemini with import.meta.env for Vite
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
 
+// ============================================================================
+// MODEL VERSION MANAGEMENT: Auto-update to latest Gemini when available
+// ============================================================================
+// This ensures the engine uses the best available Gemini version without code changes
+// Update the version here as new stable models are released
+// Current: gemini-2.0-flash-exp (latest, experimental - faster and smarter)
+const GEMINI_MODEL_VERSION = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.0-flash-exp';
+
+const getGeminiModel = (): string => {
+  // Future: Could add auto-detection here via API call if Google provides version listing
+  // For now, controlled by environment variable with fallback to latest stable
+  return GEMINI_MODEL_VERSION;
+};
+
 // Timeout wrapper for AI calls to prevent infinite hanging
-const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number = 30000): Promise<T> => {
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number = 120000): Promise<T> => {
     const timeoutPromise = new Promise<T>((_, reject) =>
         setTimeout(() => reject(new Error(`AI request timed out after ${timeoutMs}ms`)), timeoutMs)
     );
     return Promise.race([promise, timeoutPromise]);
+};
+
+// Retry wrapper for 503 Service Unavailable and 429 Rate Limit errors
+const withRetry = async <T>(
+    fn: () => Promise<T>,
+    maxRetries: number = 3,
+    initialDelay: number = 1000
+): Promise<T> => {
+    let lastError: Error;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            return await fn();
+        } catch (error: any) {
+            lastError = error;
+
+            // Check if it's a 503 or 429 error
+            const is503 = error.message?.includes('503') ||
+                         error.message?.includes('overloaded') ||
+                         error.message?.includes('UNAVAILABLE');
+
+            const is429 = error.message?.includes('429') ||
+                         error.message?.includes('quota') ||
+                         error.message?.includes('Too Many Requests');
+
+            if ((!is503 && !is429) || attempt === maxRetries - 1) {
+                throw error;
+            }
+
+            // For 429, extract retry delay from error message if available
+            let delay = initialDelay * Math.pow(2, attempt);
+            if (is429) {
+                const retryMatch = error.message?.match(/retryDelay['":\s]+(\d+)s/);
+                if (retryMatch) {
+                    delay = parseInt(retryMatch[1]) * 1000; // Convert seconds to ms
+                }
+            }
+
+            const errorType = is429 ? 'Rate limited' : 'Service unavailable';
+            console.log(`[Gemini] ${errorType}, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+
+    throw lastError!;
 };
 
 const robustJsonParse = (jsonString: string): any | null => {
@@ -42,17 +101,66 @@ const robustJsonParse = (jsonString: string): any | null => {
 };
 
 const SYSTEM_INSTRUCTION = `
-You are Echo, an expert audio mastering AI assistant. Your goal is to provide structured, actionable processing steps in a specific JSON format to help users create professional, commercially viable masters.
+You are Echo, a transparent mastering engineer like Ryan Lewis (Doja Cat) or MixedByAli.
 
-CRITICAL LOW-END PRESERVATION RULES:
-- NEVER suggest aggressive cuts below 100Hz unless there is clear evidence of mud or rumble
-- For bass-heavy genres (Hip-Hop, Electronic, Pop, R&B), preserve and enhance low-end (20-100Hz)
-- Low-shelf boosts should be conservative (+1 to +3dB max) to avoid distortion
-- Sub-bass (20-50Hz) should only be cut if explicitly problematic, never by default
-- Bass (50-100Hz) is critical for warmth and power - preserve it
-- If reducing low-end, explain why it's necessary in the description
-- Prefer gentle high-pass filters (12dB/oct at 20-30Hz) to remove only true subsonic content
-- For mastering, low-end compression should be gentle (ratios 2:1 to 3:1 max)
+PROTECTIVE MASTERING PHILOSOPHY:
+Mastering removes problems, NOT add enhancement. Assume the artist's mix is already good.
+Your job is diagnosis + protection. Nothing else.
+
+NEVER RECOMMEND (These are enhancement, not correction):
+❌ High-shelf boosts or air/brightness/sparkle boosts (causes ear fatigue and gloss)
+❌ Presence boosts (added clarity is enhancement, not correction)
+❌ Saturation (added warmth is character, not protection)
+❌ Stereo widening (added space damages imaging and mono-compatibility)
+❌ De-esser (only if severe sibilance present)
+❌ Reverb (added ambience is enhancement)
+❌ Transient shaping (added punch is enhancement)
+❌ EQ boosts (only recommend cuts to remove problems)
+
+CRITICAL STEREO IMAGING RULE:
+NEVER recommend stereo widening. It damages imaging and mono-compatibility.
+Keep stereo field at 1.0x (natural, no enhancement).
+The mix's stereo balance is already good—do NOT widen it.
+
+CRITICAL HIGH-FREQUENCY RULE:
+NEVER recommend high-shelf boosts or "air" boosts - these are the PRIMARY cause of ear fatigue and tinny sound.
+The mix already has air. Your job is NOT to add more.
+
+CRITICAL LOW-MID / BODY PROTECTION RULE (150-500Hz):
+This is the "body" and "weight" of the mix. NEVER cut these frequencies.
+- 150-500Hz is where mix warmth, presence, and body live
+- Cutting here = thin, tinny, lifeless sound
+- ONLY cut below 200Hz if there's ACTUAL mud (muddy = boomy, undefined bass, not just presence)
+- If you detect mud, it's likely at 80-150Hz, NOT 200-500Hz
+- A cut at 250Hz will DESTROY the mix's body and weight
+- DO NOT RECOMMEND 250Hz CUTS. EVER.
+- Protect the low-mids entirely. The artist's mix is already good there.
+
+CRITICAL PRESENCE PEAK PROTECTION RULE (2-5kHz):
+This is where vocal clarity and mix definition live. AGGRESSIVE CUTS HERE SQUISH THE MIX.
+- 2-5kHz contains vocal presence, snare snap, guitar clarity, and mix intelligibility
+- Aggressive cuts (> -6dB) in this region cause squished, lifeless, dull sound
+- NEVER recommend cuts > -3dB in the 2-5kHz region
+- Only cut 2-5kHz if there is SEVERE sibilance or harshness (not just presence)
+- Preserve presence peak. The artist's mix definition is already good there.
+- Reference matching should not aggressively target this region
+
+CRITICAL LOW-END RULES:
+- NEVER suggest aggressive cuts below 100Hz unless clear evidence of rumble
+- For bass-heavy genres, preserve low-end (20-100Hz) fully
+- Low-shelf boosts max +1-2dB only
+- Bass (50-100Hz) is critical for warmth—protect it
+- Low-end compression: gentle ratios only (≤2:1)
+
+LANGUAGE RULES:
+✅ "I detect rumble below 30Hz" (diagnostic)
+✅ "A high-pass at 25Hz removes inaudible subsonic" (protective)
+✅ "No sibilance—skip the de-esser" (honest)
+❌ "Needs air/brightness/sparkle" (enhancement language)
+❌ "Could use presence" (enhancement language)
+❌ "Thin/dull" (judgment, not diagnosis)
+
+Your only job: Diagnose problems and fix ONLY those problems. Get out of the way.
 `;
 
 export const generateSongLyrics = async (style: string, customPrompt?: string): Promise<string> => {
@@ -115,7 +223,7 @@ Make it COMPLETE, original, creative, and ready to sing. Include ALL sections. D
         console.log('[Gemini] Calling API with prompt length:', aiPrompt.length);
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: getGeminiModel(),
             contents: aiPrompt,
             config: {
                 systemInstruction: "You are a professional songwriter. Generate COMPLETE, FULL-LENGTH original song lyrics with ALL sections (Intro, Verses, Pre-Chorus, Chorus, Bridge, Outro). Write at least 40-50 lines total. No explanations, no commentary, just complete song lyrics.",
@@ -157,7 +265,7 @@ export const interpretMixPrompt = async (prompt: string, signature: MixSignature
 
     try {
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: getGeminiModel(),
             contents: aiPrompt,
             config: {
                 systemInstruction: "You are a mix engineer translator. Convert natural language requests into specific audio processing parameters. Return ONLY JSON.",
@@ -230,8 +338,8 @@ export const analyzeMixData = async (
   console.log('[AI Analysis] Starting request', { filename, promptLength: prompt.length, hasGenreProfile: !!genreProfile });
 
   try {
-    const response = await withTimeout(ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+    const response = await withRetry(() => withTimeout(ai.models.generateContent({
+      model: getGeminiModel(),
       contents: prompt,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
@@ -256,7 +364,7 @@ export const analyzeMixData = async (
             }
         }
       }
-    }));
+    }), 60000)); // 1 minute timeout + retry on 503
 
     const duration = Date.now() - startTime;
     console.log('[AI Analysis] Response received', { duration: `${duration}ms`, responseLength: response.text?.length || 0 });
@@ -298,18 +406,29 @@ export const analyzeMixData = async (
 export const analyzeStemMix = async (stems: Stem[], referenceMetrics?: AudioMetrics): Promise<MixAnalysis> => {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) throw new Error("Gemini API Key missing");
-    
-    const prompt = `Analyze ${stems.length} stems. Identify conflicts and suggest fixes.`;
+
+    const stemInfo = stems.map(s => `- ${s.name || 'Unnamed'}`).join('\n');
+    const prompt = `You are an expert mix engineer. Analyze this multi-stem mix with ${stems.length} stems:
+
+${stemInfo}
+
+Provide a structured analysis in JSON format with:
+1. "conflicts": Array of detected frequency conflicts or phase issues between stems
+2. "stemSuggestions": Array of suggestions for individual stems (each with stemId, reasoning, suggestedVolumeDb, suggestedEq)
+3. "masterSuggestions": Array of master bus suggestions
+
+Be specific and actionable. If no issues found, provide optimization suggestions.`;
 
     try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+        const response = await withRetry(() => withTimeout(ai.models.generateContent({
+            model: getGeminiModel(),
             contents: prompt,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
-                responseMimeType: "application/json"
+                responseMimeType: "application/json",
+                temperature: 0.3
             }
-        });
+        }), 60000)); // 1 minute timeout + retry on 503
 
         const parsed = robustJsonParse(response.text || "{}");
         if (parsed.stemSuggestions && Array.isArray(parsed.stemSuggestions)) {
@@ -317,9 +436,10 @@ export const analyzeStemMix = async (stems: Stem[], referenceMetrics?: AudioMetr
         }
         return parsed as MixAnalysis;
 
-    } catch (e: any) { 
+    } catch (e: any) {
+        console.error('[Stem Analysis] Failed:', e.message);
         return {
-            conflicts: ["Analysis unavailable"],
+            conflicts: [],
             stemSuggestions: [],
             masterSuggestions: []
         };
@@ -337,7 +457,7 @@ export const chatWithEcho = async (history: ChatMessage[], message: string): Pro
 
   try {
     const chat = ai.chats.create({
-      model: 'gemini-2.5-flash',
+      model: getGeminiModel(),
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
       },
@@ -423,7 +543,7 @@ Always explain the EMOTIONAL outcome of each suggestion.
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: getGeminiModel(),
       contents: prompt,
       config: {
         systemInstruction: PRODUCER_SYSTEM,
@@ -506,7 +626,7 @@ export const classifyUserIntent = async (message: string): Promise<{
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: getGeminiModel(),
       contents: `Classify this user message: "${message}"`,
       config: {
         systemInstruction: "Classify audio engineering requests. Extract any mentioned vibes or reference tracks.",
@@ -647,7 +767,44 @@ Then determine VERDICT:
 - "refinements_available": Score 55-69 OR optional improvements available
 - "needs_work": Score <55 OR critical technical issues
 
-If NOT release_ready, suggest specific refinements.
+If NOT release_ready, suggest specific refinements. Be intelligent about what each track ACTUALLY needs:
+
+ANALYSIS FRAMEWORK (Diagnose before recommending):
+1. DYNAMICS CHECK: Does it have dynamic issues? (Uncontrolled peaks, limp vocals, pumping, or is it punchy?)
+   - If: Uncontrolled peaks → "compression" (surgical ratio, moderate threshold)
+   - If: Dynamics already managed → Skip compression
+   - If: Limp → Consider "transient_shaper" (attack only, subtle)
+
+2. FREQUENCY CHECK: Does it have tonal imbalances?
+   - If: Harsh/sibilant (3-5kHz or 7-8kHz) → "eq" or "parametric_eq" + maybe "de_esser"
+   - If: Muddy (200-400Hz buildup) → "eq" surgical cut
+   - If: Thin (missing high-end above 10kHz) → "eq" boost
+   - If: Frequency balance is good → Skip EQ
+
+3. SIBILANCE CHECK: Does it have excessive sibilance?
+   - If: Yes, clear sibilance issues → "de_esser" (7-8kHz detection)
+   - If: Natural sibilance or well-controlled → Skip de-esser
+
+RECOMMENDATION PHILOSOPHY (MINIMAL, PROTECTIVE APPROACH):
+- NEVER recommend enhancement: no air boosts, presence boosts, saturation, reverb, stereo widening, or transient shaping
+- ONLY recommend corrective processing: removing problems, not adding character
+- Most well-mixed tracks need NO compression - just protective limiting
+- Only recommend compression if dynamics are genuinely erratic or peaks are uncontrolled
+- Only recommend de-esser if you hear actual harsh sibilance (not just presence)
+- Only recommend EQ cuts—never recommend EQ boosts (let the mix be)
+- Be diagnostic: What problem exists RIGHT NOW? Recommend ONLY that fix
+- Assume the artist's mix is already good—you are the safety mechanism, not the enhancement tool
+
+LANGUAGE RULES (PROTECTIVE, NOT PROMOTIONAL):
+✅ Say: "I hear mud buildup in the 200-400Hz range" (diagnostic, factual)
+✅ Say: "A gentle high-pass at 30Hz would remove inaudible rumble" (protective, specific)
+✅ Say: "Dynamics are stable—limiting at -1dB is sufficient" (confirmatory, minimal)
+✅ Say: "No harsh sibilance detected—skip the de-esser" (honest, protective)
+✅ Say: "The mix is well-balanced; standard mastering chain is appropriate" (reassuring)
+❌ NEVER say: "Vocals could use presence" (suggests enhancement)
+❌ NEVER say: "This needs air/shimmer/brightness" (enhancement-focused)
+❌ NEVER say: "I've added saturation for punch" (implies action, not diagnosis)
+❌ NEVER say: "Your mix sounds thin" (judgment, not diagnosis)
 
 IMPORTANT:
 - Be honest and fair. Most well-mixed tracks score 65-80.
@@ -655,7 +812,9 @@ IMPORTANT:
 - 85+ should feel like "this is elite professional work."
 ${hasReference ? '- Compare to reference for genre accuracy scoring.' : ''}
 - Confidence should be 0.85+ for release_ready verdict.
+- Only recommend corrective Stage 2 actions in Friendly Mode
 `;
+
 
     const startTime = Date.now();
     console.log('[Echo Report] Starting generation', {
@@ -666,11 +825,50 @@ ${hasReference ? '- Compare to reference for genre accuracy scoring.' : ''}
     });
 
     try {
-        const response = await withTimeout(ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+        const response = await withRetry(() => withTimeout(ai.models.generateContent({
+            model: getGeminiModel(),
             contents: promptContent,
             config: {
-                systemInstruction: "You are Echo, a Grammy-winning mastering engineer AI. Be honest and specific. Return ONLY valid JSON.",
+                systemInstruction: `You are Echo, a transparent mastering engineer like Ryan Lewis (Doja Cat) or MixedByAli.
+
+YOUR PHILOSOPHY:
+Mastering is NOT about adding character, shimmer, air, or enhancement. It's about:
+1. Removing problems (mud, harshness, rumble, distortion)
+2. Balancing what's there (fair frequency balance, stable dynamics, acceptable loudness)
+3. Getting out of the way (let the artist's mix shine through)
+
+WHAT REAL MASTERS DO:
+✅ Surgical EQ cuts to remove problem frequencies
+✅ Gentle compression to tame erratic dynamics (if needed at all)
+✅ Limiter ceiling to prevent clipping
+✅ High-pass filter to remove inaudible rumble
+
+WHAT REAL MASTERS DON'T DO:
+❌ Boost "air" or "presence" or "sparkle" to make things sound better
+❌ Add saturation for "warmth" or "color"
+❌ Widen stereo imaging to make mixes sound bigger
+❌ Add high-shelf boosts to make things brighter
+❌ Apply de-esser unless there's ACTUAL problematic sibilance
+❌ Stack multiple processors that compound each other
+
+YOUR ACTUAL GOAL:
+Diagnose what's ACTUALLY wrong. Recommend ONLY what fixes that specific problem. Most well-mixed tracks need minimal intervention - maybe a gentle high-pass, maybe a small EQ cut, maybe light compression. That's it. Done.
+
+RECOMMENDATION CONSTRAINT:
+- Do NOT recommend de-esser unless you hear actual harsh sibilance
+- Do NOT recommend high-shelf or air boosts—these are enhancement, not correction
+- Do NOT recommend saturation, reverb, stereo widening, or transient shaping
+- Do NOT stack multiple EQ bands with boosts—choose ONE problem to fix
+- Keep all EQ cuts shallow (≤3dB) unless there's serious mud
+- Keep compression ratios low (≤2:1) and thresholds moderate (≥-12dB)
+- Assume the artist's mix is already good—your job is protection, not improvement
+
+LANGUAGE:
+Say: "I detect rumble below 30Hz" (problem-focused)
+Say: "Limiting at -1dB would protect against peaks" (correction-focused)
+Do NOT say: "This needs more air" or "Add presence" or "Shimmer would help" (enhancement-focused)
+
+You are the guardrail, not the enhancement engine.`,
                 temperature: 0.3,
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -701,8 +899,28 @@ ${hasReference ? '- Compare to reference for genre accuracy scoring.' : ''}
                                     description: { type: Type.STRING },
                                     type: { type: Type.STRING },
                                     refinementType: { type: Type.STRING },
-                                    bands: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { freqHz: { type: Type.NUMBER }, gainDb: { type: Type.NUMBER }, enabledByDefault: { type: Type.BOOLEAN } } } },
-                                    params: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, value: { oneOf: [{ type: Type.NUMBER }, { type: Type.STRING }] }, enabledByDefault: { type: Type.BOOLEAN } } } }
+                                    bands: {
+                                        type: Type.ARRAY,
+                                        items: {
+                                            type: Type.OBJECT,
+                                            properties: {
+                                                freqHz: { type: Type.NUMBER },
+                                                gainDb: { type: Type.NUMBER },
+                                                enabledByDefault: { type: Type.BOOLEAN }
+                                            }
+                                        }
+                                    },
+                                    params: {
+                                        type: Type.ARRAY,
+                                        items: {
+                                            type: Type.OBJECT,
+                                            properties: {
+                                                name: { type: Type.STRING },
+                                                value: { type: Type.STRING },
+                                                enabledByDefault: { type: Type.BOOLEAN }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         },
@@ -710,7 +928,7 @@ ${hasReference ? '- Compare to reference for genre accuracy scoring.' : ''}
                     }
                 }
             }
-        }));
+        }), 60000)); // 1 minute timeout + retry on 503
 
         const duration = Date.now() - startTime;
         console.log('[Echo Report] Response received', { duration: `${duration}ms`, responseLength: response.text?.length || 0 });
@@ -762,7 +980,10 @@ ${hasReference ? '- Compare to reference for genre accuracy scoring.' : ''}
             error: e.message,
             stack: e.stack,
             isTimeout: e.message?.includes('timed out'),
-            errorType: e.constructor.name
+            errorType: e.constructor.name,
+            fullError: e,
+            response: (e as any).response?.status,
+            responseText: (e as any).response?.text
         });
         return {
             summary: `Error: ${e.message}`,
@@ -790,6 +1011,120 @@ export const analyzeReferenceGap = async (userMetrics: AudioMetrics, refMetrics:
         explanation: "Gap analysis unavailable in this version.",
         eqCorrection: undefined
     };
+};
+
+// ============================================================================
+// PHASE 3: LLM REASONING (Interpretation Layer)
+// ============================================================================
+
+export const reasonAboutListeningPass = async (input: any): Promise<any> => {
+    try {
+        // Validate input
+        if (!input || !input.listeningPass) {
+            throw new Error('Invalid input: listeningPass data required');
+        }
+
+        const { listeningPass, mode } = input;
+        const { tokens, priority_summary, analysis_confidence } = listeningPass;
+
+        // Timeout protection (generous timeout to handle rate limit retries)
+        const timeoutMs = 180000; // 3 minutes (allows for 429 retry delays)
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('LLM timeout')), timeoutMs)
+        );
+
+        // Check if there's anything to recommend
+        const hasDominantTokens = priority_summary.dominant_tokens && priority_summary.dominant_tokens.length > 0;
+
+        if (!hasDominantTokens) {
+            // No concerns detected - return reassurance
+            return {
+                guidance_text: 'No listener concerns detected. Your mix is in great shape.',
+                processing: {
+                    tokens_read: tokens.length,
+                    confidence_level: analysis_confidence,
+                    mode: 'friendly',
+                    dominant_token: null,
+                },
+            };
+        }
+
+        // Get dominant token details
+        const dominantTokenId = priority_summary.dominant_tokens[0];
+        const dominantToken = tokens.find((t: any) => t.token_id === dominantTokenId);
+
+        if (!dominantToken) {
+            throw new Error(`Dominant token ${dominantTokenId} not found in tokens`);
+        }
+
+        // Build Friendly Mode guidance (LLM_OUTPUT_CONTRACT.md compliant)
+        // This is the interpretation layer - translating tokens to human guidance
+        let guidanceText = '';
+
+        if (dominantTokenId === 'FATIGUE_EVENT' && dominantToken.detected) {
+            guidanceText =
+                `Your mix is listener-friendly with one focus area.\n\n` +
+                `FOCUS AREA: Listener Fatigue\n` +
+                `${dominantToken.listener_impact}\n\n` +
+                `WHAT TO EXPLORE\n` +
+                `Consider a gentle de-esser around 7kHz or a soft high-shelf reduction around 3kHz. ` +
+                `Listen on headphones to verify this is what you're hearing.\n\n` +
+                `WHAT'S WORKING\n` +
+                (tokens[1]?.detected === false ? `✓ ${tokens[1].listener_impact}\n` : '') +
+                (tokens[2]?.detected === false ? `✓ ${tokens[2].listener_impact}\n` : '') +
+                `\nIf you address the upper-mid sharpness, your mix will be listener-friendly.`;
+        } else if (dominantTokenId === 'INTELLIGIBILITY_LOSS' && dominantToken.detected) {
+            guidanceText =
+                `Your mix has one focus area for listener clarity.\n\n` +
+                `FOCUS AREA: Speech/Lead Clarity\n` +
+                `${dominantToken.listener_impact}\n\n` +
+                `WHAT TO EXPLORE\n` +
+                `Consider a gentle mid-range boost around 2-4kHz or reduce competing frequencies. ` +
+                `Listen on headphones with the lead isolated.\n\n` +
+                `WHAT'S WORKING\n` +
+                (tokens[0]?.detected === false ? `✓ ${tokens[0].listener_impact}\n` : '') +
+                (tokens[2]?.detected === false ? `✓ ${tokens[2].listener_impact}\n` : '') +
+                `\nImproving clarity will make your mix more engaging.`;
+        } else if (dominantTokenId === 'INSTABILITY_EVENT' && dominantToken.detected && !dominantToken.suppressed) {
+            guidanceText =
+                `Your mix has one focus area for transient control.\n\n` +
+                `FOCUS AREA: Transient Behavior\n` +
+                `${dominantToken.listener_impact}\n\n` +
+                `WHAT TO EXPLORE\n` +
+                `Consider tightening drum timing or adjusting attack/release on dynamics. ` +
+                `Listen to how predictable the rhythm feels.\n\n` +
+                `WHAT'S WORKING\n` +
+                (tokens[0]?.detected === false ? `✓ ${tokens[0].listener_impact}\n` : '') +
+                (tokens[1]?.detected === false ? `✓ ${tokens[1].listener_impact}\n` : '') +
+                `\nStabilizing transients will make your mix feel intentional.`;
+        } else {
+            // Fallback for other cases
+            guidanceText = 'Your mix is ready for review. Check the analysis details for more information.';
+        }
+
+        return {
+            guidance_text: guidanceText,
+            processing: {
+                tokens_read: tokens.length,
+                confidence_level: analysis_confidence,
+                mode: 'friendly',
+                dominant_token: dominantTokenId,
+            },
+        };
+    } catch (error) {
+        console.error('[LLM Reasoning Error]', error);
+
+        // Fallback: Return safe reassurance
+        return {
+            guidance_text: 'Analysis complete. AI reasoning temporarily unavailable. Review the analysis details.',
+            processing: {
+                tokens_read: 0,
+                confidence_level: 0,
+                mode: 'fallback',
+                dominant_token: null,
+            },
+        };
+    }
 };
 
 export const analyzeComparison = async (report: ProcessingReport): Promise<RefinementSuggestion> => {

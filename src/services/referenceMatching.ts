@@ -132,10 +132,11 @@ class ReferenceMatchingService {
         const widthGap = avgRefWidth - avgCurWidth;
 
         if (Math.abs(widthGap) > 0.1) {
+            const targetWidth = Math.max(0.7, Math.min(1.6, avgCurWidth + widthGap));
             config.stereoImager = {
-                lowWidth: Math.max(0.5, Math.min(1.5, curSig.stereoWidth.low + widthGap)),
-                midWidth: Math.max(0.7, Math.min(1.8, curSig.stereoWidth.mid + widthGap)),
-                highWidth: Math.max(0.8, Math.min(2.0, curSig.stereoWidth.high + widthGap)),
+                lowWidth: targetWidth,
+                midWidth: targetWidth,
+                highWidth: targetWidth,
                 crossovers: [300, 5000]
             };
         }
@@ -168,59 +169,60 @@ class ReferenceMatchingService {
 
     /**
      * Generate EQ to match reference tonal balance
+     * Per-band limits prevent aggressive cuts from squishing the mix
      */
     private generateMatchingEQ(refSig: MixSignature, curSig: MixSignature): ProcessingConfig['eq'] {
         const eq: ProcessingConfig['eq'] = [];
 
-        // Low frequency matching
+        // Low frequency matching (80Hz) - max ±5dB to preserve bass warmth
         const lowGap = refSig.tonalBalance.low - curSig.tonalBalance.low;
         if (Math.abs(lowGap) > 0.02) {
             eq.push({
                 frequency: 80,
-                gain: Math.max(-6, Math.min(6, lowGap * 30)),
+                gain: Math.max(-5, Math.min(5, lowGap * 15)),
                 type: 'lowshelf'
             });
         }
 
-        // Low-mid frequency matching
+        // Low-mid frequency matching (250Hz) - max ±3dB to preserve body
         const lowMidGap = refSig.tonalBalance.lowMid - curSig.tonalBalance.lowMid;
         if (Math.abs(lowMidGap) > 0.02) {
             eq.push({
                 frequency: 250,
-                gain: Math.max(-6, Math.min(6, lowMidGap * 30)),
+                gain: Math.max(-3, Math.min(3, lowMidGap * 15)),
                 type: 'peaking',
                 q: 1.0
             });
         }
 
-        // Mid frequency matching
+        // Mid frequency matching (1kHz) - max ±4dB
         const midGap = refSig.tonalBalance.mid - curSig.tonalBalance.mid;
         if (Math.abs(midGap) > 0.02) {
             eq.push({
                 frequency: 1000,
-                gain: Math.max(-6, Math.min(6, midGap * 30)),
+                gain: Math.max(-4, Math.min(4, midGap * 15)),
                 type: 'peaking',
                 q: 1.2
             });
         }
 
-        // High-mid frequency matching
+        // High-mid frequency matching (4kHz/presence) - max ±3dB to prevent squishing
         const highMidGap = refSig.tonalBalance.highMid - curSig.tonalBalance.highMid;
         if (Math.abs(highMidGap) > 0.02) {
             eq.push({
                 frequency: 4000,
-                gain: Math.max(-6, Math.min(6, highMidGap * 30)),
+                gain: Math.max(-3, Math.min(3, highMidGap * 15)),
                 type: 'peaking',
                 q: 1.5
             });
         }
 
-        // High frequency matching
+        // High frequency matching (10kHz) - max ±4dB
         const highGap = refSig.tonalBalance.high - curSig.tonalBalance.high;
         if (Math.abs(highGap) > 0.02) {
             eq.push({
                 frequency: 10000,
-                gain: Math.max(-6, Math.min(6, highGap * 30)),
+                gain: Math.max(-4, Math.min(4, highGap * 15)),
                 type: 'highshelf'
             });
         }
@@ -300,18 +302,18 @@ class ReferenceMatchingService {
         } else {
             if (lowGap > 0.05) {
                 tonalDifference += 'lacking low-end compared to reference. ';
-                recommendations.push('Boost low frequencies (60-150 Hz) by ~' + (lowGap * 30).toFixed(1) + ' dB');
+                recommendations.push('Boost low frequencies (60-150 Hz) by ~' + (lowGap * 15).toFixed(1) + ' dB');
             } else if (lowGap < -0.05) {
                 tonalDifference += 'too heavy in low-end. ';
-                recommendations.push('Reduce low frequencies (60-150 Hz) by ~' + Math.abs(lowGap * 30).toFixed(1) + ' dB');
+                recommendations.push('Reduce low frequencies (60-150 Hz) by ~' + Math.abs(lowGap * 15).toFixed(1) + ' dB');
             }
 
             if (highGap > 0.05) {
                 tonalDifference += 'Missing high-end brightness. ';
-                recommendations.push('Boost high frequencies (8-12 kHz) by ~' + (highGap * 30).toFixed(1) + ' dB');
+                recommendations.push('Boost high frequencies (8-12 kHz) by ~' + (highGap * 15).toFixed(1) + ' dB');
             } else if (highGap < -0.05) {
                 tonalDifference += 'Too bright compared to reference. ';
-                recommendations.push('Reduce high frequencies (8-12 kHz) by ~' + Math.abs(highGap * 30).toFixed(1) + ' dB');
+                recommendations.push('Reduce high frequencies (8-12 kHz) by ~' + Math.abs(highGap * 15).toFixed(1) + ' dB');
             }
         }
 

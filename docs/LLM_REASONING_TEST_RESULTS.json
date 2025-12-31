@@ -1,0 +1,96 @@
+{
+  "test_suite": {
+    "total_cases": 5,
+    "passed": 5,
+    "failed": 0,
+    "results": [
+      {
+        "case_id": "A",
+        "name": "Pure Fatigue (Stage 1 Only)",
+        "status": "success",
+        "output": "ANALYSIS\n\nThe listening pass analysis indicates a moderate level of listener fatigue detected, with high confidence (81%). The analysis focuses on Stage 1 (Survival) issues, with fatigue identified as the dominant concern. Intelligibility and instability are not detected.\n\n---\n\nPRIORITY FOCUS\n\nWe're focusing on Stage 1 (Survival) because Fatigue is moderate confidence and escalating.\n\n---\n\nLISTENER IMPACT\n\nListeners will experience fatigue in the upper range after 2 minutes on headphones. The upper-mid sharpness accumulates, particularly during choruses.\n\n---\n\nRECOMMENDATIONS (FRIENDLY MODE ONLY)\n\nListener Fatigue (Moderate confidence: 0.81)\nThe upper-mid frequencies accumulate sharpness, particularly during choruses.\nConsider a gentle de-esser around 7kHz or a soft high-shelf reduction around 3kHz.\nWe're 81% confident this is the issue; listen on headphones during the chorus to verify.\n\n---\n\nWHAT'S WORKING\n\n\u2713 Lead remains intelligible throughout. \u2713 Transient behavior is predictable and controlled.\n\n---\n\nNEXT STEPS\n\nIf you address the upper-mid sharpness, the mix will be listener-friendly. No other Stage 1 issues detected.\n",
+        "expected_behavior": {
+          "recommendation_exists": true,
+          "stage_addressed": 1,
+          "stage_2_plus_suggested": false,
+          "affirms_intelligibility": true,
+          "affirms_instability": true,
+          "tone": "protective, non-coercive",
+          "confidence_reported": true
+        },
+        "validation": {
+          "passed": true,
+          "message": "4/4 checks passed: [('recommendation_exists', True), ('no_stage_2_plus', True), ('affirms_intelligibility', True), ('confidence_reported', True)]"
+        }
+      },
+      {
+        "case_id": "B",
+        "name": "All Clear (Nothing Detected)",
+        "status": "success",
+        "output": "ANALYSIS\n\nThe listening pass analysis indicates a well-balanced mix from a listener perspective. No significant issues related to fatigue, intelligibility, or instability were detected during the analysis. The overall confidence in the analysis is high, at 94%.\n\n---\n\nPRIORITY FOCUS\n\nSince no issues were detected in Stage 1 (Survival), there's no need to focus on this stage. The mix appears listener-friendly in terms of fatigue, intelligibility, and instability.\n\n---\n\nLISTENER IMPACT\n\nThe listener should experience a comfortable and engaging listening session. The lead elements remain clear, and the transient behavior is well-controlled, contributing to a predictable and enjoyable experience.\n\n---\n\nRECOMMENDATIONS (FRIENDLY MODE ONLY)\n\n(No recommendations provided because no issues were detected.)\n\n---\n\nWHAT'S WORKING\n\n\u2713 No significant fatigue-inducing patterns were detected. Listeners can engage comfortably. \u2713 Lead remains clear and intelligible throughout. \u2713 Transient behavior is predictable and controlled.\n\n---\n\nNEXT STEPS\n\nThe mix is listener-friendly in terms of Stage 1 (Survival) tokens. No further adjustments are needed regarding fatigue, intelligibility, or instability.\n",
+        "expected_behavior": {
+          "recommendation_exists": false,
+          "affirms_fatigue": true,
+          "affirms_intelligibility": true,
+          "affirms_instability": true,
+          "tone": "affirming, positive",
+          "suggests_changes": false
+        },
+        "validation": {
+          "passed": true,
+          "message": "2/2 checks passed: [('affirming_tone', True), ('no_suggestions', True)]"
+        }
+      },
+      {
+        "case_id": "C",
+        "name": "Fatigue + Intelligibility Conflict",
+        "status": "success",
+        "output": "ANALYSIS\n\nThe listening pass analysis detected potential issues within Stage 1 (Survival). Listener fatigue is a significant concern, escalating towards the end of the mix. Intelligibility is also affected, particularly in the verses, but is secondary to fatigue. The transient behavior remains predictable and controlled.\n\n---\n\nPRIORITY FOCUS\n\nWe're focusing on Stage 1 (Survival) because Listener Fatigue is detected with high confidence and escalating.\n\n---\n\nLISTENER IMPACT\n\nListeners will experience cumulative fatigue due to sustained 4kHz presence, which worsens in the final chorus. Additionally, vocal consonants may overlap with synth pads, especially in the verses, potentially impacting intelligibility.\n\n---\n\nRECOMMENDATIONS (FRIENDLY MODE ONLY)\n\nListener Fatigue (High confidence: 0.84)\nThe sustained 4kHz presence creates cumulative fatigue, worsening in the final chorus.\nConsider a gentle reduction around 4kHz, especially focusing on the final chorus.\nWe're 84% confident this is the primary concern.\n\nNote: Intelligibility is also affected (moderate severity, 0.77 confidence) but is secondary to fatigue. Address fatigue first.\n\n---\n\nWHAT'S WORKING\n\n\u2713 Transient behavior is predictable and controlled.\n\n---\n\nNEXT STEPS\n\nIf you address the upper-mid fatigue, the mix should be more listener-friendly. No other immediate Stage 1 issues were detected.\n",
+        "expected_behavior": {
+          "addresses_fatigue": true,
+          "addresses_intelligibility": false,
+          "fatigue_prioritized": true,
+          "reason_stated": true,
+          "tone": "protective"
+        },
+        "validation": {
+          "passed": true,
+          "message": "2/2 checks passed: [('addresses_fatigue', True), ('fatigue_prioritized', True)]"
+        }
+      },
+      {
+        "case_id": "D",
+        "name": "Low Confidence vs High Confidence Gate",
+        "status": "success",
+        "output": "ANALYSIS\n\nThe listening pass indicates a need to focus on Stage 1 (Survival) issues. Instability is detected with high confidence (0.92), while fatigue is detected but at a lower confidence (0.45) below the gating threshold. Intelligibility is not an issue.\n\n---\n\nPRIORITY FOCUS\n\nWe're focusing on Stage 1 (Survival) because Instability is moderate severity and high confidence.\n\n---\n\nLISTENER IMPACT\n\nListeners may experience nervous tension due to erratic transient spacing, causing them to brace for the next attack.\n\n---\n\nRECOMMENDATIONS (FRIENDLY MODE ONLY)\n\nInstability (Moderate confidence: 0.92)\nErratic transient spacing creates nervous tension.\nConsider evening out the transient spacing throughout the mix, particularly focusing between 30 and 160 seconds.\nWe're 92% confident this is a primary concern. Listen closely between 30 and 160 seconds to evaluate transient balance.\n\n---\n\nWHAT'S WORKING\n\n\u2713 Lead remains intelligible throughout.\n\n---\n\nNEXT STEPS\n\nAddressing the transient instability will likely improve the listening experience. No other Stage 1 issues detected with high confidence.\n",
+        "expected_behavior": {
+          "addresses_instability": true,
+          "addresses_fatigue": false,
+          "explains_gate": true,
+          "instability_confidence_reported": true,
+          "fatigue_mentioned": false
+        },
+        "validation": {
+          "passed": true,
+          "message": "3/3 checks passed: [('addresses_instability', True), ('instability_high_confidence', True), ('low_confidence_gated', True)]"
+        }
+      },
+      {
+        "case_id": "E",
+        "name": "Suppressed Token (Complex Rhythm)",
+        "status": "success",
+        "output": "ANALYSIS\n\nThe schema reports that no tokens were detected, indicating a well-balanced mix from a listener perspective. There are no reported issues related to listener fatigue or intelligibility of the lead elements. The analysis confidence is high at 87%.\n\n---\n\nPRIORITY FOCUS\n\nSince no tokens were detected, there are no specific stages to address. The mix appears to be performing well in terms of listener experience, and no interventions are needed based on this schema.\n\n---\n\nLISTENER IMPACT\n\nAs no listening pass tokens were triggered, there are no negative impacts reported. The listener should have a clear and comfortable experience with the mix.\n\n---\n\nRECOMMENDATIONS (FRIENDLY MODE ONLY)\n\nThere are no recommendations to make as no issues were detected.\n\n---\n\nWHAT'S WORKING\n\n\u2713 No significant fatigue-inducing patterns. \u2713 Lead remains intelligible throughout.\n\n---\n\nNEXT STEPS\n\nThe mix seems to be in a good state. No further adjustments are needed based on the Listening Pass data.\n",
+        "expected_behavior": {
+          "mentions_instability": false,
+          "explains_suppression": false,
+          "suggests_changes": false,
+          "tone": "affirming"
+        },
+        "validation": {
+          "passed": true,
+          "message": "2/2 checks passed: [('no_instability_mention', True), ('affirming', True)]"
+        }
+      }
+    ]
+  }
+}

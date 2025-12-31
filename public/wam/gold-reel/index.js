@@ -37,7 +37,7 @@ export default class GoldReelWAM extends WebAudioModule {
 
     // ========== LF HEAD BUMP (low shelf, ~90Hz) ==========
     const lfBump = ctx.createBiquadFilter();
-    lfBump.type = 'lowShelf';
+    lfBump.type = 'lowshelf';
     lfBump.frequency.value = 90;
     lfBump.Q.value = 0.707;
     lfBump.gain.value = 1.5; // 12% default ≈ 1.5dB

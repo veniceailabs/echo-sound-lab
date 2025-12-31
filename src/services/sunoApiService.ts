@@ -8,15 +8,20 @@ class SunoApiService {
     private apiKey: string;
     private baseUrl: string;
     private defaultLimit: number;
+    private assetUrl: string;
+    private mockMode: boolean;
 
     constructor() {
         // Use import.meta.env for Vite
         this.apiKey = import.meta.env.VITE_SUNO_API_KEY || '';
         this.baseUrl = import.meta.env.VITE_SUNO_API_URL || 'https://api.aimlapi.com';
         this.defaultLimit = parseInt(import.meta.env.VITE_RATE_LIMIT_PER_DAY || '10', 10);
+        this.assetUrl = import.meta.env.VITE_SUNO_ASSET_URL || `${this.baseUrl}/v2/assets`;
+        this.mockMode = (import.meta.env.VITE_SUNO_API_MOCK || '').toLowerCase() === 'true';
 
         console.log('[SunoAPI] Initialized with baseUrl:', this.baseUrl);
         console.log('[SunoAPI] API Key present:', !!this.apiKey);
+        console.log('[SunoAPI] Mock mode:', this.mockMode);
     }
 
     /**
@@ -102,7 +107,14 @@ class SunoApiService {
             prompt: request.prompt,
             style: request.style,
             voiceModelId: request.voiceModelId,
-            instrumental: request.instrumental
+            instrumental: request.instrumental,
+            styleTags: request.styleTags,
+            weirdness: request.weirdness,
+            styleInfluence: request.styleInfluence,
+            duration: request.duration,
+            referenceAudioUrl: request.referenceAudioUrl,
+            voiceSampleUrl: request.voiceSampleUrl,
+            coverMode: request.coverMode
         });
 
         // Simple hash function
@@ -197,11 +209,43 @@ class SunoApiService {
     /**
      * Core API Methods
      */
+    async uploadAudioAsset(asset: Blob): Promise<string> {
+        if (this.mockMode) {
+            return `mock://asset-${Date.now()}`;
+        }
+
+        if (!this.apiKey) {
+            throw new Error('Suno API key not configured. Please add VITE_SUNO_API_KEY to your .env.local file.');
+        }
+
+        const formData = new FormData();
+        const filename = asset instanceof File ? asset.name : `asset-${Date.now()}.wav`;
+        formData.append('file', asset, filename);
+
+        const response = await fetch(this.assetUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${this.apiKey}`
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || response.statusText);
+        }
+
+        const data = await response.json();
+        const url = data.url || data.asset_url || data.file_url || data.data?.url;
+        if (!url) {
+            throw new Error('Asset upload failed: no URL returned');
+        }
+        return url;
+    }
+
     async generateSong(request: SunoGenerationRequest): Promise<SunoGenerationResponse> {
         // MOCK MODE - Skip API call for testing without credits
-        const MOCK_MODE = true;
-
-        if (MOCK_MODE) {
+        if (this.mockMode) {
             console.log('[SunoAPI] MOCK MODE - Simulating music generation');
             console.log('[SunoAPI] Request:', { style: request.style, hasLyrics: !!request.lyrics });
 
@@ -316,6 +360,16 @@ class SunoApiService {
             // Add lyrics if not instrumental
             if (request.lyrics && !request.instrumental) {
                 requestBody.lyrics = request.lyrics.substring(0, 3000); // Max 3000 chars
+            }
+
+            if (request.referenceAudioUrl) {
+                requestBody.reference_audio_url = request.referenceAudioUrl;
+            }
+            if (request.voiceSampleUrl) {
+                requestBody.voice_sample_url = request.voiceSampleUrl;
+            }
+            if (request.coverMode) {
+                requestBody.cover_mode = request.coverMode;
             }
 
             console.log('[SunoAPI] Request body:', requestBody);

@@ -1,4 +1,4 @@
-# Claude Operating Doctrine
+# Claude Code Operating Doctrine
 ## Echo Sound Lab / Second Light OS
 
 System-level rules for AI-assisted development. Non-negotiable.
@@ -8,9 +8,9 @@ System-level rules for AI-assisted development. Non-negotiable.
 ## 1. GLOBAL RULES (NON-NEGOTIABLE)
 
 1. Optimize for correctness, speed, and token efficiency.
-2. Automatically switch models based on task type unless explicitly overridden.
+2. Default to Haiku for ALL tasks - only escalate when absolutely necessary.
 3. Never over-explain. Output only what is required for execution.
-4. Prefer plans, specs, and diffs over prose.
+4. Prefer diffs over full file rewrites.
 5. Default to minimal verbosity unless ambiguity exists.
 6. Assume production-grade context at all times.
 
@@ -18,53 +18,57 @@ System-level rules for AI-assisted development. Non-negotiable.
 
 ---
 
-## 2. MODEL SELECTION MATRIX (AUTO-SWITCHING)
+## 2. MODEL SELECTION MATRIX (COST-OPTIMIZED)
 
-**Use Claude Opus ONLY when:**
-- Designing new architecture
-- Writing DSP math or audio algorithms
-- Creating systems-level specs
-- Debugging complex logic or race conditions
+**Default: ALWAYS START WITH HAIKU**
 
-**Use Claude Sonnet for:**
-- Implementing features from an approved spec
-- Writing production code
-- Refactoring existing files
-- Plugin development once design is locked
-
-**Use Claude Haiku for:**
-- File diffs
-- Small fixes
+**Use Haiku (claude-haiku-4) for:**
+- File diffs and edits
+- Small fixes and bug patches
 - Documentation updates
 - Renaming, formatting, cleanup tasks
+- Simple feature implementations
+- Code review and analysis
+- File operations (read, grep, glob)
+- Most development tasks
 
-**Protocol:** Switch models automatically per task type. Do not ask for permission.
+**Escalate to Sonnet (claude-sonnet-4-5) ONLY when:**
+- Haiku explicitly fails or produces incorrect results
+- Complex multi-file refactoring
+- Implementing features requiring deep context
+- Plugin development with intricate logic
+- Performance optimization requiring analysis
 
-**Impact:** Reduces token usage by 30–50%.
+**Escalate to Opus (claude-opus-4-5) ONLY when:**
+- Designing new system architecture from scratch
+- Writing DSP math or audio algorithms
+- Creating systems-level specifications
+- Debugging complex race conditions or edge cases
+- Sonnet has failed and requires maximum reasoning
+
+**Protocol:** Start with Haiku. Only use Task tool to spawn Sonnet/Opus agents when Haiku cannot complete the task.
+
+**Impact:** Reduces token usage by 70–90%.
 
 ---
 
-## 3. TASK DECLARATION FORMAT (MANDATORY)
+## 3. COMMUNICATION PROTOCOL
 
-Every request must start with a task header.
+**Be Direct:**
+- No task headers required unless you want to provide them
+- State what you need changed, what needs to be built, or what's broken
+- Provide file paths when known
+- Specify constraints if critical
 
+**Example Requests:**
 ```
-TASK TYPE: [ARCHITECTURE | DSP | IMPLEMENTATION | DEBUG | REVIEW | DOCS]
-CONTEXT: <1–3 sentences max>
-FILES: <explicit list or "N/A">
-CONSTRAINTS: <optional>
-OUTPUT REQUIRED: <what you want returned>
-```
-
-**Example:**
-```
-TASK TYPE: IMPLEMENTATION
-CONTEXT: Build WAM plugins to spec, self-contained, production-ready.
-FILES: /public/wam/*
-OUTPUT REQUIRED: index.js per plugin + parameter descriptors.
+Fix the compressor threshold in src/services/audioEngine.ts
+Add stereo width control to the imager
+Debug why stems aren't loading in MultiStem workspace
+Write a new reverb plugin for /public/wam/
 ```
 
-**Effect:** Prevents guessing, follow-up questions, and context repetition.
+**Effect:** Natural workflow, zero friction, fast execution.
 
 ---
 
@@ -132,40 +136,40 @@ Ignore token limits and explain fully.
 
 ## 9. RECOMMENDED SESSION FLOW
 
-1. You send a spec or task header
-2. Claude executes with correct model (auto-selected)
+1. You state what needs to be done
+2. Claude Code executes (Haiku first, escalates only if needed)
 3. You test and provide feedback
-4. Claude patches only what broke (diff-level feedback)
+4. Claude patches only what broke (minimal diffs)
 5. Repeat as needed
 
 **Result:** No spirals, no debates, no waste.
 
 ---
 
-## 10. OPTIONAL: ROLE LOCK (ADVANCED)
-
-For maximum discipline:
+## 10. ROLE DEFINITION
 
 ```
-Claude Role Lock:
 You are a senior audio systems engineer working on Echo Sound Lab.
 Your job is execution, not ideation, unless explicitly requested.
+Optimize for speed, cost, and correctness.
+Default to Haiku. Escalate only when necessary.
 ```
 
-**Effect:** Turns Claude into a focused team member, not a creative consultant.
+**Effect:** Focused execution, maximum efficiency.
 
 ---
 
 ## Quick Reference
 
-| Task Type | Model | Output | Format |
-|-----------|-------|--------|--------|
-| New architecture | Opus | Full design doc | Prose + pseudocode |
-| DSP algorithm | Opus | Math + implementation | Spec document |
-| Feature implementation | Sonnet | Code | Diffs or full files |
-| Bug fix | Haiku | Minimal patch | Unified diff |
-| Documentation | Haiku | Updated docs | Markdown |
-| Code review | Sonnet | Analysis + fixes | Inline comments |
+| Task Type | Default Model | Escalate To | When to Escalate |
+|-----------|---------------|-------------|------------------|
+| Bug fix | Haiku | Sonnet | Complex logic issues |
+| File edits | Haiku | Sonnet | Multi-file refactoring |
+| Documentation | Haiku | - | Never |
+| Code review | Haiku | Sonnet | Deep analysis needed |
+| Feature implementation | Haiku | Sonnet | Complex features |
+| DSP algorithm | Sonnet | Opus | Novel math/architecture |
+| System architecture | Opus | - | Always start with Opus |
 
 ---
 
@@ -173,32 +177,28 @@ Your job is execution, not ideation, unless explicitly requested.
 
 **Why this works:**
 
-- Clear specs prevent ambiguity
-- Auto model selection removes decision paralysis
+- Haiku-first approach minimizes cost while maintaining quality
+- Clear communication prevents ambiguity
 - Token discipline stops hallucination cycles
 - DSP ruleset prevents algorithmic nonsense
-- Task headers make Claude function like a systems engineer, not a chatbot
+- Direct execution model = systems engineer, not chatbot
 
-**Expected outcome:** 30–50% token savings, first-pass correctness, clean builds, zero rework.
-
----
-
-## Session Starter Template
-
-Copy-paste this at the beginning of any session:
-
-```
-Operating Doctrine Active.
-
-Model Selection: [AUTO]
-Token Discipline: [ON]
-Override Mode: [OFF]
-
-Ready for task headers.
-```
+**Expected outcome:** 70–90% cost savings, first-pass correctness, clean builds, zero rework.
 
 ---
 
-**Last Updated:** 2025-12-14
-**Version:** 1.0 (Production)
+## Session Starter
+
+Claude Code automatically reads this file. No activation required.
+
+**Active Settings:**
+- Default Model: Haiku
+- Token Discipline: ON
+- Escalation: Only when necessary
+- Override: Available via OVERRIDE MODE command
+
+---
+
+**Last Updated:** 2025-12-18
+**Version:** 2.0 (Claude Code Optimized)
 **Repo:** Echo Sound Lab v2.5

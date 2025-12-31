@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Theme helpers */
+:root.theme-dark body {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+:root.theme-light {
+  --esl-bg-950: #fbf6ef;
+  --esl-bg-900: #f2e7db;
+  --esl-bg-800: #e7d7c6;
+  --esl-bg-700: #d4c1ac;
+  --esl-text-900: #1b120a;
+  --esl-text-700: #3b2a1d;
+  --esl-text-500: #5a4432;
+  --esl-accent-orange: #f76900;
+  --esl-accent-blue: #1f6feb;
+  --esl-border: #c4ad95;
+  --esl-card: #fffaf4;
+  --esl-card-strong: #f3e5d6;
+}
+
+:root.theme-light body {
+  background: var(--esl-bg-950);
+  color: var(--esl-text-900);
+}
+
+/* Light mode class overrides (core palette flip) */
+.theme-light .bg-slate-950 { background-color: var(--esl-bg-950) !important; }
+.theme-light .bg-slate-900 { background-color: var(--esl-bg-900) !important; }
+.theme-light .bg-slate-800 { background-color: var(--esl-bg-800) !important; }
+.theme-light .bg-slate-700 { background-color: var(--esl-bg-700) !important; }
+.theme-light .bg-white\/5 { background-color: var(--esl-card) !important; }
+.theme-light .bg-white\/10 { background-color: var(--esl-card-strong) !important; }
+.theme-light .bg-slate-900\/60 { background-color: rgba(239, 230, 219, 0.8) !important; }
+.theme-light .bg-slate-900\/70 { background-color: rgba(239, 230, 219, 0.85) !important; }
+.theme-light .bg-slate-900\/80 { background-color: rgba(239, 230, 219, 0.9) !important; }
+.theme-light .bg-slate-900\/95 { background-color: rgba(239, 230, 219, 0.95) !important; }
+
+.theme-light .text-slate-200 { color: var(--esl-text-900) !important; }
+.theme-light .text-slate-300 { color: var(--esl-text-700) !important; }
+.theme-light .text-slate-400 { color: var(--esl-text-500) !important; }
+.theme-light .text-slate-500 { color: #6a4f3a !important; }
+.theme-light .text-white { color: var(--esl-text-900) !important; }
+.theme-light .text-orange-300,
+.theme-light .text-orange-400 { color: var(--esl-accent-orange) !important; }
+.theme-light .text-blue-400,
+.theme-light .text-blue-500 { color: var(--esl-accent-blue) !important; }
+
+.theme-light .border-slate-700,
+.theme-light .border-slate-800,
+.theme-light .border-white\/10,
+.theme-light .border-white\/12,
+.theme-light .border-white\/15 { border-color: var(--esl-border) !important; }
+.theme-light .border-orange-400,
+.theme-light .border-orange-500 { border-color: var(--esl-accent-orange) !important; }
+.theme-light .border-cyan-500 { border-color: var(--esl-accent-blue) !important; }
+
+
+/* Scrollbar adjustments for light mode */
+:root.theme-light ::-webkit-scrollbar-track {
+  background: var(--esl-bg-950);
+}
+
+:root.theme-light ::-webkit-scrollbar-thumb {
+  background: #b89c84;
+}

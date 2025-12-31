@@ -15,6 +15,8 @@ interface FloatingControlsProps {
   isAbComparing: boolean;
   onToggleAB: () => void;
   hasAppliedChanges: boolean;
+  abLabel: string;
+  abDisabled?: boolean;
   onSeek?: (time: number) => void;
 }
 
@@ -26,6 +28,8 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
   isAbComparing,
   onToggleAB,
   hasAppliedChanges,
+  abLabel,
+  abDisabled,
   onSeek
 }) => {
   const formatTime = (time: number) => {
@@ -113,16 +117,16 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
       
       <button
         onClick={onToggleAB}
-        disabled={!hasAppliedChanges}
+        disabled={abDisabled ?? !hasAppliedChanges}
         className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
-          !hasAppliedChanges
+          (abDisabled ?? !hasAppliedChanges)
             ? 'text-slate-600 cursor-not-allowed'
             : isAbComparing
               ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]'
               : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border border-orange-500/50'
         }`}
       >
-        {isAbComparing ? 'Original' : 'Processed'}
+        {abLabel}
       </button>
     </div>
     </>

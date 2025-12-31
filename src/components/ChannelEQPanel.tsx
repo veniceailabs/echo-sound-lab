@@ -19,9 +19,14 @@ interface ChannelEQPanelProps {
 export const ChannelEQPanel: React.FC<ChannelEQPanelProps> = ({ eqSettings, onEQChange }) => {
   const [activeBand, setActiveBand] = useState<number | null>(null);
 
-  const handleBandChange = (index: number, gain: number) => {
+  const handleBandChange = (index: number, updates: { frequency?: number, gain?: number } | number) => {
+    // Support both old (gain as number) and new (updates object) formats
+    const isNumber = typeof updates === 'number';
+    const gain = isNumber ? updates : (updates.gain ?? eqSettings[index].gain);
+    const frequency = isNumber ? eqSettings[index].frequency : (updates.frequency ?? eqSettings[index].frequency);
+
     const newSettings = [...eqSettings];
-    newSettings[index] = { ...newSettings[index], gain };
+    newSettings[index] = { ...newSettings[index], gain, frequency };
     onEQChange(newSettings);
   };
 
@@ -52,93 +57,84 @@ export const ChannelEQPanel: React.FC<ChannelEQPanelProps> = ({ eqSettings, onEQ
         <p className="text-xs text-slate-400">Simple 5-band fixed EQ for quick tonal adjustments</p>
       </div>
 
-      {/* EQ Curve Visualization */}
+      {/* EQ Curve Visualization - Interactive */}
       <div>
+        <p className="text-xs text-slate-400 mb-2">Drag the orange dots on the curve or use the sliders below</p>
         <EQCurveVisualizer
           bands={eqSettings.map(band => ({ frequency: band.frequency, gain: band.gain }))}
           width={400}
           height={120}
           showGrid={true}
           showLabels={true}
+          onBandChange={handleBandChange}
+          interactive={true}
         />
       </div>
 
       {/* Slider Controls Grid */}
       <style>{`
-        .eq-slider-vertical {
-          width: 32px;
-          height: 160px;
-          -webkit-appearance: slider-vertical;
-          appearance: slider-vertical;
-          background: transparent;
+        .eq-slider {
+          width: 100%;
+          height: 6px;
+          border-radius: 3px;
+          background: linear-gradient(to right, rgba(239, 68, 68, 0.2) 0%, rgba(100, 116, 139, 0.3) 50%, rgba(34, 197, 94, 0.2) 100%);
+          border: 1px solid rgba(148, 163, 184, 0.2);
           cursor: pointer;
-          writing-mode: bt-lr;
-          -webkit-writing-mode: bt-lr;
-          -moz-appearance: slider-vertical;
+          appearance: none;
+          -webkit-appearance: none;
           outline: none;
         }
-        .eq-slider-vertical::-webkit-slider-runnable-track {
-          width: 4px;
-          height: 160px;
-          background: linear-gradient(to top, rgba(239, 68, 68, 0.2) 0%, rgba(100, 116, 139, 0.3) 50%, rgba(34, 197, 94, 0.2) 100%);
-          border-radius: 2px;
-          border: 1px solid rgba(148, 163, 184, 0.2);
-        }
-        .eq-slider-vertical::-webkit-slider-thumb {
-          -webkit-appearance: slider-thumb;
-          appearance: slider-thumb;
-          width: 22px;
-          height: 22px;
+        .eq-slider::-webkit-slider-thumb {
+          appearance: none;
+          -webkit-appearance: none;
+          width: 18px;
+          height: 18px;
           border-radius: 50%;
           background: linear-gradient(135deg, #f97316, #ec4899);
           border: 2px solid rgba(251, 146, 60, 0.7);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.2);
           cursor: grab;
           transition: all 0.15s ease-out;
         }
-        .eq-slider-vertical::-webkit-slider-thumb:hover {
-          transform: scale(1.1);
-          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.4);
+        .eq-slider::-webkit-slider-thumb:hover {
+          transform: scale(1.15);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3);
         }
-        .eq-slider-vertical::-webkit-slider-thumb:active {
+        .eq-slider::-webkit-slider-thumb:active {
           cursor: grabbing;
-          transform: scale(0.95);
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(0, 0, 0, 0.3);
+          transform: scale(1.05);
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
         }
-        .eq-slider-vertical::-moz-range-track {
+        .eq-slider::-moz-range-thumb {
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #f97316, #ec4899);
+          border: 2px solid rgba(251, 146, 60, 0.7);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 2px rgba(255, 255, 255, 0.2);
+          cursor: grab;
+          transition: all 0.15s ease-out;
+        }
+        .eq-slider::-moz-range-thumb:hover {
+          transform: scale(1.15);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3);
+        }
+        .eq-slider::-moz-range-thumb:active {
+          cursor: grabbing;
+          transform: scale(1.05);
+          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+        }
+        .eq-slider::-moz-range-track {
           background: transparent;
           border: none;
         }
-        .eq-slider-vertical::-moz-range-progress {
-          background: linear-gradient(to top, rgba(239, 68, 68, 0.2) 0%, rgba(100, 116, 139, 0.3) 50%, rgba(34, 197, 94, 0.2) 100%);
-          border-radius: 2px;
-        }
-        .eq-slider-vertical::-moz-range-thumb {
-          width: 22px;
-          height: 22px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #f97316, #ec4899);
-          border: 2px solid rgba(251, 146, 60, 0.7);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.3);
-          cursor: grab;
-          transition: all 0.15s ease-out;
-        }
-        .eq-slider-vertical::-moz-range-thumb:hover {
-          transform: scale(1.1);
-          box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5), inset 0 1px 2px rgba(255, 255, 255, 0.4);
-        }
-        .eq-slider-vertical::-moz-range-thumb:active {
-          cursor: grabbing;
-          transform: scale(0.95);
-          box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(0, 0, 0, 0.3);
-        }
       `}</style>
 
-      <div className="grid grid-cols-5 gap-3">
+      <div className="space-y-4">
         {eqSettings.map((band, index) => (
           <div
             key={index}
-            className={`flex flex-col items-center gap-3 p-3 rounded-lg transition-all ${
+            className={`p-3 rounded-lg transition-all ${
               activeBand === index
                 ? 'bg-white/5 border border-orange-500/30'
                 : 'bg-white/0 border border-transparent hover:bg-white/[0.02]'
@@ -146,34 +142,26 @@ export const ChannelEQPanel: React.FC<ChannelEQPanelProps> = ({ eqSettings, onEQ
             onMouseEnter={() => setActiveBand(index)}
             onMouseLeave={() => setActiveBand(null)}
           >
-            {/* Vertical Slider */}
-            <div className="relative h-40 w-12 flex items-center justify-center">
-              <input
-                type="range"
-                min="-12"
-                max="12"
-                step="0.1"
-                value={band.gain}
-                onChange={(e) => handleBandChange(index, parseFloat(e.target.value))}
-                onMouseDown={() => setActiveBand(index)}
-                onMouseUp={() => setActiveBand(null)}
-                className="eq-slider-vertical"
-              />
-
-              {/* Center line indicator */}
-              <div className="absolute w-3 h-px bg-slate-500/40 pointer-events-none" />
+            {/* Band Label and Value */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm font-bold text-slate-300">{getBandLabel(band.frequency)}</div>
+              <div className={`text-sm font-bold font-mono ${getGainColor(band.gain)}`}>
+                {band.gain > 0 ? '+' : ''}{band.gain.toFixed(1)} dB
+              </div>
             </div>
 
-            {/* Frequency Label */}
-            <div className="text-center">
-              <div className="text-xs font-bold text-slate-300">{getBandLabel(band.frequency)}</div>
-            </div>
-
-            {/* Gain Value Display - with smooth transition */}
-            <div className={`text-sm font-bold font-mono ${getGainColor(band.gain)} min-h-6 text-center transition-colors duration-150`}>
-              {band.gain > 0 ? '+' : ''}{band.gain.toFixed(1)}
-              <span className="text-xs opacity-60"> dB</span>
-            </div>
+            {/* Horizontal Slider */}
+            <input
+              type="range"
+              min="-12"
+              max="12"
+              step="0.1"
+              value={band.gain}
+              onChange={(e) => handleBandChange(index, parseFloat(e.target.value))}
+              onMouseDown={() => setActiveBand(index)}
+              onMouseUp={() => setActiveBand(null)}
+              className="eq-slider"
+            />
 
             {/* Reset Button - with improved styling */}
             <button

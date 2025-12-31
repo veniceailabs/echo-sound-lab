@@ -1,17 +1,33 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AppState, AudioMetrics, ProcessingConfig, Suggestion, EchoReport, RevisionEntry, ReferenceTrack, MixSignature, GeneratedSong, Stem, EQSettings, DynamicEQConfig } from './types';
+import { AppState, AudioMetrics, ProcessingConfig, Suggestion, EchoReport, RevisionEntry, ReferenceTrack, MixSignature, GeneratedSong, Stem, EQSettings, DynamicEQConfig, EngineMode, ProcessingAction, SSCScan } from './types';
 import { audioEngine } from './services/audioEngine';
+import { audioPerceptionLayer } from './services/audioPerceptionLayer';
 import { mixAnalysisService } from './services/mixAnalysis';
+import { listeningPassService } from './services/listeningPassService';
+import { reasonAboutListeningPass } from './services/geminiService';
+
+// NEW: Refactored pipeline
+import { AudioSessionProvider, useAudioSession } from './context/AudioSessionContext';
+import { audioProcessingPipeline } from './services/audioProcessingPipeline';
+import { generateProcessingActions } from './services/masteringAnalyzer';
+import { qualityAssurance, QualityVerdictInfo } from './services/qualityAssurance';
+import { FEATURE_FLAGS } from './config/featureFlags';
+import { SAFE_TEST_CONFIG } from './services/testConfig';
+import { actionsToConfig } from './services/processingActionUtils';
+import { loadFullStudioSuite, FullStudioStatus } from './services/fullStudioSuite';
 import Visualizer from './components/Visualizer';
 import ChatInterface from './components/ChatInterface';
 import { ProcessingPanel } from './components/ProcessingPanel';
 import AnalysisPanel from './components/AnalysisPanel';
 import MultiStemWorkspace from './components/MultiStemWorkspace';
 import AIStudio from './components/AIStudio';
+import VideoEngine from './components/VideoEngine';
 import { EchoReportPanel } from './components/EchoReportPanel';
+import { ListeningPassCard } from './components/ListeningPassCard';
 import { FeedbackButton } from './components/SharedComponents';
 import { storageService } from './services/storageService';
 import { runSafeAsync } from './utils/safeAsync';
+import { saveEQSettings, saveDynamicEQSettings } from './utils/eqPersistence';
 import SettingsPanel from './components/SettingsPanel';
 import { i18nService } from './services/i18nService';
 
@@ -21,6 +37,7 @@ import { PhaseCorrelationMeter, StereoFieldMeter, LUFSMeter } from './components
 import { historyManager } from './services/historyManager';
 import { sessionManager, SessionState } from './services/sessionManager';
 import { DiagnosticsOverlay, useDiagnosticsToggle } from './components/DiagnosticsOverlay';
+import { SSCOverlay } from './components/SSCOverlay';
 import { ProcessingOverlay } from './components/ProcessingOverlay';
 import { FloatingControls } from './components/FloatingControls';
 import { HistoryTimeline } from './components/HistoryTimeline';
@@ -33,12 +50,65 @@ import { ShareableCardModal, NudgeBanner } from './components/ShareableCardModal
 // Notification System
 import { NotificationManager, NotificationType } from './components/Notification';
 
+// Capability System - Phase 2.2.4 React Integration
+import { CapabilityProvider, useCapabilityCheck, useGuardedAction } from './hooks';
+import { CapabilityACCModal } from './components/CapabilityACCModal';
+import { CapabilityStatusDisplay } from './components/CapabilityStatusDisplay';
+import { CapabilityAuthority, type ProcessIdentity } from './services/CapabilityAuthority';
+import { Capability } from './services/capabilities';
+import { createCreativeMixingPreset } from './services/capabilityPresets';
+
 declare var process: { env: Record<string, string | undefined> };
 
+const ENGINE_MODE_KEY = 'echo.engineMode.v1';
+const FRIENDLY_TOUR_KEY = 'echo.friendlyTourSeen.v1';
+
+// Initialize Capability Authority (Phase 2.2.4)
+const processIdentity: ProcessIdentity = {
+  appId: 'com.echo-sound-lab.app',
+  pid: typeof window !== 'undefined' ? Math.random() * 1000000 : 0,
+  launchTimestamp: Date.now()
+};
+
+const capabilityAuthority = new CapabilityAuthority(
+  'session-' + Date.now(),
+  () => Date.now(),
+  processIdentity
+);
+
+// Grant initial capabilities (CREATIVE_MIXING preset: full mixing with exports requiring ACC)
+const creativeMixingPreset = createCreativeMixingPreset('com.echo-sound-lab.app', 14400000); // 4 hours
+creativeMixingPreset.grants.forEach(grant => capabilityAuthority.grant(grant));
+
 const App: React.FC = () => {
+  const defaultEqSettings: EQSettings = [
+    { frequency: 60, gain: 0, type: 'lowshelf' },      // Sub bass
+    { frequency: 250, gain: 0, type: 'peaking' },      // Low-mid
+    { frequency: 1000, gain: 0, type: 'peaking' },     // Midrange
+    { frequency: 4000, gain: 0, type: 'peaking' },     // Upper-mid
+    { frequency: 8000, gain: 0, type: 'peaking' },     // Presence
+    { frequency: 12000, gain: 0, type: 'highshelf' },  // Brilliance
+  ];
+  const defaultDynamicEq: DynamicEQConfig = [
+    { id: 'dyn-eq-1', frequency: 200, gain: 0, q: 1, threshold: -20, attack: 0.01, release: 0.1, type: 'peaking', mode: 'compress', enabled: false },
+    { id: 'dyn-eq-2', frequency: 800, gain: 0, q: 1, threshold: -20, attack: 0.01, release: 0.1, type: 'peaking', mode: 'compress', enabled: false },
+    { id: 'dyn-eq-3', frequency: 4000, gain: 0, q: 1, threshold: -20, attack: 0.01, release: 0.1, type: 'peaking', mode: 'compress', enabled: false },
+    { id: 'dyn-eq-4', frequency: 10000, gain: 0, q: 1, threshold: -20, attack: 0.01, release: 0.1, type: 'peaking', mode: 'compress', enabled: false }
+  ];
   // Core state
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
-  const [activeMode, setActiveMode] = useState<'SINGLE' | 'MULTI' | 'AI_STUDIO'>('SINGLE');
+  const [activeMode, setActiveMode] = useState<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO'>('SINGLE');
+  const [engineMode, setEngineMode] = useState<EngineMode>(() => {
+    try {
+      const stored = localStorage.getItem(ENGINE_MODE_KEY);
+      if (stored === 'FRIENDLY' || stored === 'ADVANCED') {
+        return stored;
+      }
+    } catch (e) {
+      console.warn('[App] Failed to read engine mode from localStorage', e);
+    }
+    return 'FRIENDLY';
+  }); // Stage Architecture: FRIENDLY or ADVANCED
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentPlayheadSeconds, setCurrentPlayheadSeconds] = useState(0);
 
@@ -63,13 +133,26 @@ const App: React.FC = () => {
   const [echoActionStatus, setEchoActionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [echoActionError, setEchoActionError] = useState<string | null>(null);
 
+  // Phase 3: LLM Reasoning state
+  const [llmGuidance, setLLMGuidance] = useState<any>(null);
+
+  // Phase 4: Listening Pass Card state
+  const [listeningPassData, setListeningPassData] = useState<any>(null);
+
   // Processing state
   const [currentConfig, setCurrentConfig] = useState<ProcessingConfig>({});
   const [isCommitting, setIsCommitting] = useState(false);
   const [isAbComparing, setIsAbComparing] = useState(false);
   const [revisionLog, setRevisionLog] = useState<RevisionEntry[]>([]);
+  const [snapshotAId, setSnapshotAId] = useState<string | null>(null);
+  const [snapshotBId, setSnapshotBId] = useState<string | null>(null);
+  const [snapshotABActive, setSnapshotABActive] = useState(false);
+  const [snapshotALabel, setSnapshotALabel] = useState<string | null>(null);
+  const [snapshotBLabel, setSnapshotBLabel] = useState<string | null>(null);
   const [hasAppliedChanges, setHasAppliedChanges] = useState(false); // Track if any processing has been applied
   const [originalBuffer, setOriginalBuffer] = useState<AudioBuffer | null>(null); // Keep pristine original
+  const hasUserInitiatedProcessingRef = useRef(false);
+  const autoMixAbortRef = useRef(false);
 
   // UI state
   const [showAdvancedTools, setShowAdvancedTools] = useState(false);
@@ -82,6 +165,16 @@ const App: React.FC = () => {
   const [showHistoryTimeline, setShowHistoryTimeline] = useState(false);
   const [showEchoChat, setShowEchoChat] = useState(false);
   const [, forceUpdate] = useState({});
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
+  const [networkSettings, setNetworkSettings] = useState({ ssid: 'Echo WiFi', proxy: '', isLocal: true });
+  const [showFriendlyTour, setShowFriendlyTour] = useState(false);
+  const [friendlyTourStep, setFriendlyTourStep] = useState(0);
+
+  // Capability System - ACC Modal State (Phase 2.2.4)
+  const [showAccModal, setShowAccModal] = useState(false);
+  const [accToken, setAccToken] = useState<any>(null);
+  const [accReason, setAccReason] = useState('');
+  const [accIsLoading, setAccIsLoading] = useState(false);
 
   // AI Studio / Generated Song state
   const [generatedStems, setGeneratedStems] = useState<Stem[] | null>(null);
@@ -90,6 +183,77 @@ const App: React.FC = () => {
   const [showProcessingOverlay, setShowProcessingOverlay] = useState(false);
   const [processingSteps, setProcessingSteps] = useState<string[]>([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+
+  const [isAutoMixing, setIsAutoMixing] = useState(false);
+  const [autoMixError, setAutoMixError] = useState<string | null>(null);
+  const [autoMixProgress, setAutoMixProgress] = useState<{
+    iteration: number;
+    maxIterations: number;
+    stage: string;
+    score?: number;
+  } | null>(null);
+  const [autoMixMode, setAutoMixMode] = useState<'STANDARD' | 'FULL_STUDIO' | null>(null);
+  const [fullStudioStatus, setFullStudioStatus] = useState<FullStudioStatus>('idle');
+
+  const AUTO_MIX_TARGET_SCORE = 90;
+  const AUTO_MIX_MAX_ITERATIONS = 4;
+  const appVersion = 'v2.5';
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.theme = themeMode;
+    if (themeMode === 'light') {
+      root.classList.remove('theme-dark');
+      root.classList.add('theme-light');
+    } else {
+      root.classList.remove('theme-light');
+      root.classList.add('theme-dark');
+    }
+  }, [themeMode]);
+
+  const handleResetToOriginal = useCallback(() => {
+    audioEngine.resetToOriginal();
+    setHasAppliedChanges(false);
+    setProcessedBuffer(null);
+    setSnapshotABActive(false);
+    setSnapshotAId(null);
+    setSnapshotBId(null);
+    setSnapshotALabel(null);
+    setSnapshotBLabel(null);
+  }, []);
+  const pitchTag = currentConfig.pitch?.enabled ? (isAbComparing ? 'Pitch OFF' : 'Pitch ON') : null;
+  const abPanelLabel = snapshotABActive
+    ? `Listening to ${isAbComparing ? (snapshotALabel || 'Snapshot A') : (snapshotBLabel || 'Snapshot B')}`
+    : (!hasAppliedChanges
+      ? i18nService.t('ab.noChanges')
+      : isAbComparing
+        ? `${i18nService.t('ab.original')}${pitchTag ? ` · ${pitchTag}` : ''}`
+        : `${i18nService.t('ab.processed')}${pitchTag ? ` · ${pitchTag}` : ''}`);
+  const abFloatingLabel = snapshotABActive
+    ? (isAbComparing ? 'Snapshot A' : 'Snapshot B')
+    : pitchTag ? pitchTag : (isAbComparing ? 'Original' : 'Processed');
+  const abDisabled = snapshotABActive ? false : !hasAppliedChanges;
+  const friendlyTourSteps = [
+    {
+      title: 'Upload a Track',
+      body: 'Drop a WAV/MP3/AIFF to start. Uploading never changes your audio.',
+    },
+    {
+      title: 'Analyze',
+      body: 'Analyze inspects your mix and suggests fixes. Nothing changes until you apply.',
+    },
+    {
+      title: 'Auto Mix',
+      body: 'Run a safe one-click pass. You can always A/B and undo.',
+    },
+    {
+      title: 'A/B Listen',
+      body: 'Toggle Original vs Processed to confirm the change is real.',
+    },
+    {
+      title: 'Export',
+      body: 'Export when it sounds right. You stay in control.',
+    },
+  ];
 
   // Notification System State
   const [notifications, setNotifications] = useState<Array<{
@@ -109,28 +273,147 @@ const App: React.FC = () => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
 
+  const dismissFriendlyTour = useCallback(() => {
+    setShowFriendlyTour(false);
+    try {
+      localStorage.setItem(FRIENDLY_TOUR_KEY, 'true');
+    } catch (e) {
+      console.warn('[App] Failed to persist friendly tour state', e);
+    }
+  }, []);
+
+  // ACC Modal Event Listener (Phase 2.2.4)
+  useEffect(() => {
+    const handleAccRequired = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const request = customEvent.detail;
+      setAccToken(request.accToken);
+      setAccReason(request.reason);
+      setShowAccModal(true);
+    };
+
+    window.addEventListener('acc-required', handleAccRequired);
+    return () => window.removeEventListener('acc-required', handleAccRequired);
+  }, []);
+
+  const handleFriendlyTourNext = useCallback(() => {
+    setFriendlyTourStep((prev) => {
+      if (prev >= friendlyTourSteps.length - 1) {
+        dismissFriendlyTour();
+        return prev;
+      }
+      return prev + 1;
+    });
+  }, [dismissFriendlyTour, friendlyTourSteps.length]);
+
+  const handleFriendlyTourBack = useCallback(() => {
+    setFriendlyTourStep((prev) => Math.max(0, prev - 1));
+  }, []);
+
+  // ACC Modal Handlers (Phase 2.2.4)
+  const handleAccConfirm = useCallback(async (response: string) => {
+    setAccIsLoading(true);
+    try {
+      // TODO: Validate ACC response and grant capability
+      // This is where we'd call CapabilityAccBridge.validateACC()
+      console.log('[App] ACC confirmed with response:', response);
+      setShowAccModal(false);
+      setAccToken(null);
+      setAccReason('');
+    } catch (err) {
+      console.error('[App] ACC validation failed:', err);
+      throw err;
+    } finally {
+      setAccIsLoading(false);
+    }
+  }, []);
+
+  const handleAccDismiss = useCallback(() => {
+    // User dismissed the modal. Action is halted.
+    // No auto-resume. User must click button again if they want to retry.
+    setShowAccModal(false);
+    setAccToken(null);
+    setAccReason('');
+    setAccIsLoading(false);
+  }, []);
+
   // EQ state (lifted from ProcessingPanel for use in EnhancedControlPanel)
   // DESIGN PRINCIPLE: All defaults bias toward inaudibility, not effect
   // - Channel EQ: All gains at 0dB (no processing by default)
   // - Parametric EQ: Disabled by default (completely inaudible)
-  const [eqSettings, setEqSettings] = useState<EQSettings>([
-    { frequency: 60, gain: 0, type: 'lowshelf' },      // Inaudible: 0dB
-    { frequency: 250, gain: 0, type: 'peaking' },      // Inaudible: 0dB
-    { frequency: 1000, gain: 0, type: 'peaking' },     // Inaudible: 0dB
-    { frequency: 4000, gain: 0, type: 'peaking' },     // Inaudible: 0dB
-    { frequency: 12000, gain: 0, type: 'highshelf' },  // Inaudible: 0dB
-  ]);
-  const [dynamicEq, setDynamicEq] = useState<DynamicEQConfig>([
-    // Band 1: Disabled by default (completely inaudible)
-    // When enabled: conservative threshold (-20dB), moderate Q (1.0), neutral gain (0dB)
-    { id: 'dyn-eq-1', frequency: 200, gain: 0, q: 1, threshold: -20, attack: 0.01, release: 0.1, type: 'peaking', mode: 'compress', enabled: false },
-    // Band 2: Disabled by default (completely inaudible)
-    // When enabled: same conservative defaults as Band 1
-    { id: 'dyn-eq-2', frequency: 4000, gain: 0, q: 1, threshold: -20, attack: 0.01, release: 0.1, type: 'peaking', mode: 'compress', enabled: false }
-  ]);
+  const [eqSettings, setEqSettings] = useState<EQSettings>(defaultEqSettings);
+  const [dynamicEq, setDynamicEq] = useState<DynamicEQConfig>(defaultDynamicEq);
 
   // Diagnostics overlay (~ key toggle)
   const { isVisible: showDiagnostics, setIsVisible: setShowDiagnostics } = useDiagnosticsToggle();
+  const [showSSC, setShowSSC] = useState(false);
+  const [sscScan, setSscScan] = useState<SSCScan | null>(null);
+
+  const buildSSCScan = useCallback(() => {
+    const baseScan = audioEngine.getSSCScan();
+    const tabs = [
+      { id: 'SINGLE', label: i18nService.t('modes.single'), active: activeMode === 'SINGLE', confidenceLevel: 'certain' as const },
+      { id: 'MULTI', label: i18nService.t('modes.multi'), active: activeMode === 'MULTI', confidenceLevel: 'certain' as const },
+      { id: 'AI_STUDIO', label: i18nService.t('modes.ai'), active: activeMode === 'AI_STUDIO', confidenceLevel: 'certain' as const },
+      { id: 'VIDEO', label: 'Video', active: activeMode === 'VIDEO', confidenceLevel: 'certain' as const },
+    ];
+    const activeLabel = tabs.find((tab) => tab.active)?.label || activeMode;
+    const scan: SSCScan = {
+      ...baseScan,
+      ui: {
+        activeMode: activeLabel,
+        tabs,
+      },
+    };
+    setSscScan(scan);
+    return scan;
+  }, [activeMode]);
+
+  const handleOpenSSC = useCallback(() => {
+    buildSSCScan();
+    setShowSSC(true);
+  }, [buildSSCScan]);
+
+  const handleRefreshSSC = useCallback(() => {
+    buildSSCScan();
+  }, [buildSSCScan]);
+
+  const handleCloseSSC = useCallback(() => {
+    setShowSSC(false);
+  }, []);
+
+  useEffect(() => {
+    if (!showSSC) return;
+    buildSSCScan();
+  }, [showSSC, activeMode, buildSSCScan]);
+
+  useEffect(() => {
+    audioEngine.setEngineMode(engineMode);
+  }, [engineMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ENGINE_MODE_KEY, engineMode);
+    } catch (e) {
+      console.warn('[App] Failed to persist engine mode', e);
+    }
+  }, [engineMode]);
+
+  useEffect(() => {
+    if (engineMode !== 'FRIENDLY' || activeMode !== 'SINGLE') {
+      setShowFriendlyTour(false);
+      return;
+    }
+    try {
+      const seen = localStorage.getItem(FRIENDLY_TOUR_KEY) === 'true';
+      if (!seen) {
+        setFriendlyTourStep(0);
+        setShowFriendlyTour(true);
+      }
+    } catch (e) {
+      console.warn('[App] Failed to read friendly tour state', e);
+    }
+  }, [engineMode, activeMode]);
 
   // Session autosave - check for existing session on mount
   useEffect(() => {
@@ -195,9 +478,10 @@ const App: React.FC = () => {
         appliedSuggestionIds,
         echoReportSummary: echoReport?.summary || null,
         activeMode,
+        revisionLog,
       });
     }
-  }, [currentConfig, isAbComparing, currentPlayheadSeconds, appliedSuggestionIds, echoReport, activeMode, appState, currentFileName]);
+  }, [currentConfig, isAbComparing, currentPlayheadSeconds, appliedSuggestionIds, echoReport, activeMode, appState, currentFileName, revisionLog]);
 
   // Helper to run steps with delay for visualization
   const runWithSteps = async (steps: string[], operation: () => Promise<void>) => {
@@ -234,6 +518,39 @@ const App: React.FC = () => {
     }
   };
 
+  const buildSuggestionsFromActions = useCallback((actions: ProcessingAction[]): Suggestion[] => {
+    const getParamValue = (params: any[] | undefined, name: string, fallback?: number) => {
+      if (!Array.isArray(params)) return fallback;
+      const param = params.find(p => p?.name === name);
+      return param?.value ?? fallback;
+    };
+
+    return actions.map(action => ({
+      id: action.id,
+      category: action.category || action.type,
+      description: action.description,
+      isSelected: !!action.isSelected,
+      parameters: {
+        eq: action.bands || [],
+        compression: action.type === 'Compression'
+          ? {
+              threshold: getParamValue(action.params, 'threshold', -12),
+              ratio: getParamValue(action.params, 'ratio', 2),
+              attack: getParamValue(action.params, 'attack', 0.02),
+              release: getParamValue(action.params, 'release', 0.15)
+            }
+          : undefined,
+        limiter: action.type === 'Limiter'
+          ? {
+              threshold: getParamValue(action.params, 'threshold', -1),
+              release: getParamValue(action.params, 'release', 0.1)
+            }
+          : undefined,
+        inputTrimDb: getParamValue(action.params, 'inputGain', undefined)
+      }
+    }));
+  }, []);
+
   // Handle restore session
   const handleRestoreSession = () => {
     if (pendingSession) {
@@ -242,6 +559,12 @@ const App: React.FC = () => {
       setCurrentPlayheadSeconds(pendingSession.playheadSeconds);
       setAppliedSuggestionIds(pendingSession.appliedSuggestionIds);
       setActiveMode(pendingSession.activeMode);
+      setRevisionLog(pendingSession.revisionLog || []);
+      // For MULTI mode, set app state to READY so MultiStemWorkspace displays
+      // For SINGLE mode, keep IDLE so user sees upload screen
+      if (pendingSession.activeMode === 'MULTI') {
+        setAppState(AppState.READY);
+      }
       // Note: We can't restore the actual audio file, user needs to re-upload
       setShowRestoreDialog(false);
       setPendingSession(null);
@@ -255,10 +578,41 @@ const App: React.FC = () => {
     setPendingSession(null);
   };
 
+  const startAplSession = () => {
+    if (!FEATURE_FLAGS.APL_ENABLED) return;
+    const analyser = audioEngine.getAnalyserNode?.();
+    const durationSec = audioEngine.getDuration();
+    if (!analyser || !durationSec) return;
+    audioPerceptionLayer.start({
+      analyser,
+      sampleRate: audioEngine.getSampleRate(),
+      sourceId: currentFileName || 'unknown',
+      sourceType: 'file',
+      durationSec,
+    }, {
+      devLogging: FEATURE_FLAGS.APL_LOG_ENABLED,
+    });
+  };
+
+  const pauseAplSession = () => {
+    if (!FEATURE_FLAGS.APL_ENABLED) return;
+    audioPerceptionLayer.pause();
+  };
+
+  const stopAplSession = () => {
+    if (!FEATURE_FLAGS.APL_ENABLED) return;
+    audioPerceptionLayer.stop();
+  };
+
   // File upload handler
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (snapshotABActive) {
+      handleClearSnapshotAB();
+    }
+    stopAplSession();
 
     // Check file size upfront - CRITICAL for Google AI Studio
     const fileSizeMB = file.size / (1024 * 1024);
@@ -276,6 +630,73 @@ const App: React.FC = () => {
     const loadPromise = runSafeAsync(async () => {
       console.log('[1] Starting audio load...');
       const startTime = Date.now();
+
+      // NEW: Decode audio for Listening Pass analysis (Phase 2)
+      let listeningPassResult: any = null;
+      if (FEATURE_FLAGS.LISTENING_PASS_ENABLED) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const audioContext = new AudioContext();
+          const decodedBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+          // Call Listening Pass Service
+          listeningPassResult = await listeningPassService.analyzeAudio({
+            audioBuffer: decodedBuffer,
+            sampleRate: decodedBuffer.sampleRate,
+            duration: decodedBuffer.duration,
+            metadata: {
+              genre: undefined,
+              bpm: undefined,
+            },
+            mode: 'friendly',
+          });
+
+          // Store in state for UI rendering (Phase 4)
+          setListeningPassData(listeningPassResult.listening_pass);
+
+          // Dev-only logging (guarded by flag)
+          if (FEATURE_FLAGS.LISTENING_PASS_LOG_ENABLED) {
+            console.log('[Listening Pass Result]', listeningPassResult);
+            const timingMs = Date.now() - startTime;
+            console.log(`[Listening Pass Timing] ${timingMs}ms`);
+          }
+        } catch (error) {
+          console.error('[Listening Pass Error]', error);
+          // Fail gracefully: continue without analysis
+          setListeningPassData(null);
+        }
+      }
+
+      // NEW: Local Reasoning (Phase 3) - No AI needed
+      if (FEATURE_FLAGS.LISTENING_PASS_ENABLED && listeningPassResult && FEATURE_FLAGS.LLM_REASONING_ENABLED) {
+        try {
+          // Use simple rule-based guidance instead of AI
+          const llmResult = {
+            guidance_text: listeningPassResult.listening_pass.priority_summary?.dominant_tokens?.length > 0
+              ? `Detected ${listeningPassResult.listening_pass.priority_summary.dominant_tokens.length} area(s) for improvement`
+              : 'No listener concerns detected. Your mix is in great shape.',
+            processing: {}
+          };
+
+          // Store guidance
+          setLLMGuidance(llmResult);
+
+          // Dev logging
+          if (FEATURE_FLAGS.LISTENING_PASS_LOG_ENABLED) {
+            console.log('[LLM Guidance]', llmResult);
+          }
+        } catch (error) {
+          console.error('[LLM Reasoning Error]', error);
+          // Fail gracefully: continue without LLM guidance
+          if (FEATURE_FLAGS.LLM_FALLBACK_ON_ERROR) {
+            // Use Listening Pass data only
+            setLLMGuidance(null);
+          } else {
+            // Show error
+            console.warn('[LLM] Reasoning failed and fallback disabled');
+          }
+        }
+      }
 
       // Load audio file - this is the slow part for large files
       const buffer = await audioEngine.loadFile(file);
@@ -297,9 +718,17 @@ const App: React.FC = () => {
       };
 
       setOriginalMetrics(metrics);
-      setProcessedMetrics(metrics);
+      setProcessedMetrics(null); // Don't set processed until actual processing happens
       setOriginalBuffer(buffer); // Store pristine original for A/B and reprocessing
       setHasAppliedChanges(false); // Reset on new file
+      setCurrentConfig({});
+      hasUserInitiatedProcessingRef.current = false;
+      setEqSettings(defaultEqSettings);
+      setDynamicEq(defaultDynamicEq);
+
+      // Reset analysis state on new file upload
+      setListeningPassData(null);
+      setLLMGuidance(null);
 
       // NEW: Add to history
       historyManager.addEntry('upload', `Loaded ${file.name}`, {}, metrics);
@@ -331,12 +760,40 @@ const App: React.FC = () => {
     }));
 
     try {
-      const { suggestions, genre } = await import('./services/geminiService')
-        .then(m => m.analyzeMixData(originalMetrics, currentFileName, 'in_progress'));
+      // NEW: Use advanced analyzer with buffer for professional diagnostics
+      const { generateProcessingActions, analyzeAudioBuffer } = await import('./services/masteringAnalyzer')
+        .then(m => ({
+          generateProcessingActions: m.generateProcessingActions,
+          analyzeAudioBuffer: m.analyzeAudioBuffer
+        }));
+
+      // NEW: Run advanced analysis (populates advancedMetrics from buffer)
+      if (originalBuffer) {
+        try {
+          const advancedReport = analyzeAudioBuffer(originalBuffer, originalMetrics);
+          console.log('[ANALYSIS] Advanced report generated:', {
+            actionCount: advancedReport.recommended_actions.length,
+            issues: advancedReport.explanation,
+            score: advancedReport.score?.total
+          });
+        } catch (advError) {
+          console.warn('[ANALYSIS] Advanced analysis had partial failure, continuing:', advError);
+        }
+      }
+
+      // Generate actions from enriched metrics
+      const actions = generateProcessingActions(originalMetrics);
+
+      // Genre info from analysis
+      const genre = 'Professional';
+
+      // NEW: Convert actions to suggestions for backward compatibility with UI
+      const suggestions = buildSuggestionsFromActions(actions);
 
       setAnalysisResult((prev: any) => ({
         ...prev,
         suggestions,
+        actions, // NEW: Store actions for pipeline use
         genrePrediction: genre
       }));
     } catch (error) {
@@ -344,7 +801,8 @@ const App: React.FC = () => {
       setAnalysisResult((prev: any) => ({
         ...prev,
         genrePrediction: 'Analysis Failed',
-        suggestions: []
+        suggestions: [],
+        actions: []
       }));
     }
   };
@@ -406,19 +864,84 @@ const App: React.FC = () => {
       if (!prev) return prev;
       return {
         ...prev,
+        // NEW: Toggle in both suggestions (UI) and actions (pipeline)
         suggestions: prev.suggestions.map((s: Suggestion) =>
           s.id === id ? { ...s, isSelected: !s.isSelected } : s
+        ),
+        actions: (prev.actions || []).map((a: ProcessingAction) =>
+          a.id === id ? { ...a, isSelected: !a.isSelected } : a
         )
       };
     });
   };
 
+  // Remove a single applied suggestion and re-render
+  const handleRemoveAppliedSuggestion = async (suggestionId: string): Promise<void> => {
+    if (!analysisResult || !originalMetrics || !originalBuffer) return;
+
+    await runWithSteps([
+      'Removing Processor',
+      'Reconfiguring DSP Chain',
+      'Rendering Updated Audio',
+      'Analyzing Output'
+    ], async () => {
+      try {
+        // Remove from applied list
+        const newAppliedIds = appliedSuggestionIds.filter(id => id !== suggestionId);
+
+        // If no suggestions left, revert to original
+        if (newAppliedIds.length === 0) {
+          audioEngine.setBuffer(originalBuffer);
+          audioEngine.resetToOriginal();
+          setAppliedSuggestionIds([]);
+          setProcessedMetrics(null); // No processed audio when no processing applied
+          setCurrentConfig({});
+          showNotification('Reverted to original audio', 'info', 2000);
+          return;
+        }
+
+        // NEW: Get remaining actions and reprocess from original
+        const remainingActions = (analysisResult.actions || []).filter((a: ProcessingAction) =>
+          newAppliedIds.includes(a.id) && a.isEnabled
+        );
+
+        console.log('[REMOVE SUGGESTION] Reprocessing from original with', remainingActions.length, 'remaining actions');
+
+        // NEW: Load original buffer and reprocess
+        await audioProcessingPipeline.loadAudio(originalBuffer);
+        const result = await audioProcessingPipeline.reprocessAudio(remainingActions);
+        const newMetrics = result.metrics;
+
+        // Update audio engine
+        audioEngine.setProcessedBuffer(result.processedBuffer);
+        audioEngine.enableProcessedSignal();
+        setCurrentConfig({});
+
+        setProcessedMetrics(newMetrics);
+        setAppliedSuggestionIds(newAppliedIds);
+
+        // Regenerate Echo Report with updated audio
+        handleGenerateEchoReport(newMetrics);
+
+        showNotification(`Removed processor. Re-rendered audio.`, 'success', 2000);
+
+      } catch (error) {
+        console.error('Failed to remove suggestion:', error);
+        showNotification('Failed to remove suggestion: ' + (error as Error).message, 'error', 3000);
+      }
+    });
+  };
+
   // Apply selected AI recommendations
   const handleApplySuggestions = async (): Promise<boolean> => {
-    if (!analysisResult) return false;
+    if (!analysisResult || !originalMetrics) return false;
 
-    const selectedSuggestions = analysisResult.suggestions.filter((s: Suggestion) => s.isSelected);
-    if (selectedSuggestions.length === 0) {
+    // NEW: Get selected actions from the actions array (prioritize, fallback to suggestions)
+    const selectedActions = Array.isArray(analysisResult.actions)
+      ? analysisResult.actions.filter((a: ProcessingAction) => a?.isSelected)
+      : [];
+
+    if (selectedActions.length === 0) {
       setApplySuggestionsError('Please select at least one suggestion');
       return false;
     }
@@ -433,61 +956,58 @@ const App: React.FC = () => {
       'Analyzing Output'
     ], async () => {
       try {
-        // Build config from selected suggestions
-        const config: ProcessingConfig = {};
+        console.log('[APPLY SUGGESTIONS] Using new pipeline with', selectedActions.length, 'actions');
 
-        selectedSuggestions.forEach((suggestion: Suggestion) => {
-          if (suggestion.parameters?.eq) {
-            config.eq = suggestion.parameters.eq;
+        // NEW: Load original buffer to prevent cascading degradation
+        if (originalBuffer) {
+          await audioProcessingPipeline.loadAudio(originalBuffer);
+        }
+
+        // NEW: Process audio using the clean pipeline
+        const result = await audioProcessingPipeline.processAudio(selectedActions);
+        const newMetrics = result.metrics;
+
+        console.log('[APPLY SUGGESTIONS] Processing complete. Metrics:', newMetrics);
+
+        // NEW: Check quality using Perceptual Diff
+        if (originalMetrics) {
+          const qualityVerdict = qualityAssurance.assessProcessingQuality(originalMetrics, newMetrics);
+
+          console.log('\n' + '='.repeat(80));
+          console.log('QUALITY ASSURANCE VERDICT');
+          console.log('='.repeat(80));
+          console.log(qualityAssurance.generateQualityReport(qualityVerdict));
+          console.log('='.repeat(80) + '\n');
+
+          if (qualityVerdict.shouldBlock) {
+            const warningMsg = `Processing blocked: ${qualityVerdict.issues.join(', ')}`;
+            setApplySuggestionsError(warningMsg);
+            showNotification(warningMsg, 'warning', 5000);
+            console.warn('[QUALITY] Processing blocked - quality verdict:', qualityVerdict);
+            return;
           }
-          if (suggestion.parameters?.compression) {
-            config.compression = suggestion.parameters.compression;
-          }
-          if (suggestion.parameters?.limiter) {
-            config.limiter = suggestion.parameters.limiter;
-          }
-        });
+        }
 
-        // CRITICAL: Actually process the audio and create new buffer
-        const processedBuffer = await audioEngine.renderProcessedAudio(config);
-        audioEngine.setBuffer(processedBuffer);
-
-        // Apply configuration for live playback
-        audioEngine.applyProcessingConfig(config);
-        audioEngine.enableProcessedSignal(); // Switch to processed audio
-        setCurrentConfig(config);
-
-        // Analyze the processed audio
-        const newMetrics = mixAnalysisService.analyzeStaticMetrics(processedBuffer);
-
-        // Quick LUFS estimation for speed (accurate enough for most use cases)
-        const estimatedLUFS = newMetrics.rms + 3;
-        newMetrics.lufs = {
-          integrated: estimatedLUFS,
-          shortTerm: estimatedLUFS,
-          momentary: estimatedLUFS,
-          loudnessRange: newMetrics.crestFactor,
-          truePeak: newMetrics.peak
-        };
+        // Update audio engine and state
+        audioEngine.setProcessedBuffer(result.processedBuffer);
+        audioEngine.applyProcessingConfig({}); // Config already applied via pipeline
+        audioEngine.enableProcessedSignal();
 
         setProcessedMetrics(newMetrics);
-        setHasAppliedChanges(true); // Mark that changes have been applied
+        setHasAppliedChanges(true);
 
         // Track applied suggestions
-        const newAppliedIds = selectedSuggestions.map((s: Suggestion) => s.id);
+        const newAppliedIds = selectedActions.map((a: ProcessingAction) => a.id);
         setAppliedSuggestionIds([...appliedSuggestionIds, ...newAppliedIds]);
 
         // Add to history
-        if (originalMetrics) {
-          historyManager.addEntry('preset_apply', 'Applied AI recommendations', config, newMetrics);
-        }
+        historyManager.addEntry('preset_apply', 'Applied AI recommendations', {}, newMetrics, true);
 
         // Automatically trigger Echo Report generation after applying suggestions
-        // Pass newMetrics directly to avoid React state timing issues
         handleGenerateEchoReport(newMetrics);
 
         // Show success notification
-        showNotification(`${selectedSuggestions.length} fix${selectedSuggestions.length > 1 ? 'es' : ''} applied successfully`, 'success', 2000);
+        showNotification(`${selectedActions.length} fix${selectedActions.length > 1 ? 'es' : ''} applied successfully`, 'success', 2000);
 
       } catch (error) {
         console.error('Failed to apply suggestions:', error);
@@ -498,6 +1018,186 @@ const App: React.FC = () => {
     });
 
     return true;
+  };
+
+  const handleCancelAutoMix = () => {
+    autoMixAbortRef.current = true;
+    setAutoMixProgress(prev => prev ? { ...prev, stage: 'Stopping' } : prev);
+  };
+
+  const runAutoMix = async (mode: 'STANDARD' | 'FULL_STUDIO') => {
+    if (!originalBuffer || !originalMetrics || isAutoMixing) return;
+
+    setIsAutoMixing(true);
+    setAutoMixMode(mode);
+    setAutoMixError(null);
+    autoMixAbortRef.current = false;
+    hasUserInitiatedProcessingRef.current = true;
+
+    if (mode === 'FULL_STUDIO') {
+      setFullStudioStatus('loading');
+      const suiteResult = await loadFullStudioSuite();
+      setFullStudioStatus(suiteResult.status);
+
+      if (suiteResult.status === 'error') {
+        showNotification(suiteResult.errors.join(' ') || 'Full Studio failed to load.', 'error', 3000);
+        setIsAutoMixing(false);
+        setAutoMixMode(null);
+        return;
+      }
+      setHasAppliedChanges(true);
+    }
+
+    try {
+      const { analyzeAudioBuffer, analyzeMastering, generateProcessingActions } = await import('./services/masteringAnalyzer');
+
+      let iteration = 0;
+      let workingMetrics: AudioMetrics = { ...originalMetrics };
+      let workingBuffer: AudioBuffer = originalBuffer;
+      const accumulatedActions: ProcessingAction[] = [];
+      const actionSignatures = new Set<string>();
+
+      const getActionSignature = (action: ProcessingAction): string => {
+        if (action.refinementType === 'bands' && Array.isArray(action.bands)) {
+          const bandsSig = action.bands
+            .map(b => `${Math.round(b.freqHz)}:${b.gainDb}:${b.q ?? ''}`)
+            .join('|');
+          return `bands:${action.type}:${bandsSig}`;
+        }
+        if (action.refinementType === 'parameters' && Array.isArray(action.params)) {
+          const paramsSig = action.params.map(p => `${p.name}:${p.value}`).join('|');
+          return `params:${action.type}:${paramsSig}`;
+        }
+        return `misc:${action.type}:${action.label ?? action.description ?? ''}`;
+      };
+
+      while (iteration < AUTO_MIX_MAX_ITERATIONS && !autoMixAbortRef.current) {
+        iteration += 1;
+        setAutoMixProgress({
+          iteration,
+          maxIterations: AUTO_MIX_MAX_ITERATIONS,
+          stage: 'Analyzing'
+        });
+
+        let report;
+        try {
+          report = analyzeAudioBuffer(workingBuffer, workingMetrics);
+        } catch (error) {
+          console.warn('[AutoMix] Advanced analysis failed, falling back to basic metrics', error);
+          report = analyzeMastering(workingMetrics);
+        }
+
+        const score = report.score?.total ?? 0;
+        setAutoMixProgress({
+          iteration,
+          maxIterations: AUTO_MIX_MAX_ITERATIONS,
+          stage: 'Scoring',
+          score
+        });
+
+        if (score >= AUTO_MIX_TARGET_SCORE) {
+          setEchoReport(report);
+          setEchoReportStatus('success');
+          break;
+        }
+
+        const actions = generateProcessingActions(workingMetrics);
+        const newActions = actions.filter(action => {
+          const signature = getActionSignature(action);
+          if (actionSignatures.has(signature)) return false;
+          actionSignatures.add(signature);
+          return true;
+        });
+
+        if (newActions.length === 0) {
+          break;
+        }
+
+        newActions.forEach(action => {
+          action.isSelected = true;
+          action.isApplied = true;
+        });
+        accumulatedActions.push(...newActions);
+
+        setAutoMixProgress({
+          iteration,
+          maxIterations: AUTO_MIX_MAX_ITERATIONS,
+          stage: 'Applying fixes',
+          score
+        });
+
+        await audioProcessingPipeline.loadAudio(originalBuffer);
+        const result = await audioProcessingPipeline.processAudio(accumulatedActions);
+        const qualityVerdict = qualityAssurance.assessProcessingQuality(workingMetrics, result.metrics);
+        if (qualityVerdict.shouldBlock) {
+          const warningMsg = `Auto Mix halted: ${qualityVerdict.issues.join(', ')}`;
+          showNotification(warningMsg, 'warning', 5000);
+          console.warn('[AutoMix] Processing blocked - quality verdict:', qualityVerdict);
+          accumulatedActions.splice(-newActions.length);
+          break;
+        }
+
+        workingBuffer = result.processedBuffer;
+        workingMetrics = result.metrics;
+
+        setProcessedMetrics(result.metrics);
+        setHasAppliedChanges(true);
+
+        if (mode === 'STANDARD') {
+          audioEngine.setProcessedBuffer(result.processedBuffer);
+          audioEngine.enableProcessedSignal();
+        }
+
+        setAppliedSuggestionIds(accumulatedActions.map(action => action.id));
+        setAnalysisResult(prev => ({
+          ...(prev || {
+            metrics: result.metrics,
+            suggestions: [],
+            actions: [],
+            frequencyData: [],
+            mixReadiness: 'in_progress'
+          }),
+          metrics: result.metrics,
+          actions: accumulatedActions,
+          suggestions: buildSuggestionsFromActions(accumulatedActions),
+          genrePrediction: `${mode === 'FULL_STUDIO' ? 'Full Studio' : 'Auto Mix'} Pass ${iteration}`
+        }));
+      }
+
+      const finalConfig = actionsToConfig(accumulatedActions);
+      setCurrentConfig(finalConfig);
+
+      if (mode === 'FULL_STUDIO') {
+        audioEngine.setProcessedBuffer(null);
+        audioEngine.setBuffer(originalBuffer);
+        audioEngine.applyProcessingConfig(finalConfig);
+        showNotification('Full Studio chain is active.', 'success', 2000);
+      }
+
+      if (workingBuffer !== originalBuffer) {
+        handleGenerateEchoReport(workingMetrics);
+        showNotification(`${mode === 'FULL_STUDIO' ? 'Full Studio' : 'Auto Mix'} complete: ${iteration} pass${iteration > 1 ? 'es' : ''}`, 'success', 2500);
+      } else {
+        showNotification(`${mode === 'FULL_STUDIO' ? 'Full Studio' : 'Auto Mix'} found no actionable changes`, 'info', 2000);
+      }
+    } catch (error) {
+      console.error('[AutoMix] Failed:', error);
+      setAutoMixError((error as Error).message);
+      showNotification('Auto Mix failed: ' + (error as Error).message, 'error', 3000);
+    } finally {
+      setIsAutoMixing(false);
+      setAutoMixProgress(null);
+      autoMixAbortRef.current = false;
+      setAutoMixMode(null);
+    }
+  };
+
+  const handleAutoMix = async () => {
+    await runAutoMix('STANDARD');
+  };
+
+  const handleFullStudioAutoMix = async () => {
+    await runAutoMix('FULL_STUDIO');
   };
 
   // Generate Echo Report
@@ -546,9 +1246,9 @@ const App: React.FC = () => {
         issues: [] // Will be populated by the service if needed
       };
 
-      // Call the REAL Echo Report generation service, including reference if available
-      const { generateEchoReport } = await import('./services/geminiService');
-      const report = await generateEchoReport(echoMetrics, currentConfig, referenceTrack || undefined, referenceSignature || undefined);
+      // Use local mastering analyzer (no API calls, instant results)
+      const { analyzeMastering } = await import('./services/masteringAnalyzer');
+      const report = analyzeMastering(metricsToUse);
 
       setEchoReport(report);
       setEchoReportStatus('success');
@@ -560,6 +1260,9 @@ const App: React.FC = () => {
 
   // Apply Echo Report action
   const handleApplyEchoAction = async (action: any): Promise<boolean> => {
+    if (snapshotABActive) {
+      handleClearSnapshotAB();
+    }
     setEchoActionStatus('idle');
     setEchoActionError(null);
     let success = false;
@@ -575,29 +1278,77 @@ const App: React.FC = () => {
         const actionConfig: ProcessingConfig = { ...currentConfig };
 
         // Parse action parameters and update config
-        if (action.refinementType === 'eq' && action.bands) {
-          actionConfig.eq = action.bands.map((band: any) => ({
-            frequency: band.freqHz,
-            gain: band.gainDb,
-            type: 'peaking' as any,
-            q: 1.0
-          }));
+        // CRITICAL FIX: Respect enabledByDefault flags to prevent over-execution
+        // This ensures "Apply All" applies only safe defaults, not full-force processing
+        if (action.refinementType === 'bands' && action.bands) {
+          actionConfig.eq = action.bands
+            .filter((band: any) => {
+              // BODY PROTECTION: Never cut the body/weight frequencies (150-500Hz)
+              // This is critical for mix clarity and warmth
+              const isBodyRange = band.freqHz >= 150 && band.freqHz <= 500;
+              const isCut = band.gainDb < 0;
+              if (isBodyRange && isCut) {
+                console.log(`[PROTECTION] Blocking ${band.freqHz}Hz cut - protects mix body`);
+                return false; // Skip cuts in body range
+              }
+              return band.enabledByDefault !== false; // Include all other enabled bands
+            })
+            .map((band: any) => {
+              // RESTRAINT GUARDRAIL: Cap high-frequency cuts to prevent gloss
+              // High-freq EQ cuts should never exceed -3dB to avoid over-refinement
+              // De-esser handles sibilance control; EQ provides coarse shaping only
+              const isHighFreq = band.freqHz >= 5000;
+              const isCut = band.gainDb < 0;
+              const cappedGain = isHighFreq && isCut
+                ? Math.max(band.gainDb, -3) // Cap cuts at -3dB max
+                : band.gainDb;
+
+              return {
+                frequency: band.freqHz,
+                gain: cappedGain,
+                type: 'peaking' as any,
+                q: 0.7  // Wider Q for more transparent, less peaky boosts/cuts
+              };
+            });
         }
 
-        if (action.refinementType === 'compression' && action.params) {
-          const compressionParams: any = {};
+        if (action.refinementType === 'parameters' && action.params) {
+          // Extract parameters from action
+          const params: any = {};
           action.params.forEach((p: any) => {
-            if (p.name === 'threshold') compressionParams.threshold = p.value;
-            if (p.name === 'ratio') compressionParams.ratio = p.value;
-            if (p.name === 'attack') compressionParams.attack = p.value;
-            if (p.name === 'release') compressionParams.release = p.value;
+            if (p.enabledByDefault === false) return;
+            params[p.name] = p.value;
           });
-          actionConfig.compression = compressionParams;
+
+          // Apply based on action type
+          if (action.type === 'Compression' || action.type === 'Dynamics') {
+            actionConfig.compression = {
+              threshold: params.threshold ?? -12,
+              ratio: params.ratio ?? 1.5,
+              attack: params.attack ?? 0.010,
+              release: params.release ?? 0.100,
+              makeupGain: 0
+            };
+          }
+
+          if (action.type === 'Limiter') {
+            actionConfig.limiter = {
+              threshold: params.threshold ?? -1.0,
+              ratio: 20,
+              attack: 0.005,
+              release: params.release ?? 0.100
+            };
+          }
+
+          // Apply input gain if present
+          if (params.inputGain !== undefined) {
+            actionConfig.inputTrimDb = params.inputGain;
+          }
         }
 
         // Process the audio with the action config
         const processedBuffer = await audioEngine.renderProcessedAudio(actionConfig);
-        audioEngine.setBuffer(processedBuffer);
+        audioEngine.setProcessedBuffer(processedBuffer);
         audioEngine.applyProcessingConfig(actionConfig);
         audioEngine.enableProcessedSignal(); // Switch to processed audio
         setCurrentConfig(actionConfig);
@@ -617,10 +1368,14 @@ const App: React.FC = () => {
 
         // Add to history
         if (originalMetrics) {
-          historyManager.addEntry('echo_action', `Applied: ${action.label}`, actionConfig, newMetrics);
+          historyManager.addEntry('echo_action', `Applied: ${action.label}`, actionConfig, newMetrics, true);
         }
 
-        showNotification('Applied Successfully', 'success', 2000);
+        // Regenerate Echo Report with updated metrics
+        // Pass newMetrics directly to avoid React state timing issues
+        handleGenerateEchoReport(newMetrics);
+
+        showNotification('Applied Successfully - Score Updated!', 'success', 2000);
         setEchoActionStatus('idle'); // Reset status immediately
         success = true;
       } catch (error) {
@@ -637,6 +1392,9 @@ const App: React.FC = () => {
 
   // Commit changes
   const handleCommit = async (config: ProcessingConfig): Promise<AudioMetrics | null> => {
+    if (snapshotABActive) {
+      handleClearSnapshotAB();
+    }
     setIsCommitting(true);
     let resultMetrics: AudioMetrics | null = null;
 
@@ -648,7 +1406,7 @@ const App: React.FC = () => {
         try {
             // Render processed audio with the config
             const processedBuffer = await audioEngine.renderProcessedAudio(config);
-            audioEngine.setBuffer(processedBuffer);
+            audioEngine.setProcessedBuffer(processedBuffer);
             audioEngine.enableProcessedSignal(); // Switch to processed audio
 
             // Analyze the processed result
@@ -665,6 +1423,10 @@ const App: React.FC = () => {
             setProcessedMetrics(newMetrics);
             setHasAppliedChanges(true); // Mark changes applied on commit
 
+            // Persist EQ settings to localStorage
+            saveEQSettings(eqSettings);
+            saveDynamicEQSettings(dynamicEq);
+
             // Add to revision log
             if (originalMetrics) {
                 const revision: RevisionEntry = {
@@ -679,8 +1441,13 @@ const App: React.FC = () => {
                 setRevisionLog([...revisionLog, revision]);
 
                 // Add to history
-                historyManager.addEntry('commit', 'Committed changes', config, newMetrics);
+                historyManager.addEntry('commit', 'Committed changes', config, newMetrics, true);
             }
+
+            // Note: Echo Report regeneration skipped on commit
+            // Users can click "Refresh Score Card" in the Echo Report panel to see final scores
+            console.log('[App] Commit complete - user can refresh Echo Report to see final scores');
+
             resultMetrics = newMetrics;
         } catch (error) {
             console.error('Commit failed:', error);
@@ -692,21 +1459,132 @@ const App: React.FC = () => {
   };
 
   // Handle config changes from processing panel
+  const configChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const isCompressionActive = (compression?: ProcessingConfig['compression']) => {
+    if (!compression) return false;
+    const ratio = compression.ratio ?? 1;
+    const makeupGain = compression.makeupGain ?? 0;
+    return ratio > 1.01 || makeupGain !== 0;
+  };
+
+  const isLimiterActive = (limiter?: ProcessingConfig['limiter']) => {
+    if (!limiter) return false;
+    const ratio = limiter.ratio ?? 1;
+    return ratio > 1.01;
+  };
+
+  const isNoOpProcessingConfig = (config: ProcessingConfig) => {
+    const hasEq = config.eq?.some(band => band.gain !== 0) ?? false;
+    const hasDynamicEq = config.dynamicEq?.some(band => band.enabled) ?? false;
+    const hasSaturation = (config.saturation?.amount ?? 0) > 0;
+    const hasTransient = config.transientShaper
+      ? config.transientShaper.attack !== 0 || config.transientShaper.sustain !== 0 || config.transientShaper.mix !== 1
+      : false;
+    const hasImager = config.stereoImager
+      ? ((config.stereoImager.lowWidth + config.stereoImager.midWidth + config.stereoImager.highWidth) / 3) !== 1
+      : false;
+    const hasReverb = (config.motionReverb?.mix ?? 0) > 0;
+    const hasDeEsser = (config.deEsser?.amount ?? 0) > 0;
+    const hasPitch = config.pitch?.enabled ?? false;
+    const hasGate = config.gateExpander?.enabled ?? false;
+    const hasTruePeak = config.truePeakLimiter?.enabled ?? false;
+    const hasClipper = config.clipper?.enabled ?? false;
+    const hasInputTrim = config.inputTrimDb !== undefined && config.inputTrimDb !== 0;
+    const hasOutputTrim = config.outputTrimDb !== undefined && config.outputTrimDb !== 0;
+
+    return !(
+      isCompressionActive(config.compression) ||
+      isLimiterActive(config.limiter) ||
+      hasEq ||
+      hasDynamicEq ||
+      hasSaturation ||
+      hasTransient ||
+      hasImager ||
+      hasReverb ||
+      hasDeEsser ||
+      hasPitch ||
+      hasGate ||
+      hasTruePeak ||
+      hasClipper ||
+      hasInputTrim ||
+      hasOutputTrim
+    );
+  };
+
   const handleConfigChange = (config: ProcessingConfig) => {
+    if (snapshotABActive) {
+      handleClearSnapshotAB();
+    }
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      !hasAppliedChanges &&
+      !hasUserInitiatedProcessingRef.current &&
+      !isNoOpProcessingConfig(config)
+    ) {
+      throw new Error('[P0] Processing chain built without user-applied changes');
+    }
     setCurrentConfig(config);
     audioEngine.applyProcessingConfig(config);
+
+    if (isNoOpProcessingConfig(config)) {
+      if (configChangeTimeoutRef.current) {
+        clearTimeout(configChangeTimeoutRef.current);
+      }
+      audioEngine.setProcessedBuffer(null);
+      audioEngine.resetToOriginal();
+      setProcessedMetrics(null);
+      setHasAppliedChanges(false);
+      setIsAbComparing(false);
+      return;
+    }
+
+    // Debounce the re-render to avoid too many offline renders during rapid slider adjustments
+    if (configChangeTimeoutRef.current) {
+      clearTimeout(configChangeTimeoutRef.current);
+    }
+
+    configChangeTimeoutRef.current = setTimeout(async () => {
+      try {
+        // Re-render processed audio with new EQ settings for real-time preview
+        const processedBuffer = await audioEngine.renderProcessedAudio(config);
+        audioEngine.setProcessedBuffer(processedBuffer);
+        audioEngine.enableProcessedSignal();
+        setHasAppliedChanges(true);
+        console.log('[App] Real-time config rendered and applied');
+      } catch (error) {
+        console.error('[App] Failed to render config changes:', error);
+      }
+    }, 300); // 300ms debounce for re-rendering
   };
+
+  const handlePluginChange = useCallback(() => {
+    hasUserInitiatedProcessingRef.current = true;
+    audioEngine.refreshExternalPluginChain();
+  }, []);
 
   // Handle config apply from Enhanced Control Panel
   const handleEnhancedConfigApply = async (config: ProcessingConfig) => {
     setCurrentConfig(config);
     audioEngine.applyProcessingConfig(config);
+    if (config.pitch?.enabled && !audioEngine.canPreviewPitchRealtime()) {
+      showNotification('Vocal Tune realtime preview disabled due to latency. Offline render will still apply.', 'warning', 4000);
+    }
+
+    if (isNoOpProcessingConfig(config)) {
+      audioEngine.setProcessedBuffer(null);
+      audioEngine.resetToOriginal();
+      setProcessedMetrics(null);
+      setHasAppliedChanges(false);
+      setIsAbComparing(false);
+      return;
+    }
 
     // Render processed audio so changes are actually applied
     try {
       console.log('[App] Rendering processed audio for enhanced config...');
       const processedBuffer = await audioEngine.renderProcessedAudio(config);
-      audioEngine.setBuffer(processedBuffer);
+      audioEngine.setProcessedBuffer(processedBuffer);
       audioEngine.enableProcessedSignal();
 
       // Update metrics
@@ -715,7 +1593,7 @@ const App: React.FC = () => {
       setHasAppliedChanges(true);
 
       if (originalMetrics) {
-        historyManager.addEntry('preset_apply', 'Applied preset/config', config, newMetrics);
+        historyManager.addEntry('preset_apply', 'Applied preset/config', config, newMetrics, true);
       }
 
       console.log('[App] Enhanced config applied and rendered successfully');
@@ -729,17 +1607,44 @@ const App: React.FC = () => {
     setIsPlaying(!isPlaying);
     if (isPlaying) {
       audioEngine.pause();
+      pauseAplSession();
     } else {
-      audioEngine.play();
+      void audioEngine.play().then(() => {
+        startAplSession();
+      });
     }
   };
 
   // A/B bypass toggle - only works if changes have been applied
   const handleToggleAB = () => {
+    if (snapshotABActive) {
+      const newBypassState = !isAbComparing;
+      setIsAbComparing(newBypassState);
+      audioEngine.setBypass(newBypassState);
+      return;
+    }
     if (!hasAppliedChanges) return; // Don't allow A/B until changes applied
     const newBypassState = !isAbComparing;
     setIsAbComparing(newBypassState);
     audioEngine.setBypass(newBypassState);
+  };
+
+  // Play raw original audio with zero processing
+  const handlePlayRawAudio = () => {
+    if (!originalBuffer) return;
+    if (snapshotABActive) {
+      handleClearSnapshotAB();
+    }
+    audioEngine.setBuffer(originalBuffer);
+    setIsPlaying(false);
+    setIsAbComparing(false);
+    // Small delay to ensure buffer is set
+    setTimeout(() => {
+      void audioEngine.play().then(() => {
+        startAplSession();
+      });
+      setIsPlaying(true);
+    }, 50);
   };
 
   // Track Delete + Reset - returns to upload state
@@ -750,10 +1655,17 @@ const App: React.FC = () => {
     if (isPlaying) {
       audioEngine.pause();
       setIsPlaying(false);
+      pauseAplSession();
+    }
+
+    if (snapshotABActive) {
+      handleClearSnapshotAB();
     }
 
     // Clear all audio buffers
-    audioEngine.setBuffer(null as any);
+    audioEngine.setBuffer(null);
+    audioEngine.setProcessedBuffer(null);
+    stopAplSession();
 
     // Reset all state
     setAppState(AppState.IDLE);
@@ -793,10 +1705,17 @@ const App: React.FC = () => {
     if (isPlaying) {
       audioEngine.pause();
       setIsPlaying(false);
+      pauseAplSession();
+    }
+
+    if (snapshotABActive) {
+      handleClearSnapshotAB();
     }
 
     // Clear all audio buffers
-    audioEngine.setBuffer(null as any);
+    audioEngine.setBuffer(null);
+    audioEngine.setProcessedBuffer(null);
+    stopAplSession();
 
     // Reset to upload state
     // NOTE: We do NOT clear the session here, so the restore dialog will appear
@@ -818,7 +1737,7 @@ const App: React.FC = () => {
     historyManager.clear();
 
     // Re-check for pending session and show restore dialog
-    const savedSession = sessionManager.loadSession();
+    const savedSession = sessionManager.getSession();
     if (savedSession) {
       setPendingSession(savedSession);
       setShowRestoreDialog(true);
@@ -827,11 +1746,80 @@ const App: React.FC = () => {
     console.log('[App] Logo clicked, returned to upload state with session preserved');
   };
 
+  const resolveSnapshotBuffer = async (entry: HistoryEntry): Promise<AudioBuffer | null> => {
+    const cached = historyManager.getBufferSnapshot(entry.id);
+    if (cached) return cached;
+    if (!originalBuffer) return null;
+
+    const buffer = await audioEngine.renderProcessedAudio(entry.config);
+    historyManager.setBufferSnapshot(entry.id, buffer);
+    return buffer;
+  };
+
+  const activateSnapshotAB = async (aId: string, bId: string) => {
+    const entries = historyManager.getAllEntries();
+    const entryA = entries.find(entry => entry.id === aId);
+    const entryB = entries.find(entry => entry.id === bId);
+    if (!entryA || !entryB) return;
+
+    const [bufferA, bufferB] = await Promise.all([
+      resolveSnapshotBuffer(entryA),
+      resolveSnapshotBuffer(entryB)
+    ]);
+
+    if (!bufferA || !bufferB) return;
+
+    audioEngine.enableSnapshotAB(bufferA, bufferB);
+    setSnapshotABActive(true);
+    setIsAbComparing(true);
+  };
+
+  const handleClearSnapshotAB = () => {
+    if (audioEngine.isSnapshotABActive()) {
+      audioEngine.disableSnapshotAB();
+    }
+    setSnapshotABActive(false);
+    setSnapshotAId(null);
+    setSnapshotBId(null);
+    setSnapshotALabel(null);
+    setSnapshotBLabel(null);
+    setIsAbComparing(false);
+  };
+
+  const handleSetSnapshotA = async (entry: HistoryEntry) => {
+    const buffer = await resolveSnapshotBuffer(entry);
+    if (!buffer) {
+      showNotification('Unable to capture Snapshot A', 'error', 2000);
+      return;
+    }
+    setSnapshotAId(entry.id);
+    setSnapshotALabel(entry.description);
+    if (snapshotBId && snapshotBId !== entry.id) {
+      await activateSnapshotAB(entry.id, snapshotBId);
+    }
+  };
+
+  const handleSetSnapshotB = async (entry: HistoryEntry) => {
+    const buffer = await resolveSnapshotBuffer(entry);
+    if (!buffer) {
+      showNotification('Unable to capture Snapshot B', 'error', 2000);
+      return;
+    }
+    setSnapshotBId(entry.id);
+    setSnapshotBLabel(entry.description);
+    if (snapshotAId && snapshotAId !== entry.id) {
+      await activateSnapshotAB(snapshotAId, entry.id);
+    }
+  };
+
   /**
    * Jump to a specific history entry and restore its state
    */
   const handleJumpToHistoryEntry = async (entry: HistoryEntry) => {
     try {
+      if (snapshotABActive) {
+        handleClearSnapshotAB();
+      }
       console.log('[App] Jumping to history entry:', entry.id, entry.description);
 
       // Apply the config from the history entry
@@ -841,7 +1829,7 @@ const App: React.FC = () => {
       // Render processed audio with the historical config
       if (originalBuffer) {
         const processedBuffer = await audioEngine.renderProcessedAudio(entry.config);
-        audioEngine.setBuffer(processedBuffer);
+        audioEngine.setProcessedBuffer(processedBuffer);
         audioEngine.enableProcessedSignal();
 
         // Update metrics
@@ -903,11 +1891,16 @@ const App: React.FC = () => {
     }
   };
 
-  // Selected suggestion count
-  const selectedSuggestionCount = analysisResult?.suggestions.filter((s: Suggestion) => s.isSelected).length || 0;
+  // Selected suggestion count (only unapplied)
+  const selectedSuggestionCount = analysisResult?.suggestions.filter((s: Suggestion) => s.isSelected && !appliedSuggestionIds.includes(s.id)).length || 0;
 
   return (
-    <div className="min-h-screen bg-[#0a0c12] text-slate-300 font-sans flex flex-col pb-24 relative overflow-hidden">
+    <CapabilityProvider
+      authority={capabilityAuthority}
+      appId="com.echo-sound-lab.app"
+      processIdentity={processIdentity}
+    >
+      <div className="min-h-screen bg-[#0a0c12] text-slate-300 font-sans flex flex-col pb-24 relative overflow-hidden">
       {/* Second Light OS Background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0a0c12] to-slate-950" />
@@ -922,6 +1915,11 @@ const App: React.FC = () => {
         currentStepIndex={currentStepIndex}
       />
 
+      {/* Capability Status Display (Phase 2.2.4) */}
+      <div className="relative z-40 mx-4 mt-2">
+        <CapabilityStatusDisplay className="max-w-2xl" />
+      </div>
+
       {/* Second Light OS Background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0a0c12] to-slate-950" />
@@ -932,24 +1930,41 @@ const App: React.FC = () => {
       {/* System Bar - Second Light OS Style */}
       <header className="sticky top-0 z-50 bg-gradient-to-r from-black/90 via-slate-900/90 to-black/90 backdrop-blur-xl border-b border-white/5 shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
         <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          {/* Logo */}
+          {/* Logo - Echo Sound Lab */}
           <div className="flex items-center gap-3">
             <button
               onClick={handleLogoClick}
-              className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-400 to-orange-500 flex items-center justify-center shadow-[0_0_15px_rgba(251,146,60,0.3)] hover:shadow-[0_0_25px_rgba(251,146,60,0.5)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
-              title="Return to home"
+              className="group relative w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-200 hover:-translate-y-0.5 hover:rotate-[-1.5deg] active:scale-95 active:translate-y-[1px]"
+              title="Return to Echo Sound Lab"
             >
-              <span className="text-white font-black text-sm">E</span>
+              <span className="absolute -inset-1 rounded-[18px] bg-gradient-to-br from-amber-500/15 via-orange-400/5 to-amber-700/20 blur-md opacity-60 transition-opacity duration-300 group-hover:opacity-80" />
+              <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-slate-950 to-slate-900 border border-amber-300/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]" />
+              <span className="absolute inset-[3px] rounded-xl bg-[linear-gradient(145deg,#a9642f_0%,#b7723b_45%,#8d4e25_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]" />
+              <span className="absolute inset-[3px] rounded-xl bg-[repeating-linear-gradient(35deg,rgba(18,14,10,0.16)_0,rgba(18,14,10,0.16)_1px,rgba(255,255,255,0.015)_1px,rgba(255,255,255,0.015)_3px)] opacity-30" />
+              <span className="absolute inset-[3px] rounded-xl bg-[radial-gradient(90%_80%_at_30%_25%,rgba(255,255,255,0.18),transparent_60%)] opacity-60" />
+              <svg className="relative w-6 h-6 text-[#2b1c12] drop-shadow-[0_1px_0_rgba(255,255,255,0.25)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.1} strokeLinecap="square" strokeLinejoin="miter" aria-hidden="true">
+                <path d="M7 5h10" />
+                <path d="M7 12h7.5" />
+                <path d="M7 19h10" />
+                <path d="M7 5v14" />
+              </svg>
             </button>
             <div>
-              <h1 className="text-lg font-bold flex items-center gap-2"><span className="text-white">Echo</span> <span className="text-slate-400 font-normal">Sound Lab</span> <span className="text-slate-600 text-sm font-normal tracking-widest">||</span> <span className="text-slate-500 text-xs font-normal">VENICEAI LABS</span></h1>
-              <p className="text-[10px] text-orange-400/70 font-medium tracking-widest uppercase mt-0.5">Second Light OS</p>
+              <h1 className="text-sm text-white tracking-tight flex items-center gap-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="font-bold">Echo</span>
+                  <span className="font-normal text-slate-600">Sound Lab</span>
+                </span>
+                <span className="text-slate-600">| |</span>
+                <span className="text-slate-400 font-normal -ml-0.5">VENICEAI LABS</span>
+              </h1>
+              <p className="text-[10px] text-orange-400 font-semibold tracking-widest uppercase mt-1">Second Light OS</p>
             </div>
           </div>
 
           {/* Mode Tabs */}
           <div className="flex items-center gap-2 bg-slate-950/80 rounded-2xl p-1.5 border border-slate-800/50 shadow-[inset_2px_2px_4px_#000000,inset_-2px_-2px_4px_#0a0c12]">
-            {['SINGLE', 'MULTI', 'AI_STUDIO'].map((mode) => (
+            {['SINGLE', 'MULTI', 'AI_STUDIO', 'VIDEO'].map((mode) => (
               <button
                 key={mode}
                 onClick={() => setActiveMode(mode as any)}
@@ -959,7 +1974,7 @@ const App: React.FC = () => {
                     : 'bg-slate-900/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/70 shadow-[3px_3px_6px_#050710,-3px_-3px_6px_#0f1828] border border-slate-800/30 hover:border-slate-700/50'
                 }`}
               >
-                {mode === 'SINGLE' ? i18nService.t('modes.single') : mode === 'MULTI' ? i18nService.t('modes.multi') : i18nService.t('modes.ai')}
+                {mode === 'SINGLE' ? i18nService.t('modes.single') : mode === 'MULTI' ? i18nService.t('modes.multi') : mode === 'AI_STUDIO' ? i18nService.t('modes.ai') : 'Video'}
               </button>
             ))}
           </div>
@@ -1002,7 +2017,22 @@ const App: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </button>
+            <button
+              onClick={handleOpenSSC}
+              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-all"
+              title="SSC Observe Mode"
+            >
+              <svg className="w-5 h-5 text-slate-400 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0v4" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z" />
+              </svg>
+            </button>
             <div className="text-xs text-slate-500 font-mono">v2.5</div>
+            <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-lg bg-white/5 border border-white/5 text-[11px] text-slate-400">
+              <span className="font-semibold text-orange-300 uppercase tracking-wider">Net</span>
+              <span>{networkSettings.ssid}</span>
+              {networkSettings.proxy && <span className="text-slate-500">// {networkSettings.proxy}</span>}
+            </div>
           </div>
         </div>
       </header>
@@ -1011,6 +2041,12 @@ const App: React.FC = () => {
       <DiagnosticsOverlay
         isVisible={showDiagnostics}
         onClose={() => setShowDiagnostics(false)}
+      />
+      <SSCOverlay
+        isVisible={showSSC}
+        scan={sscScan}
+        onClose={handleCloseSSC}
+        onRefresh={handleRefreshSSC}
       />
 
       {/* Session Restore Dialog */}
@@ -1059,12 +2095,17 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Single Track Accent Line */}
+      {appState === AppState.IDLE && activeMode === 'SINGLE' && (
+        <div className="w-full h-[2px] bg-gradient-to-r from-orange-500/80 via-orange-400/60 to-orange-500/80 shadow-[0_0_12px_rgba(249,115,22,0.45)]" />
+      )}
+
       {/* Main Content Area */}
       <main className="flex-1 p-6 flex flex-col items-center relative z-10">
 
       {/* Upload Screen - Second Light OS Glass Card */}
-      {appState === AppState.IDLE && (
-        <div className="mt-20">
+      {appState === AppState.IDLE && activeMode === 'SINGLE' && (
+        <div className="mt-24">
           <label className="relative cursor-pointer group block">
             {/* Glass card */}
             <div className="relative bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-3xl p-16 border-[0.5px] border-orange-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)] hover:border-orange-500/40 hover:shadow-[inset_4px_4px_12px_rgba(0,0,0,0.6),inset_-2px_-2px_8px_rgba(255,255,255,0.02)] hover:translate-y-[2px] active:shadow-[inset_6px_6px_16px_rgba(0,0,0,0.7),inset_-2px_-2px_6px_rgba(255,255,255,0.01)] active:translate-y-[4px] transition-all duration-200">
@@ -1127,14 +2168,14 @@ const App: React.FC = () => {
 
             {/* AI Studio */}
             <div className="relative group/badge flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity duration-300 animate-in fade-in slide-in-from-left-6 delay-1200">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/10 flex items-center justify-center border border-purple-400/40">
-                <svg className="w-3 h-3 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-sky-500/20 to-blue-500/10 flex items-center justify-center border border-sky-400/40">
+                <svg className="w-3 h-3 text-sky-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
               </div>
               <span className="text-xs text-slate-400">AI Studio</span>
               {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900/95 backdrop-blur-xl rounded-lg border border-purple-500/30 shadow-lg opacity-0 group-hover/badge:opacity-100 pointer-events-none transition-opacity duration-200 whitespace-nowrap z-50">
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900/95 backdrop-blur-xl rounded-lg border border-sky-500/30 shadow-lg opacity-0 group-hover/badge:opacity-100 pointer-events-none transition-opacity duration-200 whitespace-nowrap z-50">
                 <p className="text-xs text-slate-300">AI-powered mastering recommendations and analysis</p>
               </div>
             </div>
@@ -1185,6 +2226,17 @@ const App: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <button
+                  onClick={handlePlayRawAudio}
+                  disabled={!originalBuffer}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                    !originalBuffer
+                      ? 'bg-white/5 text-slate-600 border border-white/5 cursor-not-allowed opacity-50'
+                      : 'bg-green-500/20 text-green-400 border border-green-500/30 hover:border-green-500/50'
+                  }`}
+                >
+                  RAW
+                </button>
+                <button
                   onClick={handleToggleAB}
                   disabled={!hasAppliedChanges}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
@@ -1205,6 +2257,7 @@ const App: React.FC = () => {
               <Visualizer
                 isPlaying={isPlaying}
                 currentTime={currentPlayheadSeconds}
+                buffer={isAbComparing ? originalBuffer : audioEngine.getProcessedBuffer() ?? originalBuffer}
                 onSeek={(time) => audioEngine.seek(time)}
                 onPlayheadUpdate={setCurrentPlayheadSeconds}
               />
@@ -1258,9 +2311,16 @@ const App: React.FC = () => {
             </div>
           </div>
 
+          {/* Listening Pass Card - Phase 4 */}
+          <ListeningPassCard
+            listeningPassData={listeningPassData}
+            llmGuidance={llmGuidance}
+          />
+
           {/* AI Recommendations Panel - Full Width */}
           <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden">
             <AnalysisPanel
+              engineMode={engineMode}
               analysisResult={analysisResult}
               onReferenceUpload={handleReferenceUpload}
               referenceMetrics={referenceTrack?.metrics || null}
@@ -1276,6 +2336,15 @@ const App: React.FC = () => {
               mixReadiness="in_progress"
               onRequestAIAnalysis={handleRequestAIAnalysis}
               echoReportStatus={echoReportStatus}
+              onRemoveAppliedSuggestion={handleRemoveAppliedSuggestion}
+              onAutoMix={handleAutoMix}
+              onCancelAutoMix={handleCancelAutoMix}
+              isAutoMixing={isAutoMixing}
+              autoMixProgress={autoMixProgress}
+              autoMixError={autoMixError}
+              autoMixMode={autoMixMode}
+              onFullStudioAutoMix={handleFullStudioAutoMix}
+              fullStudioStatus={fullStudioStatus}
             />
           </div>
 
@@ -1311,6 +2380,9 @@ const App: React.FC = () => {
                 processedMetrics={processedMetrics}
                 onCommit={handleCommit}
                 onConfigChange={handleConfigChange}
+                onUserInteraction={() => {
+                  hasUserInitiatedProcessingRef.current = true;
+                }}
                 isCommitting={isCommitting}
                 echoReport={echoReport}
                 onToggleAB={handleToggleAB}
@@ -1319,6 +2391,8 @@ const App: React.FC = () => {
                 onTogglePlayback={handleTogglePlayback}
                 onExportComplete={() => setShowExportSharePrompt(true)}
                 hasAppliedChanges={hasAppliedChanges}
+                abLabel={abPanelLabel}
+                abDisabled={abDisabled}
                 eqSettings={eqSettings}
                 setEqSettings={setEqSettings}
                 dynamicEq={dynamicEq}
@@ -1344,37 +2418,140 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Video Engine Mode */}
+      {activeMode === 'VIDEO' && (
+        <div className="w-full max-w-6xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden">
+          <VideoEngine />
+        </div>
+      )}
+
       </main>
+
+      {showFriendlyTour && (
+        <div className="fixed right-6 top-24 z-[90] w-[340px] max-w-[90vw]">
+          <div className="bg-slate-900/95 backdrop-blur-xl border border-orange-500/20 rounded-2xl p-5 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs text-orange-300 uppercase tracking-wider font-bold">
+                Start Here · {friendlyTourStep + 1}/{friendlyTourSteps.length}
+              </div>
+              <button
+                onClick={dismissFriendlyTour}
+                className="text-slate-500 hover:text-slate-300 text-xs uppercase tracking-wider font-semibold"
+              >
+                Skip
+              </button>
+            </div>
+            <h4 className="text-lg font-bold text-white mb-2">
+              {friendlyTourSteps[friendlyTourStep]?.title}
+            </h4>
+            <p className="text-sm text-slate-400 mb-4">
+              {friendlyTourSteps[friendlyTourStep]?.body}
+            </p>
+            <div className="flex items-center justify-between">
+              <button
+                onClick={handleFriendlyTourBack}
+                disabled={friendlyTourStep === 0}
+                className={`text-xs uppercase tracking-wider font-semibold px-3 py-2 rounded-lg border ${
+                  friendlyTourStep === 0
+                    ? 'border-slate-800 text-slate-600 cursor-not-allowed'
+                    : 'border-slate-700 text-slate-300 hover:text-white hover:border-slate-500'
+                }`}
+              >
+                Back
+              </button>
+              <button
+                onClick={handleFriendlyTourNext}
+                className="text-xs uppercase tracking-wider font-semibold px-4 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_6px_16px_rgba(249,115,22,0.3)]"
+              >
+                {friendlyTourStep >= friendlyTourSteps.length - 1 ? 'Done' : 'Next'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <FeedbackButton onClick={() => {}} />
 
-      {/* Floating Buttons */}
-      {appState === AppState.READY && (
-        <>
-          {/* Advanced Tools Button */}
+      {/* Mode Switcher - Always Visible */}
+      <div className="fixed bottom-6 left-6 z-50 flex gap-2 items-center">
+        <div className="flex gap-3 items-center group/mode-switcher">
           <button
-            onClick={() => setShowAdvancedTools(!showAdvancedTools)}
-            className={`fixed bottom-6 left-6 z-50 w-14 h-14 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02),_0_0_25px_rgba(168,85,247,0.05)] active:shadow-[inset_3px_3px_8px_rgba(0,0,0,0.9)] active:translate-y-[1px] transition-all flex items-center justify-center group ${
-              showAdvancedTools ? 'bg-slate-900 text-purple-600' : 'bg-slate-900 text-slate-400 hover:text-purple-400'
-            }`}
-            title="Advanced Tools"
+            onClick={() => {
+              const newMode = engineMode === 'FRIENDLY' ? 'ADVANCED' : 'FRIENDLY';
+              setEngineMode(newMode);
+            }}
+            className={`w-14 h-14 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] transition-all flex items-center justify-center group relative ${
+              engineMode === 'ADVANCED' ? 'bg-slate-900 text-green-500 hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02),_0_0_25px_rgba(34,197,94,0.05)]' : 'bg-slate-900 text-blue-400 hover:text-green-400 hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02),_0_0_25px_rgba(34,197,94,0.05)]'
+            } active:shadow-[inset_3px_3px_8px_rgba(0,0,0,0.9)] active:translate-y-[1px]`}
+          >
+            {engineMode === 'FRIENDLY' ? (
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ) : (
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            )}
+
+            {/* Tooltip on hover */}
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-3 bg-slate-900/95 backdrop-blur-xl rounded-lg border border-slate-700/50 shadow-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-200 whitespace-nowrap z-50 text-left">
+              <p className="text-xs text-slate-200 font-medium leading-relaxed">
+                {engineMode === 'FRIENDLY' ? (
+                  <>
+                    <span className="font-bold text-blue-400">Friendly</span>
+                    <br />
+                    <span className="text-slate-400">Fix problems</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-bold text-green-400">Advanced</span>
+                    <br />
+                    <span className="text-slate-400">Fix + Add effects</span>
+                  </>
+                )}
+              </p>
+              {/* Tooltip arrow */}
+              <div className="absolute right-full top-1/2 -translate-y-1/2 w-2 h-2 bg-slate-900/95 border-l border-t border-slate-700/50 rotate-45" />
+            </div>
+          </button>
+          <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
+            {engineMode === 'FRIENDLY' ? 'Friendly' : 'Advanced'} Mode
+          </div>
+        </div>
+
+        {/* Advanced Tools Button (next to mode switcher on left) */}
+        {appState !== AppState.IDLE && (
+          <button
+            onClick={() => engineMode === 'ADVANCED' && setShowAdvancedTools(!showAdvancedTools)}
+            disabled={engineMode === 'FRIENDLY'}
+            className={`w-14 h-14 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] transition-all flex items-center justify-center group ${
+              engineMode === 'FRIENDLY'
+                ? 'bg-slate-800 text-slate-600 cursor-not-allowed opacity-50 shadow-none'
+                : showAdvancedTools
+                ? 'bg-slate-900 text-orange-400 hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02),_0_0_25px_rgba(249,115,22,0.06)]'
+                : 'bg-slate-900 text-slate-400 hover:text-sky-400 hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02),_0_0_25px_rgba(59,130,246,0.05)]'
+            } active:shadow-[inset_3px_3px_8px_rgba(0,0,0,0.9)] active:translate-y-[1px]`}
+            title={engineMode === 'FRIENDLY' ? 'Switch to Advanced Mode to access character tools' : 'Advanced Tools'}
           >
             <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
             </svg>
           </button>
+        )}
+      </div>
 
-          {/* Echo Chat Button */}
-          <button
-            onClick={() => setShowEchoChat(true)}
-            className="fixed bottom-6 left-24 z-50 w-14 h-14 bg-slate-900 text-orange-400 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03),_0_0_20px_rgba(251,146,60,0.03)] hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02),_0_0_25px_rgba(251,146,60,0.05)] hover:text-orange-300 active:shadow-[inset_3px_3px_8px_rgba(0,0,0,0.9)] active:translate-y-[1px] transition-all flex items-center justify-center group"
-            title="Open Echo Chat"
-          >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          </button>
-        </>
+      {/* Echo Chat Button - Right side */}
+      {appState !== AppState.IDLE && (
+        <button
+          onClick={() => setShowEchoChat(true)}
+          className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-slate-900 text-orange-400 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03),_0_0_20px_rgba(251,146,60,0.03)] hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02),_0_0_25px_rgba(251,146,60,0.05)] hover:text-orange-300 active:shadow-[inset_3px_3px_8px_rgba(0,0,0,0.9)] active:translate-y-[1px] transition-all flex items-center justify-center group"
+          title="Open Echo Chat"
+        >
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+        </button>
       )}
 
       {/* Advanced Tools Modal */}
@@ -1383,8 +2560,8 @@ const App: React.FC = () => {
           <div className="bg-slate-900 rounded-3xl border border-slate-700/50 shadow-[8px_8px_24px_#000000,-4px_-4px_12px_#0f1828] w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-slate-800 border border-purple-500/30 flex items-center justify-center shadow-[inset_2px_2px_4px_#050710,inset_-2px_-2px_4px_#0f1828]">
-                  <svg className="w-6 h-6 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="w-10 h-10 rounded-xl bg-slate-800 border border-orange-500/30 flex items-center justify-center shadow-[inset_2px_2px_4px_#050710,inset_-2px_-2px_4px_#0f1828]">
+                  <svg className="w-6 h-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                   </svg>
                 </div>
@@ -1405,6 +2582,7 @@ const App: React.FC = () => {
             <div className="flex-1 overflow-auto p-6">
               <EnhancedControlPanel
                 onConfigApply={handleEnhancedConfigApply}
+                onPluginChange={handlePluginChange}
                 currentConfig={currentConfig}
                 eqSettings={eqSettings}
                 setEqSettings={setEqSettings}
@@ -1461,6 +2639,8 @@ const App: React.FC = () => {
           isAbComparing={isAbComparing}
           onToggleAB={handleToggleAB}
           hasAppliedChanges={hasAppliedChanges}
+          abLabel={abFloatingLabel}
+          abDisabled={abDisabled}
           onSeek={(time) => audioEngine.seek(time)}
         />
       )}
@@ -1521,7 +2701,17 @@ const App: React.FC = () => {
 
       {/* Settings Panel */}
       {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          engineMode={engineMode}
+          setEngineMode={setEngineMode}
+          onResetToOriginal={handleResetToOriginal}
+          appVersion={appVersion}
+          themeMode={themeMode}
+          setThemeMode={setThemeMode}
+          networkSettings={networkSettings}
+          setNetworkSettings={setNetworkSettings}
+        />
       )}
 
       {/* History Timeline */}
@@ -1530,15 +2720,34 @@ const App: React.FC = () => {
           isOpen={showHistoryTimeline}
           onClose={() => setShowHistoryTimeline(false)}
           onJumpToEntry={handleJumpToHistoryEntry}
+          onSetSnapshotA={handleSetSnapshotA}
+          onSetSnapshotB={handleSetSnapshotB}
+          snapshotAId={snapshotAId}
+          snapshotBId={snapshotBId}
+          snapshotALabel={snapshotALabel}
+          snapshotBLabel={snapshotBLabel}
+          snapshotABActive={snapshotABActive}
+          onClearSnapshotAB={handleClearSnapshotAB}
         />
       )}
+
+      {/* Capability ACC Modal (Phase 2.2.4) */}
+      <CapabilityACCModal
+        isOpen={showAccModal}
+        token={accToken}
+        reason={accReason}
+        onConfirm={handleAccConfirm}
+        onDismiss={handleAccDismiss}
+        isLoading={accIsLoading}
+      />
 
       {/* Notification System */}
       <NotificationManager
         notifications={notifications}
         onDismiss={dismissNotification}
       />
-    </div>
+      </div>
+    </CapabilityProvider>
   );
 };
 

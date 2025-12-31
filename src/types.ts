@@ -1,6 +1,28 @@
 import { GenreProfile } from './services/genreProfiles';
 
 export type ProcessingMode = 'default' | 'vocal_presence';
+export type EngineMode = 'FRIENDLY' | 'ADVANCED';
+
+export type HookStatus = 'draft' | 'rendering' | 'ready' | 'failed';
+
+export interface AnimateArtRequest {
+  sourceImageUrl?: string;
+  previewUrl?: string;
+  songId?: string;
+  prompt?: string;
+  style?: 'cinematic' | 'abstract' | 'lyric' | 'performance';
+  durationSeconds?: number;
+}
+
+export interface HookAsset {
+  id: string;
+  title: string;
+  status: HookStatus;
+  createdAt: string;
+  durationSeconds: number;
+  previewUrl?: string;
+  imageUrl?: string;
+}
 
 export interface AudioMetrics {
   rms: number;
@@ -10,9 +32,11 @@ export interface AudioMetrics {
   spectralRolloff: number;
   duration: number;
   spectralBalance?: {
-    low: number;
-    mid: number;
-    high: number;
+    low: number;      // 20-150Hz
+    lowMid: number;   // 150-500Hz
+    mid: number;      // 500-2kHz
+    highMid: number;  // 2-5kHz
+    high: number;     // 5kHz+
   };
   lufs?: {
     integrated: number;
@@ -20,6 +44,57 @@ export interface AudioMetrics {
     momentary: number;
     loudnessRange: number;
     truePeak: number;
+  };
+
+  // PROFESSIONAL DIAGNOSTICS (NEW)
+  advancedMetrics?: {
+    // Loudness consistency (how steady is the loudness over time?)
+    loudnessConsistency?: number; // 0-100, higher = more consistent
+    loudnessVariance?: number;    // dB, variance across track
+    loudnessFloor?: number;       // dB, minimum loudness point
+    loudnessPeaks?: number;       // count of brief loud moments
+
+    // Frequency-specific dynamics
+    dynamicsPerBand?: {
+      subBass: number;          // 20-60Hz
+      bass: number;             // 60-250Hz
+      lowMid: number;           // 250-500Hz
+      mid: number;              // 500-2kHz
+      highMid: number;          // 2-5kHz
+      presence: number;         // 5-8kHz
+      brilliance: number;       // 8-16kHz
+    };
+
+    // Phase & Stereo quality
+    monoCompatibility?: number;   // 0-100, how well it works in mono
+    phaseCoherence?: number;      // 0-100, phase stability
+    stereoWidth?: number;         // 0-100, perceived stereo width
+    stereoImbalance?: number;     // dB, L-R level difference
+
+    // Transient characteristics
+    transientSharpness?: number;  // 0-100, attack sharpness
+    transientSustain?: number;    // 0-100, sustain quality
+    transientDecay?: number;      // 0-100, decay smoothness
+    transientCount?: number;      // estimated number of transients
+
+    // Distortion & clipping
+    clippingProbability?: number; // 0-100, likelihood of clipping on playback
+    harmonicDistortion?: number;  // dB, estimated distortion level
+    intermodulationDistortion?: number; // dB, IMD level
+
+    // Frequency masking
+    maskingIndex?: number;        // 0-100, how much frequency masking
+    maskingFrequencies?: number[]; // frequencies being masked
+
+    // Platform predictions
+    platformPredictions?: {
+      spotify?: string;          // "Loud" | "Normal" | "Quiet"
+      appleMusic?: string;
+      youtube?: string;
+      earbuds?: string;          // "Thin" | "Balanced" | "Boomy"
+      headphones?: string;
+      carSpeakers?: string;
+    };
   };
 }
 
@@ -31,6 +106,9 @@ export interface ProcessingConfig {
   eq?: EQSettings;
   compression?: Partial<CompressionPreset>;
   limiter?: LimiterConfig;
+  gateExpander?: GateExpanderConfig;
+  truePeakLimiter?: TruePeakLimiterConfig;
+  clipper?: ClipperConfig;
   saturation?: SaturationConfig;
   stereoWidener?: StereoWidenerConfig;
   multibandCompression?: MultibandCompressionConfig;
@@ -41,6 +119,7 @@ export interface ProcessingConfig {
   deEsser?: DeEsserConfig;
   dynamicEq?: DynamicEQConfig;
   colorFilter?: ColorFilterType;
+  pitch?: PitchCorrectionConfig;
 }
 
 export type LiveProcessingConfig = Omit<ProcessingConfig, 'targetGainDb' | 'compression' | 'stereoWidener' | 'limiter'> & {
@@ -48,6 +127,22 @@ export type LiveProcessingConfig = Omit<ProcessingConfig, 'targetGainDb' | 'comp
     stereoWidener?: StereoWidenerConfig;
     limiter?: LimiterConfig;
 };
+
+export type PitchKey =
+  | 'C' | 'C#' | 'D' | 'D#' | 'E' | 'F' | 'F#' | 'G' | 'G#' | 'A' | 'A#' | 'B';
+
+export type PitchScale = 'major' | 'minor' | 'chromatic';
+
+export interface PitchCorrectionConfig {
+  enabled: boolean;
+  mode: 'chromatic' | 'scale';
+  key?: PitchKey | null;
+  scale?: PitchScale | null;
+  retuneSpeed: number; // 0-100 (lower = faster)
+  humanize: number; // 0-100
+  strength: number; // 0-100
+  formantPreserve: boolean;
+}
 
 export interface CompressionPreset {
   id?: string;
@@ -70,6 +165,27 @@ export interface SaturationConfig {
   type: 'tape' | 'tube' | 'digital' | 'density' | 'console' | 'spiral' | 'channel' | 'totape' | 'purestdrive';
   amount: number;
   mix?: number;
+}
+
+export interface GateExpanderConfig {
+  enabled: boolean;
+  threshold: number; // dB
+  ratio: number; // >1 = downward expansion
+  attack: number; // seconds
+  release: number; // seconds
+  range: number; // max attenuation in dB
+}
+
+export interface TruePeakLimiterConfig {
+  enabled: boolean;
+  ceiling: number; // dBFS
+  oversampleFactor?: number;
+}
+
+export interface ClipperConfig {
+  enabled: boolean;
+  threshold: number; // dBFS
+  softness: number; // 0-1
 }
 
 export interface StereoWidenerConfig {
@@ -134,6 +250,51 @@ export interface DynamicEQBand {
 }
 
 export type DynamicEQConfig = DynamicEQBand[];
+
+export type SSCConfidenceLevel = 'certain' | 'derived' | 'heuristic';
+export type SSCActionability = 'none';
+
+export interface SSCScanEntry {
+  id: string;
+  label: string;
+  active: boolean;
+  reason: string;
+  confidenceLevel: SSCConfidenceLevel;
+  value?: number | string | boolean | null;
+  defaultValue?: number | string | boolean | null;
+  bounds?: { min?: number; max?: number; step?: number };
+}
+
+export interface SSCUITab {
+  id: string;
+  label: string;
+  active: boolean;
+  confidenceLevel: SSCConfidenceLevel;
+}
+
+export interface SSCUIScan {
+  activeMode: string;
+  tabs: SSCUITab[];
+}
+
+export interface SSCScan {
+  session: {
+    id: string;
+    timestamp: number;
+    mode: 'read-only';
+    actionability: SSCActionability;
+  };
+  processingOrder: string;
+  sanitizedConfig: ProcessingConfig;
+  processors: SSCScanEntry[];
+  controls: SSCScanEntry[];
+  noOp: boolean;
+  noOpReasons: Array<{ id: string; reason: string; confidenceLevel: SSCConfidenceLevel }>;
+  constraints: string[];
+  affordances: string[];
+  notes: Array<{ level: 'info' | 'warn'; message: string; confidenceLevel: SSCConfidenceLevel }>;
+  ui?: SSCUIScan;
+}
 
 export type ColorFilterType = 'Dawn Glow' | 'Venice Blue' | 'Jellyfish Warmth' | 'Amber Tape' | 'Noir Filter' | 'Buffalo Snow' | 'None';
 export type VeniceColorPreset = 'DawnGlow' | 'VeniceBlue' | 'JellyfishWarmth';
@@ -202,7 +363,10 @@ export type MixReadiness = 'raw_demo' | 'in_progress' | 'pre_master' | 'finished
 
 export interface AnalysisResult {
     metrics: AudioMetrics;
-    suggestions: Suggestion[];
+    // NEW: Use unified ProcessingAction instead of Suggestion
+    actions: ProcessingAction[];
+    // DEPRECATED: Keep for backward compatibility during migration
+    suggestions?: Suggestion[];
     genrePrediction?: string;
     frequencyData: any[];
     mixReadiness?: MixReadiness;
@@ -336,6 +500,70 @@ export interface EchoAction {
         enumOptions?: string[];
         enabledByDefault: boolean;
     }[];
+}
+
+/**
+ * UNIFIED PROCESSING ACTION
+ *
+ * Single format that flows through entire pipeline:
+ * Analysis → UI → Application → DSP Processing
+ *
+ * Replaces the lossy EchoAction → Suggestion → ProcessingConfig conversions
+ */
+export interface ProcessingAction {
+    // Identity
+    id: string;
+    label: string;
+    description: string;
+
+    // Classification
+    type: EchoReportTool;
+    category: string; // 'EQ', 'Compression', 'Limiter', etc.
+
+    // UI State
+    isSelected: boolean;
+    isApplied: boolean;
+    isEnabled: boolean;
+
+    // Diagnostic Info
+    diagnostic?: {
+        metric: string;           // 'LUFS', 'Peak', 'Dynamic Range', etc.
+        currentValue: number;
+        targetValue: number;
+        severity: 'info' | 'warning' | 'critical';
+    };
+
+    // Processing Definition (for DSP)
+    refinementType: "bands" | "parameters";
+
+    // For EQ-type actions
+    bands?: {
+        freqHz: number;
+        gainDb: number;
+        q?: number;
+        type?: 'peaking' | 'lowshelf' | 'highshelf';
+        enabledByDefault: boolean;
+    }[];
+
+    // For compression/dynamics-type actions
+    params?: {
+        name: string;
+        value: number | string;
+        unit?: string;
+        min?: number;
+        max?: number;
+        step?: number;
+        type?: 'number' | 'boolean' | 'enum' | 'string';
+        enumOptions?: string[];
+        enabledByDefault: boolean;
+    }[];
+
+    // Metrics impact prediction
+    impactPrediction?: {
+        estimatedLufsChange: number;
+        estimatedPeakChange: number;
+        estimatedCrestFactorChange: number;
+    };
 }
 
 export type EchoVerdict = 'release_ready' | 'refinements_available' | 'needs_work';
@@ -507,6 +735,9 @@ export interface SunoGenerationRequest {
   styleTags?: string; // Free-form style description
   weirdness?: number; // 0-100% experimental texture
   styleInfluence?: number; // 0-100% adherence to style description
+  referenceAudioUrl?: string;
+  voiceSampleUrl?: string;
+  coverMode?: 'reference' | 'cover' | 'remix';
 }
 
 export interface SunoGenerationResponse {
@@ -544,4 +775,45 @@ export interface GenerationCache {
   songId: string;
   createdAt: number;
   ttl: number; // Time-to-live in milliseconds
+}
+
+// ============================================================================
+// PHASE 3: LLM REASONING TYPES
+// ============================================================================
+
+export interface LLMReasoningInput {
+  // Listening Pass data (read-only, no modification)
+  listeningPass: {
+    version: string;
+    analysis_confidence: number;
+    tokens: any[]; // Array of Token objects
+    priority_summary: {
+      highest_stage_triggered: number;
+      dominant_tokens: string[];
+      recommended_focus: string | null;
+      conflicts: string[];
+    };
+  };
+
+  // Mode selection (Friendly Mode only in Phase 3)
+  mode: 'friendly';
+
+  // Optional context (reserved for Phase 4+)
+  userContext?: {
+    genre?: string;
+    bpm?: number;
+  };
+}
+
+export interface LLMGuidanceOutput {
+  // Primary output: Human-readable guidance text
+  guidance_text: string;
+
+  // Metadata for logging/debugging
+  processing: {
+    tokens_read: number;
+    confidence_level: number;
+    mode: string;
+    dominant_token: string | null;
+  };
 }

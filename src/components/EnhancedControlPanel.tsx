@@ -6,12 +6,16 @@ import { batchProcessor } from '../services/batchProcessor';
 import { autoMasteringService } from '../services/autoMastering';
 import { referenceMatchingService } from '../services/referenceMatching';
 import { audioEngine } from '../services/audioEngine';
+import { localPluginService } from '../services/localPluginService';
+import { FULL_STUDIO_WAM_CHAIN, FULL_STUDIO_LOCAL_CHAIN, loadFullStudioSuite, clearFullStudioSuite, getFullStudioState } from '../services/fullStudioSuite';
 import { WAMPluginRack } from './WAMPluginRack';
+import { LocalPluginRack } from './LocalPluginRack';
 import { ChannelEQPanel } from './ChannelEQPanel';
 import { ParametricEQPanel } from './ParametricEQPanel';
 
 interface EnhancedControlPanelProps {
     onConfigApply: (config: ProcessingConfig) => void;
+    onPluginChange?: () => void;
     currentConfig: ProcessingConfig;
     eqSettings?: EQSettings;
     setEqSettings?: (settings: EQSettings) => void;
@@ -21,6 +25,7 @@ interface EnhancedControlPanelProps {
 
 export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({
     onConfigApply,
+    onPluginChange,
     currentConfig,
     eqSettings,
     setEqSettings,
@@ -28,8 +33,8 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({
     setDynamicEq
 }) => {
     const [activeTab, setActiveTab] = useState<'plugins' | 'presets' | 'tools' | 'history'>('plugins');
-    const [activePluginTab, setActivePluginTab] = useState<'channel-eq' | 'parametric-eq' | 'wam'>('channel-eq');
-    const [activeToolTab, setActiveToolTab] = useState<'auto-master' | 'reference' | 'batch'>('auto-master');
+    const [activePluginTab, setActivePluginTab] = useState<'channel-eq' | 'parametric-eq' | 'local' | 'wam'>('channel-eq');
+    const [activeToolTab, setActiveToolTab] = useState<'auto-master' | 'reference' | 'batch' | 'studio'>('auto-master');
 
     return (
         <div className="bg-slate-900 rounded-3xl p-6 shadow-lg">
@@ -58,7 +63,7 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({
             {/* Sub-tab Navigation for Plugins */}
             {activeTab === 'plugins' && (
                 <div className="flex gap-2 mb-4 border-b border-slate-700 pb-3">
-                    {(['channel-eq', 'parametric-eq', 'wam'] as const).map(subTab => (
+                    {(['channel-eq', 'parametric-eq', 'local', 'wam'] as const).map(subTab => (
                         <button
                             key={subTab}
                             onClick={() => setActivePluginTab(subTab)}
@@ -70,6 +75,7 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({
                         >
                             {subTab === 'channel-eq' && 'Channel EQ'}
                             {subTab === 'parametric-eq' && 'Parametric EQ'}
+                            {subTab === 'local' && 'Local FX'}
                             {subTab === 'wam' && 'WAM Plugins'}
                         </button>
                     ))}
@@ -79,7 +85,7 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({
             {/* Sub-tab Navigation for Tools */}
             {activeTab === 'tools' && (
                 <div className="flex gap-2 mb-4 border-b border-slate-700 pb-3">
-                    {(['auto-master', 'reference', 'batch'] as const).map(subTab => (
+                    {(['auto-master', 'reference', 'batch', 'studio'] as const).map(subTab => (
                         <button
                             key={subTab}
                             onClick={() => setActiveToolTab(subTab)}
@@ -92,6 +98,7 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({
                             {subTab === 'auto-master' && 'Auto Master'}
                             {subTab === 'reference' && 'Reference Match'}
                             {subTab === 'batch' && 'Batch Process'}
+                            {subTab === 'studio' && 'Full Studio'}
                         </button>
                     ))}
                 </div>
@@ -112,7 +119,12 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({
                         onDynamicEQChange={setDynamicEq}
                     />
                 )}
-                {activeTab === 'plugins' && activePluginTab === 'wam' && <WAMPluginRack />}
+                {activeTab === 'plugins' && activePluginTab === 'local' && (
+                    <LocalPluginRack onPluginChange={onPluginChange} />
+                )}
+                {activeTab === 'plugins' && activePluginTab === 'wam' && (
+                    <WAMPluginRack onPluginChange={onPluginChange} />
+                )}
 
                 {/* Presets Tab */}
                 {activeTab === 'presets' && <PresetManager onConfigApply={onConfigApply} />}
@@ -121,6 +133,13 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({
                 {activeTab === 'tools' && activeToolTab === 'auto-master' && <AutoMasterPanel onConfigApply={onConfigApply} />}
                 {activeTab === 'tools' && activeToolTab === 'reference' && <ReferenceMatchPanel onConfigApply={onConfigApply} />}
                 {activeTab === 'tools' && activeToolTab === 'batch' && <BatchProcessPanel currentConfig={currentConfig} />}
+                {activeTab === 'tools' && activeToolTab === 'studio' && (
+                    <FullStudioPanel
+                        onPluginChange={onPluginChange}
+                        currentConfig={currentConfig}
+                        onConfigApply={onConfigApply}
+                    />
+                )}
 
                 {/* History Tab */}
                 {activeTab === 'history' && <HistoryPanel onConfigApply={onConfigApply} />}
@@ -496,6 +515,513 @@ const BatchProcessPanel: React.FC<{ currentConfig: ProcessingConfig }> = ({ curr
                     >
                         Download Results
                     </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+/* Full Studio Panel */
+const FullStudioPanel: React.FC<{
+    onPluginChange?: () => void;
+    currentConfig: ProcessingConfig;
+    onConfigApply: (config: ProcessingConfig) => void;
+}> = ({ onPluginChange, currentConfig, onConfigApply }) => {
+    const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+    const [errors, setErrors] = useState<string[]>([]);
+    const [loadedWam, setLoadedWam] = useState<string[]>(() => audioEngine.getWAMPluginChain());
+    const [loadedLocal, setLoadedLocal] = useState<string[]>(() => {
+        const instances = localPluginService.getActiveInstances();
+        return Array.from(new Set(instances.map(instance => instance.pluginId)));
+    });
+    const defaultPitchConfig = {
+        enabled: false,
+        mode: 'chromatic' as const,
+        key: null as string | null,
+        scale: null as string | null,
+        strength: 15,
+        retuneSpeed: 70,
+        humanize: 80,
+        formantPreserve: true,
+    };
+    const pitchConfig = { ...defaultPitchConfig, ...(currentConfig.pitch ?? {}) };
+    const defaultGateConfig = {
+        enabled: false,
+        threshold: -45,
+        ratio: 2,
+        attack: 0.01,
+        release: 0.08,
+        range: 12,
+    };
+    const gateConfig = { ...defaultGateConfig, ...(currentConfig.gateExpander ?? {}) };
+    const defaultTruePeakConfig = {
+        enabled: false,
+        ceiling: -1,
+        oversampleFactor: 4,
+    };
+    const truePeakConfig = { ...defaultTruePeakConfig, ...(currentConfig.truePeakLimiter ?? {}) };
+    const defaultClipperConfig = {
+        enabled: false,
+        threshold: -1,
+        softness: 0.3,
+    };
+    const clipperConfig = { ...defaultClipperConfig, ...(currentConfig.clipper ?? {}) };
+
+    const refreshLoaded = () => {
+        const state = getFullStudioState();
+        setLoadedWam(state.loadedWam);
+        setLoadedLocal(state.loadedLocal);
+    };
+
+    const getWamName = (pluginId: string) => {
+        return audioEngine.getAvailableWAMPlugins().find(plugin => plugin.id === pluginId)?.name ?? pluginId;
+    };
+
+    const getLocalName = (pluginId: string) => {
+        return localPluginService.getPluginDefinition(pluginId)?.name ?? pluginId;
+    };
+
+    const handleEnableSuite = async () => {
+        setStatus('loading');
+        setErrors([]);
+
+        const result = await loadFullStudioSuite();
+        refreshLoaded();
+        onPluginChange?.();
+
+        const friendlyErrors = result.errors.map((error) => {
+            if (error.includes('local FX')) {
+                const pluginId = error.split(':').pop()?.trim() || error;
+                return `Failed to load local FX: ${getLocalName(pluginId)}`;
+            }
+            if (error.includes('WAM')) {
+                const pluginId = error.split(':').pop()?.trim() || error;
+                return `Failed to load WAM: ${getWamName(pluginId)}`;
+            }
+            return error;
+        });
+
+        setErrors(friendlyErrors);
+        setStatus(result.status);
+    };
+
+    const handleClearSuite = async () => {
+        setStatus('loading');
+        setErrors([]);
+
+        const result = await clearFullStudioSuite();
+        refreshLoaded();
+        onPluginChange?.();
+
+        setErrors(result.errors);
+        setStatus(result.status);
+    };
+
+    const suiteLoaded = FULL_STUDIO_WAM_CHAIN.every(id => loadedWam.includes(id))
+        && FULL_STUDIO_LOCAL_CHAIN.every(id => loadedLocal.includes(id));
+
+    return (
+        <div className="space-y-4">
+            <div className="bg-slate-800 rounded-lg p-4">
+                <h3 className="font-semibold text-white mb-2">Full Studio Suite</h3>
+                <p className="text-sm text-slate-400">
+                    Loads the Echo Sound Lab plugin chain for full-session mixing.
+                </p>
+            </div>
+
+            <div className="grid gap-3">
+                <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-700/40">
+                    <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">WAM Chain</span>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider ${suiteLoaded ? 'text-emerald-400' : 'text-slate-500'}`}>
+                            {suiteLoaded ? 'Ready' : 'Idle'}
+                        </span>
+                    </div>
+                    <div className="space-y-2">
+                        {FULL_STUDIO_WAM_CHAIN.map((pluginId) => (
+                            <div key={pluginId} className="flex items-center justify-between text-sm">
+                                <span className="text-slate-200">{getWamName(pluginId)}</span>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                                    loadedWam.includes(pluginId)
+                                        ? 'text-orange-300 border-orange-500/40 bg-orange-500/10'
+                                        : 'text-slate-500 border-slate-700/50 bg-slate-900/50'
+                                }`}>
+                                    {loadedWam.includes(pluginId) ? 'Loaded' : 'Off'}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-700/40">
+                    <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Local FX</span>
+                    </div>
+                    <div className="space-y-2">
+                        {FULL_STUDIO_LOCAL_CHAIN.map((pluginId) => (
+                            <div key={pluginId} className="flex items-center justify-between text-sm">
+                                <span className="text-slate-200">{getLocalName(pluginId)}</span>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                                    loadedLocal.includes(pluginId)
+                                        ? 'text-sky-300 border-sky-500/40 bg-sky-500/10'
+                                        : 'text-slate-500 border-slate-700/50 bg-slate-900/50'
+                                }`}>
+                                    {loadedLocal.includes(pluginId) ? 'Loaded' : 'Off'}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-700/40 space-y-4">
+                <div>
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="text-sm font-bold text-slate-200">Vocal Tune</h4>
+                            <p className="text-xs text-slate-500">Optional pitch stabilization (manual only).</p>
+                        </div>
+                        <button
+                            onClick={() => {
+                                onConfigApply({
+                                    ...currentConfig,
+                                    pitch: { ...pitchConfig, enabled: !pitchConfig.enabled }
+                                });
+                            }}
+                            className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-all border ${
+                                pitchConfig.enabled
+                                    ? 'text-orange-300 border-orange-500/40 bg-orange-500/10'
+                                    : 'text-slate-500 border-slate-700/50 bg-slate-900/50'
+                            }`}
+                        >
+                            {pitchConfig.enabled ? 'Enabled' : 'Off'}
+                        </button>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-2">
+                        Enabling Vocal Tune alters performance character. Use intentionally.
+                    </p>
+                </div>
+
+                {pitchConfig.enabled && (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <label className="text-[10px] uppercase tracking-wider text-slate-500">Mode</label>
+                                <select
+                                    value={pitchConfig.mode}
+                                    onChange={(e) => {
+                                        const mode = e.target.value as 'chromatic' | 'scale';
+                                        onConfigApply({
+                                            ...currentConfig,
+                                            pitch: { ...pitchConfig, mode }
+                                        });
+                                    }}
+                                    className="w-full bg-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2 border border-slate-700"
+                                >
+                                    <option value="chromatic">Chromatic</option>
+                                    <option value="scale">Key / Scale</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] uppercase tracking-wider text-slate-500">Formant Preserve</label>
+                                <button
+                                    onClick={() => {
+                                        onConfigApply({
+                                            ...currentConfig,
+                                            pitch: { ...pitchConfig, formantPreserve: !pitchConfig.formantPreserve }
+                                        });
+                                    }}
+                                    className={`w-full px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border ${
+                                        pitchConfig.formantPreserve
+                                            ? 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10'
+                                            : 'text-slate-400 border-slate-700/50 bg-slate-900/50'
+                                    }`}
+                                >
+                                    {pitchConfig.formantPreserve ? 'On' : 'Off'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {pitchConfig.mode === 'scale' && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] uppercase tracking-wider text-slate-500">Key</label>
+                                    <select
+                                        value={pitchConfig.key ?? 'C'}
+                                        onChange={(e) => {
+                                            onConfigApply({
+                                                ...currentConfig,
+                                                pitch: { ...pitchConfig, key: e.target.value }
+                                            });
+                                        }}
+                                        className="w-full bg-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2 border border-slate-700"
+                                    >
+                                        {['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'].map(key => (
+                                            <option key={key} value={key}>{key}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] uppercase tracking-wider text-slate-500">Scale</label>
+                                    <select
+                                        value={pitchConfig.scale ?? 'major'}
+                                        onChange={(e) => {
+                                            onConfigApply({
+                                                ...currentConfig,
+                                                pitch: { ...pitchConfig, scale: e.target.value }
+                                            });
+                                        }}
+                                        className="w-full bg-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2 border border-slate-700"
+                                    >
+                                        <option value="major">Major</option>
+                                        <option value="minor">Minor</option>
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-3 gap-3">
+                            {[
+                                { id: 'strength', label: 'Strength', value: pitchConfig.strength },
+                                { id: 'retuneSpeed', label: 'Retune', value: pitchConfig.retuneSpeed },
+                                { id: 'humanize', label: 'Humanize', value: pitchConfig.humanize },
+                            ].map(item => (
+                                <div key={item.id} className="space-y-1">
+                                    <label className="text-[10px] uppercase tracking-wider text-slate-500">{item.label}</label>
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={100}
+                                        value={item.value}
+                                        onChange={(e) => {
+                                            const nextValue = Number(e.target.value);
+                                            onConfigApply({
+                                                ...currentConfig,
+                                                pitch: { ...pitchConfig, [item.id]: nextValue }
+                                            });
+                                        }}
+                                        className="w-full accent-orange-500"
+                                    />
+                                    <div className="text-[10px] text-slate-400 text-center">{item.value}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-700/40 space-y-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h4 className="text-sm font-bold text-slate-200">Mastering Safety</h4>
+                        <p className="text-xs text-slate-500">Cleanup + headroom protection.</p>
+                    </div>
+                </div>
+
+                <div className="grid gap-3">
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-200">Gate / Expander</span>
+                        <button
+                            onClick={() => {
+                                onConfigApply({
+                                    ...currentConfig,
+                                    gateExpander: { ...gateConfig, enabled: !gateConfig.enabled }
+                                });
+                            }}
+                            className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                                gateConfig.enabled
+                                    ? 'text-orange-300 border-orange-500/40 bg-orange-500/10'
+                                    : 'text-slate-500 border-slate-700/50 bg-slate-900/50'
+                            }`}
+                        >
+                            {gateConfig.enabled ? 'On' : 'Off'}
+                        </button>
+                    </div>
+                    {gateConfig.enabled && (
+                        <div className="grid grid-cols-2 gap-3">
+                            {[
+                                { id: 'threshold', label: 'Threshold', min: -80, max: -20, step: 1, value: gateConfig.threshold },
+                                { id: 'range', label: 'Range', min: 6, max: 24, step: 1, value: gateConfig.range },
+                            ].map(item => (
+                                <div key={item.id} className="space-y-1">
+                                    <label className="text-[10px] uppercase tracking-wider text-slate-500">{item.label}</label>
+                                    <input
+                                        type="range"
+                                        min={item.min}
+                                        max={item.max}
+                                        step={item.step}
+                                        value={item.value}
+                                        onChange={(e) => {
+                                            const nextValue = Number(e.target.value);
+                                            onConfigApply({
+                                                ...currentConfig,
+                                                gateExpander: { ...gateConfig, [item.id]: nextValue }
+                                            });
+                                        }}
+                                        className="w-full accent-orange-500"
+                                    />
+                                    <div className="text-[10px] text-slate-400 text-center">{item.value}dB</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="grid gap-3">
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-200">True-Peak Limiter</span>
+                        <button
+                            onClick={() => {
+                                onConfigApply({
+                                    ...currentConfig,
+                                    truePeakLimiter: { ...truePeakConfig, enabled: !truePeakConfig.enabled }
+                                });
+                            }}
+                            className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                                truePeakConfig.enabled
+                                    ? 'text-orange-300 border-orange-500/40 bg-orange-500/10'
+                                    : 'text-slate-500 border-slate-700/50 bg-slate-900/50'
+                            }`}
+                        >
+                            {truePeakConfig.enabled ? 'On' : 'Off'}
+                        </button>
+                    </div>
+                    {truePeakConfig.enabled && (
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <label className="text-[10px] uppercase tracking-wider text-slate-500">Ceiling</label>
+                                <input
+                                    type="range"
+                                    min={-3}
+                                    max={0}
+                                    step={0.1}
+                                    value={truePeakConfig.ceiling}
+                                    onChange={(e) => {
+                                        const nextValue = Number(e.target.value);
+                                        onConfigApply({
+                                            ...currentConfig,
+                                            truePeakLimiter: { ...truePeakConfig, ceiling: nextValue }
+                                        });
+                                    }}
+                                    className="w-full accent-orange-500"
+                                />
+                                <div className="text-[10px] text-slate-400 text-center">{truePeakConfig.ceiling.toFixed(1)}dB</div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] uppercase tracking-wider text-slate-500">Oversample</label>
+                                <select
+                                    value={truePeakConfig.oversampleFactor}
+                                    onChange={(e) => {
+                                        const nextValue = Number(e.target.value);
+                                        onConfigApply({
+                                            ...currentConfig,
+                                            truePeakLimiter: { ...truePeakConfig, oversampleFactor: nextValue }
+                                        });
+                                    }}
+                                    className="w-full bg-slate-800 text-slate-200 text-sm rounded-lg px-3 py-2 border border-slate-700"
+                                >
+                                    {[2, 4, 8].map(factor => (
+                                        <option key={factor} value={factor}>{factor}x</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="grid gap-3">
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-200">Soft Clipper</span>
+                        <button
+                            onClick={() => {
+                                onConfigApply({
+                                    ...currentConfig,
+                                    clipper: { ...clipperConfig, enabled: !clipperConfig.enabled }
+                                });
+                            }}
+                            className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                                clipperConfig.enabled
+                                    ? 'text-orange-300 border-orange-500/40 bg-orange-500/10'
+                                    : 'text-slate-500 border-slate-700/50 bg-slate-900/50'
+                            }`}
+                        >
+                            {clipperConfig.enabled ? 'On' : 'Off'}
+                        </button>
+                    </div>
+                    {clipperConfig.enabled && (
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1">
+                                <label className="text-[10px] uppercase tracking-wider text-slate-500">Threshold</label>
+                                <input
+                                    type="range"
+                                    min={-6}
+                                    max={0}
+                                    step={0.1}
+                                    value={clipperConfig.threshold}
+                                    onChange={(e) => {
+                                        const nextValue = Number(e.target.value);
+                                        onConfigApply({
+                                            ...currentConfig,
+                                            clipper: { ...clipperConfig, threshold: nextValue }
+                                        });
+                                    }}
+                                    className="w-full accent-orange-500"
+                                />
+                                <div className="text-[10px] text-slate-400 text-center">{clipperConfig.threshold.toFixed(1)}dB</div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] uppercase tracking-wider text-slate-500">Softness</label>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={1}
+                                    step={0.05}
+                                    value={clipperConfig.softness}
+                                    onChange={(e) => {
+                                        const nextValue = Number(e.target.value);
+                                        onConfigApply({
+                                            ...currentConfig,
+                                            clipper: { ...clipperConfig, softness: nextValue }
+                                        });
+                                    }}
+                                    className="w-full accent-orange-500"
+                                />
+                                <div className="text-[10px] text-slate-400 text-center">{clipperConfig.softness.toFixed(2)}</div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+                <button
+                    onClick={handleEnableSuite}
+                    disabled={status === 'loading'}
+                    className="flex-1 bg-slate-900 text-orange-400 font-bold py-3 rounded-xl shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6),_2px_2px_4px_rgba(255,255,255,0.04)] hover:text-orange-300 active:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02)] active:translate-y-[1px] transition-all disabled:opacity-50 uppercase tracking-wider text-xs"
+                >
+                    {status === 'loading' ? 'Loading Suite...' : suiteLoaded ? 'Reload Full Studio' : 'Enable Full Studio'}
+                </button>
+                <button
+                    onClick={handleClearSuite}
+                    disabled={status === 'loading' && !suiteLoaded}
+                    className="px-4 py-3 rounded-xl bg-slate-800 text-slate-300 font-semibold shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:text-white hover:bg-slate-700 active:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02)] active:translate-y-[1px] transition-all disabled:opacity-50 text-xs uppercase tracking-wider"
+                >
+                    Clear Suite
+                </button>
+            </div>
+
+            {status === 'ready' && (
+                <div className="text-xs text-emerald-400 text-center uppercase tracking-wider font-semibold">
+                    Full Studio suite is active
+                </div>
+            )}
+
+            {errors.length > 0 && (
+                <div className="bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl p-3 text-xs space-y-1">
+                    <div className="font-bold uppercase tracking-wider">Load Issues</div>
+                    {errors.map((error, index) => (
+                        <div key={index}>{error}</div>
+                    ))}
                 </div>
             )}
         </div>

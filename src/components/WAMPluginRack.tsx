@@ -249,12 +249,12 @@ export const WAMPluginRack: React.FC<WAMPluginRackProps> = ({ onPluginChange }) 
       {/* Header - Second Light OS Style */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-blue-600 flex items-center justify-center shadow-[0_0_15px_rgba(59,130,246,0.25)]">
             <span className="text-white text-sm font-bold">W</span>
           </div>
           <div>
             <h3 className="text-lg font-bold text-white">Plugin Rack</h3>
-            <p className="text-[10px] text-purple-400/80 font-medium tracking-widest uppercase">WAM 2.0</p>
+            <p className="text-[10px] text-sky-300/80 font-medium tracking-widest uppercase">WAM 2.0</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -466,8 +466,8 @@ export const WAMPluginRack: React.FC<WAMPluginRackProps> = ({ onPluginChange }) 
 
       {/* Info Footer */}
       <div className="flex items-center gap-3 pt-3 border-t border-white/5">
-        <div className="w-4 h-4 rounded bg-purple-500/20 flex items-center justify-center">
-          <span className="text-purple-400 text-[10px]">i</span>
+        <div className="w-4 h-4 rounded bg-blue-500/20 flex items-center justify-center">
+          <span className="text-blue-300 text-[10px]">i</span>
         </div>
         <p className="text-[10px] text-slate-500">
           WAM 2.0 plugins load from external servers. Availability depends on network and CORS policies.

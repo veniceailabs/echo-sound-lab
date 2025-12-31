@@ -6,8 +6,14 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
       server: {
-        port: 3000,
+        port: 3003,
         host: '0.0.0.0',
+        proxy: {
+          '/api/video': {
+            target: 'http://localhost:3006',
+            changeOrigin: true
+          }
+        }
       },
       plugins: [react()],
       define: {
@@ -21,6 +27,9 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve('.', './src'),
         }
+      },
+      optimizeDeps: {
+        exclude: ['@breezystack/lamejs', '@google/genai']
       }
     };
 });

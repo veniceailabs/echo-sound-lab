@@ -12,6 +12,8 @@ interface EQCurveVisualizerProps {
   height?: number;
   showGrid?: boolean;
   showLabels?: boolean;
+  onBandChange?: (bandIndex: number, updates: { frequency?: number, gain?: number }) => void;
+  interactive?: boolean;
 }
 
 export const EQCurveVisualizer: React.FC<EQCurveVisualizerProps> = ({
@@ -20,7 +22,11 @@ export const EQCurveVisualizer: React.FC<EQCurveVisualizerProps> = ({
   height = 100,
   showGrid = true,
   showLabels = true,
+  onBandChange,
+  interactive = false,
 }) => {
+  const [draggedBand, setDraggedBand] = React.useState<number | null>(null);
+
   // Calculate SVG path for EQ curve
   const generateCurvePath = (): string => {
     if (bands.length === 0) return `M 0 ${height / 2} L ${width} ${height / 2}`;
@@ -36,10 +42,61 @@ export const EQCurveVisualizer: React.FC<EQCurveVisualizerProps> = ({
     return `M 0 ${height / 2} ${points.join(' ')} L ${width} ${height / 2}`;
   };
 
+  // Convert pixel Y position to gain value
+  const pixelToGain = (pixelY: number): number => {
+    const centerY = height / 2;
+    const deltaY = centerY - pixelY;
+    const gain = (deltaY / (height / 24)); // 2px per dB
+    return Math.max(-12, Math.min(12, gain)); // Clamp to -12 to +12 dB
+  };
+
+  // Convert pixel X position to frequency value (logarithmic)
+  const pixelToFrequency = (pixelX: number): number => {
+    // Inverse of: x = Math.log10(freq / 20) / Math.log10(20000 / 20) * width
+    const normalized = pixelX / width; // 0 to 1
+    const freqHz = Math.pow(10, normalized * Math.log10(20000 / 20)) * 20;
+    return Math.max(20, Math.min(20000, freqHz)); // Clamp to 20Hz to 20kHz
+  };
+
+  // Handle drag on control points
+  const handleMouseDown = (bandIndex: number) => {
+    if (!interactive) return;
+    setDraggedBand(bandIndex);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!interactive || draggedBand === null || !onBandChange) return;
+
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const relativeX = e.clientX - rect.left;
+    const relativeY = e.clientY - rect.top;
+
+    // Convert viewport coords to SVG coords
+    const svgX = (relativeX / rect.width) * width;
+    const svgY = (relativeY / rect.height) * height;
+
+    const frequency = pixelToFrequency(svgX);
+    const gain = pixelToGain(svgY);
+
+    onBandChange(draggedBand, { frequency, gain });
+  };
+
+  const handleMouseUp = () => {
+    setDraggedBand(null);
+  };
+
   return (
     <div className="bg-slate-950 rounded-xl p-4 relative overflow-hidden border border-white/5" style={{ height: `${height + 32}px` }}>
       <div className="absolute inset-0 flex items-center justify-center p-4">
-        <svg className="w-full h-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+        <svg
+          className={`w-full h-full ${interactive && draggedBand !== null ? 'cursor-grabbing' : interactive ? 'cursor-grab' : ''}`}
+          viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="none"
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
           {showGrid && (
             <>
               {/* Horizontal grid line at 0dB */}
@@ -74,15 +131,33 @@ export const EQCurveVisualizer: React.FC<EQCurveVisualizerProps> = ({
           {bands.map((band, i) => {
             const x = Math.max(0, Math.min(width, Math.log10(band.frequency / 20) / Math.log10(20000 / 20) * width));
             const y = Math.max(0, Math.min(height, (height / 2) - (band.gain * (height / 24))));
+            const isHovered = draggedBand === i;
             return (
-              <circle
-                key={i}
-                cx={x}
-                cy={y}
-                r={band.enabled !== false ? 5 : 3}
-                fill={band.enabled !== false ? '#f97316' : '#475569'}
-                className="transition-all"
-              />
+              <g key={i}>
+                {/* Highlight ring when dragging */}
+                {isHovered && interactive && (
+                  <circle
+                    cx={x}
+                    cy={y}
+                    r={10}
+                    fill="none"
+                    stroke="#f97316"
+                    strokeWidth="1.5"
+                    opacity="0.3"
+                  />
+                )}
+                {/* Control point */}
+                <circle
+                  cx={x}
+                  cy={y}
+                  r={band.enabled !== false ? (isHovered ? 7 : 5) : 3}
+                  fill={band.enabled !== false ? '#f97316' : '#475569'}
+                  className={`transition-all ${interactive && band.enabled !== false ? 'hover:brightness-110' : ''}`}
+                  style={{ cursor: interactive && band.enabled !== false ? 'grab' : 'default' }}
+                  onMouseDown={() => handleMouseDown(i)}
+                  pointerEvents="auto"
+                />
+              </g>
             );
           })}
         </svg>

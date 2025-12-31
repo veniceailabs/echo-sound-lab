@@ -166,7 +166,8 @@ class AutoMasteringService {
             const currentThreshold = config.compression.threshold ?? -20;
             config.compression.threshold = Math.max(-30, currentThreshold - (lufsGap * 0.5));
             config.compression.ratio = Math.min(6, (config.compression.ratio ?? 3) + (lufsGap * 0.2));
-            config.compression.makeupGain = (config.compression.makeupGain ?? 0) + (lufsGap * 0.6);
+            // PROTECTIVE MASTERING: Block automatic makeup gain (causes phase artifacts and gloss)
+            config.compression.makeupGain = 0;
 
             // Ensure limiter prevents clipping
             config.limiter = {
@@ -207,17 +208,17 @@ class AutoMasteringService {
         if (avgWidth < 0.5) {
             // Narrow stereo - widen it
             config.stereoImager = {
-                lowWidth: 0.8,
-                midWidth: 1.3,
-                highWidth: 1.6,
+                lowWidth: 1.25,
+                midWidth: 1.25,
+                highWidth: 1.25,
                 crossovers: [300, 5000]
             };
         } else if (avgWidth > 1.5) {
             // Too wide - narrow it for mono compatibility
             config.stereoImager = {
-                lowWidth: 0.7,
-                midWidth: 1.0,
-                highWidth: 1.2,
+                lowWidth: 0.95,
+                midWidth: 0.95,
+                highWidth: 0.95,
                 crossovers: [300, 5000]
             };
         }

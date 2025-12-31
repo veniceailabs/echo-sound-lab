@@ -164,12 +164,15 @@ export const DiagnosticsOverlay: React.FC<Props> = ({ isVisible, onClose }) => {
             [~]
           </button>
         </div>
+        <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-3">
+          Informational only (some estimates)
+        </div>
 
         {/* Stats Grid */}
         <div className="space-y-2">
           {/* Audio Thread CPU */}
           <div className="flex justify-between">
-            <span className="text-white/50">Audio CPU</span>
+            <span className="text-white/50">Audio CPU (est.)</span>
             <span className={getCpuColor(diagnostics.audioCpuPercent)}>
               {diagnostics.audioCpuPercent}%
             </span>
@@ -206,7 +209,7 @@ export const DiagnosticsOverlay: React.FC<Props> = ({ isVisible, onClose }) => {
           {/* LUFS Refresh Rate */}
           <div className="flex justify-between">
             <span className="text-white/50">LUFS Refresh</span>
-            <span className="text-purple-400">{diagnostics.lufsRefreshRate} Hz</span>
+            <span className="text-blue-400">{diagnostics.lufsRefreshRate} Hz</span>
           </div>
 
           {/* Output Latency */}

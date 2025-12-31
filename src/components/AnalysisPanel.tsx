@@ -108,6 +108,7 @@ const PluginIcon: React.FC<{ category: string }> = ({ category }) => {
 };
 
 interface AnalysisPanelProps {
+  engineMode: 'FRIENDLY' | 'ADVANCED';
   analysisResult: AnalysisResult | null;
   onReferenceUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   referenceMetrics: AudioMetrics | null;
@@ -123,9 +124,47 @@ interface AnalysisPanelProps {
   mixReadiness: MixReadiness;
   onRequestAIAnalysis?: () => void;
   echoReportStatus?: 'idle' | 'loading' | 'success' | 'error';
+  onRemoveAppliedSuggestion?: (id: string) => Promise<void>;
+  onAutoMix?: () => void;
+  onCancelAutoMix?: () => void;
+  isAutoMixing?: boolean;
+  autoMixProgress?: {
+    iteration: number;
+    maxIterations: number;
+    stage: string;
+    score?: number;
+  } | null;
+  autoMixError?: string | null;
+  autoMixMode?: 'STANDARD' | 'FULL_STUDIO' | null;
+  onFullStudioAutoMix?: () => void;
+  fullStudioStatus?: 'idle' | 'loading' | 'ready' | 'error';
 }
 
+const FRIENDLY_CATEGORY_LABELS: Record<string, string> = {
+  EQ: 'Tone Balance',
+  DYNAMICS: 'Control',
+  COMPRESSION: 'Control',
+  LIMITER: 'Loudness',
+  STEREO: 'Space',
+  IMAGING: 'Space',
+  SATURATION: 'Warmth',
+  TRANSIENT: 'Punch',
+  REVERB: 'Space',
+  DELAY: 'Space',
+  'DE-ESSER': 'Clarity',
+  DEESSER: 'Clarity',
+  MULTIBAND: 'Control',
+  EXCITER: 'Air',
+};
+
+const resolveFriendlyCategory = (category: string) => {
+  const normalized = category.toUpperCase();
+  const matchKey = Object.keys(FRIENDLY_CATEGORY_LABELS).find((key) => normalized.includes(key));
+  return matchKey ? FRIENDLY_CATEGORY_LABELS[matchKey] : category;
+};
+
 const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
+  engineMode,
   analysisResult,
   onReferenceUpload,
   referenceMetrics,
@@ -139,29 +178,160 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   applySuggestionsError,
   selectedSuggestionCount,
   onRequestAIAnalysis,
-  echoReportStatus
+  echoReportStatus,
+  onRemoveAppliedSuggestion,
+  onAutoMix,
+  onCancelAutoMix,
+  isAutoMixing,
+  autoMixProgress,
+  autoMixError,
+  autoMixMode,
+  onFullStudioAutoMix,
+  fullStudioStatus
 }) => {
   if (!analysisResult) return null;
+  const isFriendly = engineMode === 'FRIENDLY';
+  const showFullStudio = !isFriendly && !!onFullStudioAutoMix;
+  const autoMixLabel = autoMixMode === 'FULL_STUDIO' ? 'Full Studio Auto Mix' : 'Auto Mix';
 
   return (
     <div className="bg-gradient-to-br from-slate-900/90 to-slate-800/90 backdrop-blur-xl rounded-3xl p-8 shadow-[6px_6px_20px_rgba(0,0,0,0.4),-2px_-2px_10px_rgba(255,255,255,0.02)] border border-slate-700/30 mb-6">
-      {/* AI Recommendations - First */}
+      {/* AI Recommendations - Always visible for management and removal */}
       <div className="mb-8 border-b border-slate-700/50 pb-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-pink-500 flex items-center justify-center shadow-lg">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
+        <div className="flex items-center gap-3 mb-6 justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-blue-500 flex items-center justify-center shadow-lg">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-white tracking-tight">AI Recommendations</h3>
+              <p className="text-xs text-slate-400">Powered by Gemini</p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-black text-white tracking-tight">AI Recommendations</h3>
-            <p className="text-xs text-slate-400">Powered by Gemini</p>
+          <div className="flex items-center gap-2">
+            {fullStudioStatus === 'ready' && (
+              <span className="text-[10px] uppercase tracking-wider font-bold text-orange-300 border border-orange-500/30 px-2 py-1 rounded-full bg-orange-500/10">
+                Full Studio Active
+              </span>
+            )}
+            {onAutoMix && (
+              <button
+                onClick={onAutoMix}
+                disabled={isProcessing || isAutoMixing}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 whitespace-nowrap ${
+                  isAutoMixing
+                    ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                    : 'bg-slate-900/70 text-slate-200 border border-slate-700/50 hover:bg-slate-800/80 hover:border-orange-400/40'
+                }`}
+                title="Run Auto Mix loop"
+              >
+                {isAutoMixing ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-orange-300/40 border-t-orange-300 rounded-full animate-spin" />
+                    Auto Mix
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h12M3 17h18" />
+                    </svg>
+                    {isFriendly ? 'Auto Mix' : 'Auto Mix Loop'}
+                  </>
+                )}
+              </button>
+            )}
+            {showFullStudio && (
+              <button
+                onClick={onFullStudioAutoMix}
+                disabled={isProcessing || isAutoMixing}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 whitespace-nowrap ${
+                  isAutoMixing
+                    ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                    : 'bg-slate-900/70 text-slate-200 border border-slate-700/50 hover:bg-slate-800/80 hover:border-orange-400/40'
+                }`}
+                title="Run Full Studio Auto Mix"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h10M4 18h16" />
+                </svg>
+                Full Studio Auto Mix
+              </button>
+            )}
+            {analysisResult.suggestions.length > 0 && (
+              <button
+                onClick={() => {
+                  // Select all suggestions first
+                  analysisResult.suggestions.forEach((s: Suggestion) => {
+                    if (!s.isSelected && !appliedSuggestionIds.includes(s.id)) {
+                      onToggleSuggestion(s.id);
+                    }
+                  });
+                  // Then apply them
+                  onApplySuggestions();
+                }}
+                disabled={isProcessing || isAutoMixing || (analysisResult.suggestions.length === 0 || analysisResult.suggestions.every((s: Suggestion) => appliedSuggestionIds.includes(s.id)))}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all flex items-center gap-2 whitespace-nowrap ${
+                  analysisResult.suggestions.every((s: Suggestion) => appliedSuggestionIds.includes(s.id))
+                    ? 'bg-green-600/20 text-green-400 border border-green-500/30'
+                    : isProcessing || isAutoMixing
+                      ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
+                      : 'bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30 hover:border-orange-400'
+                }`}
+                title={analysisResult.suggestions.every((s: Suggestion) => appliedSuggestionIds.includes(s.id)) ? 'All fixes applied' : 'Apply all recommendations at once'}
+              >
+                {analysisResult.suggestions.every((s: Suggestion) => appliedSuggestionIds.includes(s.id)) ? (
+                  <>
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    Done
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    {isFriendly ? 'Apply Recommendations' : 'Apply All'}
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
+        {onAutoMix && (isAutoMixing || autoMixProgress || autoMixError) && (
+          <div className="mb-5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-4 py-3 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-slate-200 font-semibold">
+                {autoMixProgress
+                  ? `${autoMixLabel} Pass ${autoMixProgress.iteration}/${autoMixProgress.maxIterations} · ${autoMixProgress.stage}`
+                  : autoMixLabel}
+              </div>
+              {isAutoMixing && onCancelAutoMix && (
+                <button
+                  onClick={onCancelAutoMix}
+                  className="text-xs text-red-300 hover:text-red-200 border border-red-500/30 px-2 py-1 rounded-md hover:bg-red-500/10 transition-colors"
+                >
+                  Stop
+                </button>
+              )}
+            </div>
+            {autoMixProgress?.score !== undefined && (
+              <div className="mt-1 text-slate-400">
+                Score: <span className="text-orange-300 font-semibold">{autoMixProgress.score}</span>
+              </div>
+            )}
+            {autoMixError && (
+              <div className="mt-2 text-xs text-red-300">{autoMixError}</div>
+            )}
+          </div>
+        )}
+
         {analysisResult.genrePrediction === 'Ready for Analysis' && analysisResult.suggestions.length === 0 ? (
           <div className="text-center py-12 px-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-4 border border-orange-500/30">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500/20 to-blue-500/20 flex items-center justify-center mx-auto mb-4 border border-orange-500/30">
               <svg className="w-8 h-8 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
@@ -178,8 +348,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         ) : analysisResult.genrePrediction === 'Analyzing...' && analysisResult.suggestions.length === 0 ? (
           <div className="text-center py-12">
             <div className="relative w-16 h-16 mx-auto mb-4">
-              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-pink-500 opacity-20 animate-pulse" />
-              <div className="absolute inset-2 rounded-full border-4 border-transparent border-t-orange-500 border-r-pink-500 animate-spin" />
+              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-blue-500 opacity-20 animate-pulse" />
+              <div className="absolute inset-2 rounded-full border-4 border-transparent border-t-orange-500 border-r-blue-500 animate-spin" />
             </div>
             <p className="text-slate-200 font-semibold mb-1">Analyzing your track...</p>
             <p className="text-slate-500 text-sm">This may take a few moments</p>
@@ -189,6 +359,17 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             <div className="space-y-3">
               {analysisResult.suggestions.map((suggestion: Suggestion) => {
                 const isApplied = appliedSuggestionIds.includes(suggestion.id);
+                const displayCategory = isFriendly ? resolveFriendlyCategory(suggestion.category) : suggestion.category;
+                const pluginLabel = (() => {
+                  if (suggestion.category === 'Compression' || suggestion.category === 'Dynamics') return 'Plugin: Compressor';
+                  if (suggestion.category === 'Limiter') return 'Plugin: Limiter';
+                  if (suggestion.category === 'EQ') return 'Plugin: EQ';
+                  if (suggestion.category === 'De-Esser') return 'Plugin: De-Esser';
+                  if (suggestion.category === 'Stereo' || suggestion.category === 'Imaging') return 'Plugin: Stereo Imager';
+                  if (suggestion.category === 'Saturation') return 'Plugin: Saturation';
+                  if (suggestion.category === 'Reverb') return 'Plugin: Reverb';
+                  return 'Plugin: Echo Engine';
+                })();
                 return (
                   <div
                     key={suggestion.id}
@@ -213,18 +394,32 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2 flex-wrap">
                           <span className="text-white bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-lg flex items-center gap-1.5">
-                            {suggestion.category}
+                            {displayCategory}
                             <span className="text-sm">✨</span>
                           </span>
                           {isApplied && (
-                            <span className="text-green-400 text-xs font-bold flex items-center gap-1 bg-green-900/30 px-2 py-1 rounded-full">
-                              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                              Applied
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-400 text-xs font-bold flex items-center gap-1 bg-green-900/30 px-2 py-1 rounded-full">
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                                Applied
+                              </span>
+                              {!isFriendly && onRemoveAppliedSuggestion && (
+                                <button
+                                  onClick={() => onRemoveAppliedSuggestion(suggestion.id)}
+                                  className="ml-2 p-1 text-red-400 hover:bg-red-900/20 rounded-full transition-colors hover:text-red-300"
+                                  title={`Remove ${suggestion.id}`}
+                                >
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
+                        <p className="text-[11px] text-slate-500 uppercase tracking-wider mb-2">{pluginLabel}</p>
                         <p className="text-sm text-slate-200 leading-relaxed">{suggestion.description}</p>
                       </div>
                     </div>
@@ -246,45 +441,28 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
 
             {analysisResult.suggestions.length > 0 && (
               <div className="mt-6">
-                {(() => {
-                  const areAllSelectedApplied = selectedSuggestionCount > 0 && analysisResult.suggestions
-                    .filter((s: Suggestion) => s.isSelected)
-                    .every((s: Suggestion) => appliedSuggestionIds.includes(s.id));
-
-                  return (
-                    <button
-                      onClick={onApplySuggestions}
-                      disabled={isProcessing || selectedSuggestionCount === 0 || areAllSelectedApplied}
-                      className={`relative overflow-hidden w-full font-bold py-4 rounded-xl transition-all duration-300 ease-out flex items-center justify-center gap-2 text-sm uppercase tracking-wider shadow-lg ${
-                        areAllSelectedApplied
-                          ? 'bg-gradient-to-r from-green-600 to-green-700 text-white cursor-default shadow-[0_4px_20px_rgba(34,197,94,0.3)]'
-                          : isProcessing
-                            ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-[0_4px_20px_rgba(251,146,60,0.3)]'
-                            : selectedSuggestionCount === 0
-                              ? 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
-                              : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 hover:shadow-[0_8px_40px_rgba(251,146,60,0.5)] active:scale-[0.98] backdrop-blur-xl border border-orange-400/20 before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:-translate-x-full hover:before:translate-x-full before:transition-transform before:duration-700 before:ease-out'
-                      }`}
-                    >
-                      <span className="relative z-10 flex items-center justify-center gap-2">
-                        {isProcessing ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Applying Changes...
-                          </>
-                        ) : areAllSelectedApplied ? (
-                          <>
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                            Fixes Applied
-                          </>
-                        ) : (
-                          `Apply ${selectedSuggestionCount > 0 ? `${selectedSuggestionCount} Selected Fix${selectedSuggestionCount > 1 ? 'es' : ''}` : 'Selected Fixes'}`
-                        )}
-                      </span>
-                    </button>
-                  );
-                })()}
+                <button
+                  onClick={onApplySuggestions}
+                  disabled={isProcessing || isAutoMixing || selectedSuggestionCount === 0}
+                  className={`relative overflow-hidden w-full font-bold py-4 rounded-xl transition-all duration-300 ease-out flex items-center justify-center gap-2 text-sm uppercase tracking-wider shadow-lg ${
+                    isProcessing
+                      ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-[0_4px_20px_rgba(251,146,60,0.3)]'
+                      : isAutoMixing || selectedSuggestionCount === 0
+                        ? 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 hover:shadow-[0_8px_40px_rgba(251,146,60,0.5)] active:scale-[0.98] backdrop-blur-xl border border-orange-400/20 before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:-translate-x-full hover:before:translate-x-full before:transition-transform before:duration-700 before:ease-out'
+                    }`}
+                >
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    {isProcessing ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Applying Changes...
+                      </>
+                    ) : (
+                      `Apply ${selectedSuggestionCount > 0 ? `${selectedSuggestionCount} Selected Fix${selectedSuggestionCount > 1 ? 'es' : ''}` : 'Selected Fixes'}`
+                    )}
+                  </span>
+                </button>
                 {applySuggestionsError && (
                   <div className="mt-3 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
                     <p className="text-red-400 text-xs font-medium">{applySuggestionsError}</p>
@@ -297,10 +475,10 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
       </div>
 
       {/* Reference Track - Second - Hidden when Echo Report is active */}
-      {(echoReportStatus !== 'loading' && echoReportStatus !== 'success') && (
+      {!isFriendly && (echoReportStatus !== 'loading' && echoReportStatus !== 'success') && (
       <div>
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-blue-500 flex items-center justify-center shadow-lg">
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
             </svg>
@@ -315,7 +493,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           <label className={`group block relative overflow-hidden bg-gradient-to-br from-slate-800/50 to-slate-800/30 backdrop-blur-sm border-2 border-dashed rounded-2xl p-8 cursor-pointer transition-all duration-300 ${
             isLoadingReference
               ? 'opacity-50 pointer-events-none'
-              : 'border-slate-700/50 hover:border-purple-500/50 hover:bg-slate-800/60 hover:shadow-[0_0_30px_rgba(168,85,247,0.1)]'
+              : 'border-slate-700/50 hover:border-blue-500/50 hover:bg-slate-800/60 hover:shadow-[0_0_30px_rgba(59,130,246,0.1)]'
           }`}>
             <input
               type="file"
@@ -328,15 +506,15 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               {isLoadingReference ? (
                 <>
                   <div className="relative w-12 h-12 mx-auto mb-3">
-                    <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 opacity-20 animate-pulse" />
-                    <div className="absolute inset-2 rounded-full border-4 border-transparent border-t-purple-500 border-r-pink-500 animate-spin" />
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-blue-500 opacity-20 animate-pulse" />
+                    <div className="absolute inset-2 rounded-full border-4 border-transparent border-t-orange-500 border-r-blue-500 animate-spin" />
                   </div>
                   <p className="text-slate-300 font-semibold">Loading reference...</p>
                 </>
               ) : (
                 <>
-                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center mx-auto mb-4 border border-purple-500/30 group-hover:scale-110 transition-transform duration-300">
-                    <svg className="w-8 h-8 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-500/20 to-blue-500/20 flex items-center justify-center mx-auto mb-4 border border-orange-500/30 group-hover:scale-110 transition-transform duration-300">
+                    <svg className="w-8 h-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                   </div>
@@ -345,20 +523,20 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 </>
               )}
             </div>
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-500/0 via-purple-500/5 to-pink-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/5 to-sky-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           </label>
         ) : (
-          <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-sm border border-purple-500/30 rounded-2xl p-5 shadow-lg">
+          <div className="bg-gradient-to-br from-blue-500/10 to-sky-500/10 backdrop-blur-sm border border-blue-500/30 rounded-2xl p-5 shadow-lg">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0 shadow-lg">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-blue-500 flex items-center justify-center flex-shrink-0 shadow-lg">
                   <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-white truncate">{referenceTrack.name}</p>
-                  <p className="text-xs text-purple-300/70 font-medium">Reference loaded</p>
+                  <p className="text-xs text-blue-300/70 font-medium">Reference loaded</p>
                 </div>
               </div>
               {onClearReference && (
@@ -372,22 +550,22 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             </div>
             {referenceMetrics && (
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-slate-900/40 backdrop-blur-sm rounded-xl p-3 text-center border border-purple-500/20">
-                  <div className="text-[10px] text-purple-300/70 uppercase font-bold tracking-wider mb-1">RMS</div>
-                  <div className="text-sm font-mono font-bold text-purple-200">{referenceMetrics.rms.toFixed(1)} dB</div>
+                <div className="bg-slate-900/40 backdrop-blur-sm rounded-xl p-3 text-center border border-blue-500/20">
+                  <div className="text-[10px] text-blue-300/70 uppercase font-bold tracking-wider mb-1">RMS</div>
+                  <div className="text-sm font-mono font-bold text-blue-200">{referenceMetrics.rms.toFixed(1)} dB</div>
                 </div>
-                <div className="bg-slate-900/40 backdrop-blur-sm rounded-xl p-3 text-center border border-purple-500/20">
-                  <div className="text-[10px] text-purple-300/70 uppercase font-bold tracking-wider mb-1">Peak</div>
-                  <div className="text-sm font-mono font-bold text-purple-200">{referenceMetrics.peak.toFixed(1)} dB</div>
+                <div className="bg-slate-900/40 backdrop-blur-sm rounded-xl p-3 text-center border border-blue-500/20">
+                  <div className="text-[10px] text-blue-300/70 uppercase font-bold tracking-wider mb-1">Peak</div>
+                  <div className="text-sm font-mono font-bold text-blue-200">{referenceMetrics.peak.toFixed(1)} dB</div>
                 </div>
-                <div className="bg-slate-900/40 backdrop-blur-sm rounded-xl p-3 text-center border border-purple-500/20">
-                  <div className="text-[10px] text-purple-300/70 uppercase font-bold tracking-wider mb-1">Crest</div>
-                  <div className="text-sm font-mono font-bold text-purple-200">{referenceMetrics.crestFactor.toFixed(1)} dB</div>
+                <div className="bg-slate-900/40 backdrop-blur-sm rounded-xl p-3 text-center border border-blue-500/20">
+                  <div className="text-[10px] text-blue-300/70 uppercase font-bold tracking-wider mb-1">Crest</div>
+                  <div className="text-sm font-mono font-bold text-blue-200">{referenceMetrics.crestFactor.toFixed(1)} dB</div>
                 </div>
               </div>
             )}
-            <div className="mt-4 p-3 bg-purple-900/20 border border-purple-500/20 rounded-xl">
-              <p className="text-xs text-purple-200/80 text-center font-medium">Echo will match your mix to this reference</p>
+            <div className="mt-4 p-3 bg-blue-900/20 border border-blue-500/20 rounded-xl">
+              <p className="text-xs text-blue-200/80 text-center font-medium">Echo will match your mix to this reference</p>
             </div>
           </div>
         )}

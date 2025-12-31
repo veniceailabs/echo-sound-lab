@@ -7,6 +7,14 @@ interface HistoryTimelineProps {
   isOpen: boolean;
   onClose: () => void;
   onJumpToEntry?: (entry: HistoryEntry) => void;
+  onSetSnapshotA?: (entry: HistoryEntry) => void;
+  onSetSnapshotB?: (entry: HistoryEntry) => void;
+  snapshotAId?: string | null;
+  snapshotBId?: string | null;
+  snapshotALabel?: string | null;
+  snapshotBLabel?: string | null;
+  snapshotABActive?: boolean;
+  onClearSnapshotAB?: () => void;
 }
 
 type FilterType = 'all' | 'eq' | 'compression' | 'reverb' | 'delay' | 'saturation' | 'user' | 'ai';
@@ -14,7 +22,15 @@ type FilterType = 'all' | 'eq' | 'compression' | 'reverb' | 'delay' | 'saturatio
 export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
   isOpen,
   onClose,
-  onJumpToEntry
+  onJumpToEntry,
+  onSetSnapshotA,
+  onSetSnapshotB,
+  snapshotAId,
+  snapshotBId,
+  snapshotALabel,
+  snapshotBLabel,
+  snapshotABActive,
+  onClearSnapshotAB
 }) => {
   const [timeline, setTimeline] = useState<Array<{
     entry: HistoryEntry;
@@ -57,7 +73,6 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
     const components: string[] = [];
     if (config.eq && config.eq.length > 0) components.push('EQ');
     if (config.compression) components.push('Compression');
-    if (config.multibandCompression) components.push('Multiband Compression');
     if (config.motionReverb) components.push('Reverb');
     if (config.delay) components.push('Delay');
     if (config.saturation) components.push('Saturation');
@@ -79,7 +94,7 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
     const componentsLower = components.map(c => c.toLowerCase());
 
     if (activeFilter === 'eq') return componentsLower.includes('eq') || componentsLower.includes('dynamic eq');
-    if (activeFilter === 'compression') return componentsLower.includes('compression') || componentsLower.includes('multiband compression');
+    if (activeFilter === 'compression') return componentsLower.includes('compression');
     if (activeFilter === 'reverb') return componentsLower.includes('reverb');
     if (activeFilter === 'delay') return componentsLower.includes('delay');
     if (activeFilter === 'saturation') return componentsLower.includes('saturation');
@@ -250,7 +265,7 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
     if (config.motionReverb) {
       params.push(
         <div key="reverb" className="mb-2">
-          <div className="font-bold text-purple-400 text-xs mb-1">Reverb</div>
+          <div className="font-bold text-blue-400 text-xs mb-1">Reverb</div>
           <div className="text-xs font-mono text-slate-300 space-y-0.5">
             <div>Mix: {(config.motionReverb.mix * 100).toFixed(0)}%</div>
             <div>Decay: {config.motionReverb.decay.toFixed(1)}s</div>
@@ -384,6 +399,16 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
                                 CURRENT
                               </span>
                             )}
+                            {snapshotAId === item.entry.id && (
+                              <span className="px-2 py-0.5 bg-orange-500/20 text-orange-300 text-xs rounded-full font-bold border border-orange-500/40">
+                                SNAPSHOT A
+                              </span>
+                            )}
+                            {snapshotBId === item.entry.id && (
+                              <span className="px-2 py-0.5 bg-blue-500/20 text-blue-300 text-xs rounded-full font-bold border border-blue-500/40">
+                                SNAPSHOT B
+                              </span>
+                            )}
                           </div>
                           <div className="text-xs text-slate-400 mt-1">
                             {formatTimestamp(item.entry.timestamp)}
@@ -430,8 +455,8 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
                   </div>
 
                   {/* Jump Button */}
-                  {!item.isCurrent && onJumpToEntry && (
-                    <div className="px-4 pb-4">
+                  <div className="px-4 pb-4 space-y-2">
+                    {!item.isCurrent && onJumpToEntry && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -441,8 +466,30 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
                       >
                         Jump to this state
                       </button>
-                    </div>
-                  )}
+                    )}
+                    {(onSetSnapshotA || onSetSnapshotB) && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSetSnapshotA?.(item.entry);
+                          }}
+                          className="py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-orange-500/15 text-orange-300 border border-orange-500/40 hover:bg-orange-500/25 transition-all"
+                        >
+                          Set as A
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSetSnapshotB?.(item.entry);
+                          }}
+                          className="py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-blue-500/15 text-blue-300 border border-blue-500/40 hover:bg-blue-500/25 transition-all"
+                        >
+                          Set as B
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })
@@ -453,18 +500,34 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
         <div className="px-8 py-5 border-t border-slate-700/30 flex items-center justify-between bg-slate-900/30">
           <div className="text-xs text-slate-500 font-medium">
             TIP: Click any entry to view detailed parameters
+            {snapshotAId && (
+              <div className="mt-1 text-slate-400">Snapshot A: {snapshotALabel || snapshotAId}</div>
+            )}
+            {snapshotBId && (
+              <div className="text-slate-400">Snapshot B: {snapshotBLabel || snapshotBId}</div>
+            )}
           </div>
-          <button
-            onClick={() => {
-              if (confirm('Clear all history? This cannot be undone.')) {
-                historyManager.clearHistory();
-                setTimeline([]);
-              }
-            }}
-            className={cn(dangerButton, 'px-5 py-2.5 text-sm')}
-          >
-            Clear History
-          </button>
+          <div className="flex items-center gap-2">
+            {snapshotABActive && onClearSnapshotAB && (
+              <button
+                onClick={onClearSnapshotAB}
+                className="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider bg-slate-800 text-slate-200 border border-slate-700 hover:border-orange-500/40 hover:text-orange-300 transition-all"
+              >
+                Exit Snapshot A/B
+              </button>
+            )}
+            <button
+              onClick={() => {
+                if (confirm('Clear all history? This cannot be undone.')) {
+                  historyManager.clearHistory();
+                  setTimeline([]);
+                }
+              }}
+              className={cn(dangerButton, 'px-5 py-2.5 text-sm')}
+            >
+              Clear History
+            </button>
+          </div>
         </div>
       </div>
     </div>

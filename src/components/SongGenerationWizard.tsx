@@ -295,7 +295,7 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
 
                         {voiceModels.length === 0 ? (
                             <div className="text-center py-16">
-                                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center border border-purple-500/30">
+                                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-orange-500/20 to-blue-500/15 flex items-center justify-center border border-orange-500/30">
                                     <span className="text-4xl">MIC</span>
                                 </div>
                                 <h3 className="text-lg font-bold text-slate-300 mb-2">No voice models yet</h3>
@@ -315,7 +315,7 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
                                         )}
                                     >
                                         <div className="flex items-center gap-3 mb-3">
-                                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center shadow-lg">
+                                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-blue-600 flex items-center justify-center shadow-lg">
                                                 <span className="text-2xl">MIC</span>
                                             </div>
                                             <div>
@@ -352,7 +352,7 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
                         </div>
 
                         {/* Instrumental Mode Toggle */}
-                        <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/30 rounded-2xl p-5">
+                        <div className="bg-gradient-to-r from-orange-500/10 to-blue-500/10 border border-orange-500/30 rounded-2xl p-5">
                             <label className="flex items-center gap-3 cursor-pointer">
                                 <input
                                     type="checkbox"
@@ -361,11 +361,11 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
                                         setIsInstrumental(e.target.checked);
                                         if (e.target.checked) setLyrics('');
                                     }}
-                                    className="w-5 h-5 rounded border-purple-600 bg-slate-800 checked:bg-purple-500"
+                                    className="w-5 h-5 rounded border-orange-500 bg-slate-800 checked:bg-orange-500"
                                 />
                                 <div>
                                     <span className="text-white font-bold">Instrumental Remix Mode</span>
-                                    <p className="text-xs text-purple-300/80 mt-1">
+                                    <p className="text-xs text-orange-300/80 mt-1">
                                         Upload a beat to create a completely new AI-generated instrumental (like Suno's remix feature)
                                     </p>
                                 </div>
@@ -386,8 +386,8 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
                                             onChange={(e) => e.target.files && handleBeatUpload(e.target.files[0])}
                                             className="hidden"
                                         />
-                                        <div className="text-center py-6 border-2 border-dashed border-purple-500/30 rounded-xl hover:border-purple-500/50 transition-colors">
-                                            <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center border border-purple-500/30">
+                                        <div className="text-center py-6 border-2 border-dashed border-orange-500/30 rounded-xl hover:border-orange-500/50 transition-colors">
+                                            <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-gradient-to-br from-orange-500/20 to-blue-500/15 flex items-center justify-center border border-orange-500/30">
                                                 <span className="text-2xl"></span>
                                             </div>
                                             <p className="text-white font-medium mb-1">Upload Beat</p>
@@ -395,9 +395,9 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
                                         </div>
                                     </label>
                                 ) : (
-                                    <div className="flex items-center justify-between bg-purple-500/10 border border-purple-500/30 rounded-xl p-4">
+                                    <div className="flex items-center justify-between bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                            <div className="w-10 h-10 rounded-lg bg-orange-500/20 flex items-center justify-center">
                                                 <span className="text-xl">✓</span>
                                             </div>
                                             <div>
@@ -541,7 +541,7 @@ Chorus:
                                             max="100"
                                             value={styleInfluence}
                                             onChange={(e) => setStyleInfluence(parseInt(e.target.value))}
-                                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
                                         />
                                         <p className="text-xs text-slate-500 mt-2">
                                             How closely to follow your style description
@@ -791,7 +791,7 @@ Chorus:
                                 <div className="bg-slate-900/50 rounded-2xl p-8 border border-slate-700/30">
                                     {recordingState === 'idle' && !audioUrl && (
                                         <div className="text-center space-y-6">
-                                            <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center shadow-[0_0_30px_rgba(239,68,68,0.3)]">
+                                            <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-orange-500 to-blue-600 flex items-center justify-center shadow-[0_0_30px_rgba(59,130,246,0.25)]">
                                                 <span className="text-4xl">MIC</span>
                                             </div>
                                             <div>

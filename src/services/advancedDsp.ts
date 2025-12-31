@@ -20,84 +20,61 @@ export class AdvancedDspService {
         const crossover1 = Math.max(50, Math.min(500, config.crossovers?.[0] || 150));
         const crossover2 = Math.max(crossover1 + 500, Math.min(10000, config.crossovers?.[1] || 4000));
 
-        // Gentle transparent compression settings
-        const DEFAULT_LOW = { threshold: -35, ratio: 2.0, attack: 0.020, release: 0.150, makeupGain: 0 };
-        const DEFAULT_MID = { threshold: -30, ratio: 2.5, attack: 0.010, release: 0.120, makeupGain: 0 };
-        const DEFAULT_HIGH = { threshold: -28, ratio: 2.0, attack: 0.003, release: 0.080, makeupGain: 0 };
+        // Reasonable compression with good level control
+        const DEFAULT_LOW = { threshold: -24, ratio: 2.0, attack: 0.030, release: 0.250, makeupGain: 0 };
+        const DEFAULT_MID = { threshold: -24, ratio: 2.0, attack: 0.030, release: 0.250, makeupGain: 0 };
+        const DEFAULT_HIGH = { threshold: -24, ratio: 2.0, attack: 0.030, release: 0.250, makeupGain: 0 };
 
         const lowSettings = { ...DEFAULT_LOW, ...config.low };
         const midSettings = { ...DEFAULT_MID, ...config.mid };
         const highSettings = { ...DEFAULT_HIGH, ...config.high };
 
-        // Linkwitz-Riley 2nd-order crossover (Q = 0.707 for Butterworth alignment)
-        const Q_BUTTERWORTH = Math.SQRT1_2; // 0.707
+        // Use 1st-order filters instead of 2nd-order to reduce phase distortion
+        // Single-order filters only (no cascading) - much cleaner sound
+        const Q_FIRSTORDER = 0.707; // Standard Butterworth for 1st order
 
-        // LOW BAND: Two cascaded lowpass filters at crossover1
-        const lowpass1a = ctx.createBiquadFilter();
-        lowpass1a.type = 'lowpass';
-        lowpass1a.frequency.value = crossover1;
-        lowpass1a.Q.value = Q_BUTTERWORTH;
-
-        const lowpass1b = ctx.createBiquadFilter();
-        lowpass1b.type = 'lowpass';
-        lowpass1b.frequency.value = crossover1;
-        lowpass1b.Q.value = Q_BUTTERWORTH;
+        // LOW BAND: Single lowpass filter at crossover1
+        const lowpass1 = ctx.createBiquadFilter();
+        lowpass1.type = 'lowpass';
+        lowpass1.frequency.value = crossover1;
+        lowpass1.Q.value = Q_FIRSTORDER;
 
         const lowBandComp = ctx.createDynamicsCompressor();
         const lowBandGain = ctx.createGain();
-        input.connect(lowpass1a);
-        lowpass1a.connect(lowpass1b);
-        lowpass1b.connect(lowBandComp);
+        input.connect(lowpass1);
+        lowpass1.connect(lowBandComp);
         lowBandComp.connect(lowBandGain);
         lowBandGain.connect(output);
 
-        // MID BAND: Highpass at crossover1 → Lowpass at crossover2 (both 2nd order)
-        const highpass1a = ctx.createBiquadFilter();
-        highpass1a.type = 'highpass';
-        highpass1a.frequency.value = crossover1;
-        highpass1a.Q.value = Q_BUTTERWORTH;
+        // MID BAND: Highpass at crossover1 → Lowpass at crossover2 (single filters)
+        const highpass1 = ctx.createBiquadFilter();
+        highpass1.type = 'highpass';
+        highpass1.frequency.value = crossover1;
+        highpass1.Q.value = Q_FIRSTORDER;
 
-        const highpass1b = ctx.createBiquadFilter();
-        highpass1b.type = 'highpass';
-        highpass1b.frequency.value = crossover1;
-        highpass1b.Q.value = Q_BUTTERWORTH;
-
-        const lowpass2a = ctx.createBiquadFilter();
-        lowpass2a.type = 'lowpass';
-        lowpass2a.frequency.value = crossover2;
-        lowpass2a.Q.value = Q_BUTTERWORTH;
-
-        const lowpass2b = ctx.createBiquadFilter();
-        lowpass2b.type = 'lowpass';
-        lowpass2b.frequency.value = crossover2;
-        lowpass2b.Q.value = Q_BUTTERWORTH;
+        const lowpass2 = ctx.createBiquadFilter();
+        lowpass2.type = 'lowpass';
+        lowpass2.frequency.value = crossover2;
+        lowpass2.Q.value = Q_FIRSTORDER;
 
         const midBandComp = ctx.createDynamicsCompressor();
         const midBandGain = ctx.createGain();
-        input.connect(highpass1a);
-        highpass1a.connect(highpass1b);
-        highpass1b.connect(lowpass2a);
-        lowpass2a.connect(lowpass2b);
-        lowpass2b.connect(midBandComp);
+        input.connect(highpass1);
+        highpass1.connect(lowpass2);
+        lowpass2.connect(midBandComp);
         midBandComp.connect(midBandGain);
         midBandGain.connect(output);
 
-        // HIGH BAND: Two cascaded highpass filters at crossover2
-        const highpass2a = ctx.createBiquadFilter();
-        highpass2a.type = 'highpass';
-        highpass2a.frequency.value = crossover2;
-        highpass2a.Q.value = Q_BUTTERWORTH;
-
-        const highpass2b = ctx.createBiquadFilter();
-        highpass2b.type = 'highpass';
-        highpass2b.frequency.value = crossover2;
-        highpass2b.Q.value = Q_BUTTERWORTH;
+        // HIGH BAND: Single highpass filter at crossover2
+        const highpass2 = ctx.createBiquadFilter();
+        highpass2.type = 'highpass';
+        highpass2.frequency.value = crossover2;
+        highpass2.Q.value = Q_FIRSTORDER;
 
         const highBandComp = ctx.createDynamicsCompressor();
         const highBandGain = ctx.createGain();
-        input.connect(highpass2a);
-        highpass2a.connect(highpass2b);
-        highpass2b.connect(highBandComp);
+        input.connect(highpass2);
+        highpass2.connect(highBandComp);
         highBandComp.connect(highBandGain);
         highBandGain.connect(output);
 
@@ -151,14 +128,11 @@ export class AdvancedDspService {
                 const validC1 = Math.max(50, Math.min(500, c1));
                 const validC2 = Math.max(validC1 + 500, Math.min(10000, c2));
 
-                lowpass1a.frequency.setTargetAtTime(validC1, ctx.currentTime, 0.02);
-                lowpass1b.frequency.setTargetAtTime(validC1, ctx.currentTime, 0.02);
-                highpass1a.frequency.setTargetAtTime(validC1, ctx.currentTime, 0.02);
-                highpass1b.frequency.setTargetAtTime(validC1, ctx.currentTime, 0.02);
-                lowpass2a.frequency.setTargetAtTime(validC2, ctx.currentTime, 0.02);
-                lowpass2b.frequency.setTargetAtTime(validC2, ctx.currentTime, 0.02);
-                highpass2a.frequency.setTargetAtTime(validC2, ctx.currentTime, 0.02);
-                highpass2b.frequency.setTargetAtTime(validC2, ctx.currentTime, 0.02);
+                // Update crossover frequencies (1st-order filters)
+                lowpass1.frequency.setTargetAtTime(validC1, ctx.currentTime, 0.02);
+                highpass1.frequency.setTargetAtTime(validC1, ctx.currentTime, 0.02);
+                lowpass2.frequency.setTargetAtTime(validC2, ctx.currentTime, 0.02);
+                highpass2.frequency.setTargetAtTime(validC2, ctx.currentTime, 0.02);
             }
         };
     }
@@ -561,7 +535,7 @@ export class AdvancedDspService {
         
         if (ctx.destination.channelCount < 2) { 
              input.connect(output);
-             return { input, output, setLowWidth:()=>{}, setMidWidth:()=>{}, setHighWidth:()=>{} };
+             return { input, output, setLowWidth:()=>{}, setMidWidth:()=>{}, setHighWidth:()=>{}, setCrossovers:()=>{} };
         }
 
         const merger = ctx.createChannelMerger(2);
@@ -584,76 +558,10 @@ export class AdvancedDspService {
         splitter.connect(invertR, 1); 
         invertR.connect(S_gain); 
 
-        // Linkwitz-Riley 4th-order crossovers (phase-coherent)
-        const Q_BUTTERWORTH = Math.SQRT1_2; // 0.707
-
-        // LOW BAND: Two cascaded lowpass filters at crossover1
-        const lowpass1a = ctx.createBiquadFilter();
-        lowpass1a.type = 'lowpass';
-        lowpass1a.frequency.value = config.crossovers[0];
-        lowpass1a.Q.value = Q_BUTTERWORTH;
-
-        const lowpass1b = ctx.createBiquadFilter();
-        lowpass1b.type = 'lowpass';
-        lowpass1b.frequency.value = config.crossovers[0];
-        lowpass1b.Q.value = Q_BUTTERWORTH;
-
-        // MID BAND: Highpass at crossover1 → Lowpass at crossover2 (both 4th-order)
-        const highpass1a = ctx.createBiquadFilter();
-        highpass1a.type = 'highpass';
-        highpass1a.frequency.value = config.crossovers[0];
-        highpass1a.Q.value = Q_BUTTERWORTH;
-
-        const highpass1b = ctx.createBiquadFilter();
-        highpass1b.type = 'highpass';
-        highpass1b.frequency.value = config.crossovers[0];
-        highpass1b.Q.value = Q_BUTTERWORTH;
-
-        const lowpass2a = ctx.createBiquadFilter();
-        lowpass2a.type = 'lowpass';
-        lowpass2a.frequency.value = config.crossovers[1];
-        lowpass2a.Q.value = Q_BUTTERWORTH;
-
-        const lowpass2b = ctx.createBiquadFilter();
-        lowpass2b.type = 'lowpass';
-        lowpass2b.frequency.value = config.crossovers[1];
-        lowpass2b.Q.value = Q_BUTTERWORTH;
-
-        // HIGH BAND: Two cascaded highpass filters at crossover2
-        const highpass2a = ctx.createBiquadFilter();
-        highpass2a.type = 'highpass';
-        highpass2a.frequency.value = config.crossovers[1];
-        highpass2a.Q.value = Q_BUTTERWORTH;
-
-        const highpass2b = ctx.createBiquadFilter();
-        highpass2b.type = 'highpass';
-        highpass2b.frequency.value = config.crossovers[1];
-        highpass2b.Q.value = Q_BUTTERWORTH;
-
-        const lowS_width_gain = ctx.createGain();
-        const midS_width_gain = ctx.createGain();
-        const highS_width_gain = ctx.createGain();
-
-        // LOW BAND routing
-        S_gain.connect(lowpass1a);
-        lowpass1a.connect(lowpass1b);
-        lowpass1b.connect(lowS_width_gain);
-
-        // MID BAND routing
-        S_gain.connect(highpass1a);
-        highpass1a.connect(highpass1b);
-        highpass1b.connect(lowpass2a);
-        lowpass2a.connect(lowpass2b);
-        lowpass2b.connect(midS_width_gain);
-
-        // HIGH BAND routing
-        S_gain.connect(highpass2a);
-        highpass2a.connect(highpass2b);
-        highpass2b.connect(highS_width_gain);
-        
-        lowS_width_gain.gain.value = config.lowWidth;
-        midS_width_gain.gain.value = config.midWidth;
-        highS_width_gain.gain.value = config.highWidth;
+        const widthGain = ctx.createGain();
+        const width = (config.lowWidth + config.midWidth + config.highWidth) / 3;
+        widthGain.gain.value = width;
+        S_gain.connect(widthGain);
 
         const M_to_L = ctx.createGain(); M_to_L.gain.value = 1;
         const M_to_R = ctx.createGain(); M_to_R.gain.value = 1;
@@ -663,13 +571,8 @@ export class AdvancedDspService {
         M_gain.connect(M_to_L);
         M_gain.connect(M_to_R);
 
-        const S_summed_output = ctx.createGain();
-        lowS_width_gain.connect(S_summed_output);
-        midS_width_gain.connect(S_summed_output);
-        highS_width_gain.connect(S_summed_output);
-
-        S_summed_output.connect(S_to_L);
-        S_summed_output.connect(S_to_R_inv);
+        widthGain.connect(S_to_L);
+        widthGain.connect(S_to_R_inv);
 
         M_to_L.connect(merger, 0, 0);
         S_to_L.connect(merger, 0, 0);
@@ -682,20 +585,10 @@ export class AdvancedDspService {
         return {
             input,
             output,
-            setLowWidth: (v: number) => { lowS_width_gain.gain.setTargetAtTime(v, ctx.currentTime, 0.02); },
-            setMidWidth: (v: number) => { midS_width_gain.gain.setTargetAtTime(v, ctx.currentTime, 0.02); },
-            setHighWidth: (v: number) => { highS_width_gain.gain.setTargetAtTime(v, ctx.currentTime, 0.02); },
-            setCrossovers: (c1: number, c2: number) => {
-                // Update all crossover frequencies for phase-coherent splits
-                lowpass1a.frequency.setTargetAtTime(c1, ctx.currentTime, 0.02);
-                lowpass1b.frequency.setTargetAtTime(c1, ctx.currentTime, 0.02);
-                highpass1a.frequency.setTargetAtTime(c1, ctx.currentTime, 0.02);
-                highpass1b.frequency.setTargetAtTime(c1, ctx.currentTime, 0.02);
-                lowpass2a.frequency.setTargetAtTime(c2, ctx.currentTime, 0.02);
-                lowpass2b.frequency.setTargetAtTime(c2, ctx.currentTime, 0.02);
-                highpass2a.frequency.setTargetAtTime(c2, ctx.currentTime, 0.02);
-                highpass2b.frequency.setTargetAtTime(c2, ctx.currentTime, 0.02);
-            }
+            setLowWidth: (v: number) => { widthGain.gain.setTargetAtTime(v, ctx.currentTime, 0.02); },
+            setMidWidth: (v: number) => { widthGain.gain.setTargetAtTime(v, ctx.currentTime, 0.02); },
+            setHighWidth: (v: number) => { widthGain.gain.setTargetAtTime(v, ctx.currentTime, 0.02); },
+            setCrossovers: (_c1: number, _c2: number) => {}
         };
     }
 

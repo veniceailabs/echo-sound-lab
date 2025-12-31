@@ -1,20 +1,84 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# 🎵 Echo Sound Lab v2.5
 
-# Run and deploy your AI Studio app
+**Second Light OS Edition** - Professional AI-powered audio mastering for the web
 
-This contains everything you need to run your app locally.
+---
 
-View your app in AI Studio: https://ai.studio/apps/drive/1MvKzVxI5Iq6RHpPmx_ldq-sJdlxNxWH0
+## 🚀 Quick Links
 
-## Run Locally
+- **Live App:** [echosoundlab.vercel.app](#) (deploy to get your link)
+- **Beta Guide:** [BETA_TESTER_GUIDE.md](./BETA_TESTER_GUIDE.md)
+- **Deploy Guide:** [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md)
 
-**Prerequisites:**  Node.js
+---
 
+## ✨ Features
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+- 🤖 **AI-Powered Mastering** - Instant analysis & smart recommendations
+- 🎤 **Song Generation** - AI lyrics + music synthesis + voice cloning
+- 🎛️ **Pro Tools** - EQ, compression, reverb, delay, saturation
+- 💾 **Session Management** - Auto-save, history, undo/redo
+- 📊 **Advanced Metering** - LUFS, phase correlation, stereo field
+
+---
+
+## 🛠️ Tech Stack
+
+- React 19 + TypeScript + Vite
+- Tailwind CSS (Second Light OS design)
+- Web Audio API + AudioWorklets
+- Google Gemini 2.5 + AI/ML API
+
+---
+
+## 📦 Run Locally
+
+**Prerequisites:** Node.js 18+
+
+```bash
+# Install
+npm install
+
+# Setup environment
+cp .env.example .env.local
+# Add your API keys to .env.local
+
+# Run
+npm run dev
+
+# Open http://localhost:3001
+```
+
+---
+
+## 🌐 Deploy to Vercel
+
+See [DEPLOY_VERCEL.md](./DEPLOY_VERCEL.md) for full guide.
+
+**Quick deploy:**
+```bash
+npm i -g vercel
+vercel
+```
+
+---
+
+## 🔑 Environment Variables
+
+```env
+VITE_GEMINI_API_KEY=your_gemini_key
+VITE_SUNO_API_KEY=your_aiml_key
+VITE_SUNO_API_URL=https://api.aimlapi.com
+```
+
+Get keys: [aistudio.google.com](https://aistudio.google.com) | [aimlapi.com](https://aimlapi.com)
+
+---
+
+## 📱 Browser Support
+
+✅ Chrome/Edge 90+ | Firefox 88+ | Safari 14+ | Mobile Safari/Chrome
+
+---
+
+**Version:** 2.5.0 Beta | **License:** Proprietary | © 2024 Echo Sound Lab

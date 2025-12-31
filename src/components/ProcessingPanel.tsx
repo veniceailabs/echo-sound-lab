@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AudioMetrics, ProcessingConfig, LiveProcessingConfig, ExportFormat, ReverbConfig, SaturationConfig, StereoImagerConfig, DynamicEQConfig, EQSettings, CompressionPreset, MultibandCompressionConfig, TransientShaperConfig, DeEsserConfig } from '../types';
+import { AudioMetrics, ProcessingConfig, LiveProcessingConfig, ExportFormat, ReverbConfig, SaturationConfig, StereoImagerConfig, DynamicEQConfig, EQSettings, CompressionPreset, TransientShaperConfig, DeEsserConfig } from '../types';
 import { audioEngine } from '../services/audioEngine';
 import { encoderService } from '../services/encoderService';
 import { glassCard, glowButton, secondaryButton, metricCard, gradientDivider, sectionHeader, cn } from '../utils/secondLightStyles';
@@ -8,6 +8,7 @@ interface ProcessingPanelProps {
   originalMetrics: AudioMetrics;
   onCommit: (config: ProcessingConfig, appliedEchoAction?: any) => Promise<AudioMetrics | null>;
   onConfigChange: (config: LiveProcessingConfig) => void;
+  onUserInteraction: () => void;
   isCommitting: boolean;
   processedMetrics: AudioMetrics | null;
   echoReport: any;
@@ -17,6 +18,8 @@ interface ProcessingPanelProps {
   onTogglePlayback: () => void;
   onExportComplete?: () => void; // V.E.N.U.M. hook
   hasAppliedChanges?: boolean;
+  abLabel: string;
+  abDisabled?: boolean;
   // EQ state (lifted from local state in App.tsx)
   eqSettings: EQSettings;
   setEqSettings: (settings: EQSettings) => void;
@@ -29,6 +32,7 @@ export const ProcessingPanel: React.FC<ProcessingPanelProps> = ({
   processedMetrics,
   onCommit,
   onConfigChange,
+  onUserInteraction,
   isCommitting,
   echoReport,
   isAbComparing,
@@ -37,52 +41,75 @@ export const ProcessingPanel: React.FC<ProcessingPanelProps> = ({
   onTogglePlayback,
   onExportComplete,
   hasAppliedChanges = false,
+  abLabel,
+  abDisabled,
   eqSettings,
   setEqSettings,
   dynamicEq,
   setDynamicEq,
 }) => {
-  const [compression, setCompression] = useState<Partial<CompressionPreset>>({ threshold: -24, ratio: 3, attack: 0.003, release: 0.25, makeupGain: 0 });
-  const [multiband, setMultiband] = useState<MultibandCompressionConfig>({ low: {}, mid: {}, high: {}, crossovers: [150, 4000] });
+  // Compression disabled by default - modern tracks need surgical fixes, not blanket processing
+  const [compression, setCompression] = useState<Partial<CompressionPreset>>({ threshold: -12, ratio: 1.0, attack: 0.005, release: 0.3, makeupGain: 0 });
   const [transient, setTransient] = useState<TransientShaperConfig>({ attack: 0, sustain: 0, mix: 1 });
   const [deEsser, setDeEsser] = useState<DeEsserConfig>({ frequency: 7000, threshold: -20, amount: 0 });
   const [saturation, setSaturation] = useState<SaturationConfig>({ type: 'tape', amount: 0, mix: 1 });
   const [reverb, setReverb] = useState<ReverbConfig>({ mix: 0, decay: 2.0, preDelay: 0.01, motion: { bpm: 120, depth: 0 }, duckingAmount: 0 });
   const [imager, setImager] = useState<StereoImagerConfig>({ lowWidth: 1, midWidth: 1, highWidth: 1, crossovers: [300, 5000] });
   const currentLiveConfig = useRef<LiveProcessingConfig>({});
+  const lastEmittedConfigKeyRef = useRef<string | null>(null);
   // Changed NodeJS.Timeout to number for browser compatibility
   const configChangeTimeout = useRef<number | null>(null);
 
   useEffect(() => {
+    const compressionActive = (compression.ratio ?? 1) > 1.01 || (compression.makeupGain ?? 0) !== 0;
+    const width = (imager.lowWidth + imager.midWidth + imager.highWidth) / 3;
+    const normalizedImager: StereoImagerConfig = {
+        lowWidth: width,
+        midWidth: width,
+        highWidth: width,
+        crossovers: imager.crossovers,
+    };
     const config: LiveProcessingConfig = {
-        compression: (compression.threshold !== -24 || compression.ratio !== 3 || (compression.makeupGain ?? 0) !== 0) ? compression : undefined,
+        compression: compressionActive ? compression : undefined,
         eq: eqSettings.some(b => b.gain !== 0) ? eqSettings : undefined,
-        multibandCompression: multiband,
         transientShaper: transient.attack !== 0 || transient.sustain !== 0 || transient.mix !== 1 ? transient : undefined,
         deEsser: deEsser.amount > 0 ? deEsser : undefined,
         saturation: saturation.amount > 0 || saturation.mix !== 1 ? saturation : undefined,
         motionReverb: reverb.mix > 0 ? reverb : undefined,
-        stereoImager: imager.lowWidth !== 1 || imager.midWidth !== 1 ? imager : undefined,
+        stereoImager: width !== 1 ? normalizedImager : undefined,
         dynamicEq: dynamicEq.filter(b => b.enabled).length > 0 ? dynamicEq : undefined
     };
     currentLiveConfig.current = config;
+
+    const configKey = JSON.stringify(config);
+    if (lastEmittedConfigKeyRef.current === null) {
+      lastEmittedConfigKeyRef.current = configKey;
+      return;
+    }
+    if (lastEmittedConfigKeyRef.current === configKey) {
+      return;
+    }
 
     // Debounce config changes to prevent spam - only update when user stops adjusting
     if (configChangeTimeout.current) {
       clearTimeout(configChangeTimeout.current);
     }
+    if (isAbComparing) {
+      return;
+    }
     configChangeTimeout.current = setTimeout(() => {
       if (!isAbComparing) {
         onConfigChange(config);
+        lastEmittedConfigKeyRef.current = configKey;
       }
-    }, 100); // 100ms debounce
+    }, 50); // 50ms debounce for snappier real-time response
 
     return () => {
       if (configChangeTimeout.current) {
         clearTimeout(configChangeTimeout.current);
       }
     };
-  }, [eqSettings, multiband, transient, deEsser, saturation, reverb, imager, dynamicEq, compression, onConfigChange, isAbComparing]);
+  }, [eqSettings, transient, deEsser, saturation, reverb, imager, dynamicEq, compression, onConfigChange, isAbComparing]);
 
   const handleCommit = () => {
     onCommit(currentLiveConfig.current, undefined);
@@ -124,7 +151,11 @@ export const ProcessingPanel: React.FC<ProcessingPanelProps> = ({
   };
 
   return (
-    <div className={cn(glassCard, 'p-8 space-y-6 relative')}>
+    <div
+      className={cn(glassCard, 'p-8 space-y-6 relative')}
+      onPointerDown={onUserInteraction}
+      onKeyDown={onUserInteraction}
+    >
       <h2 className={cn(sectionHeader, 'text-2xl mb-2')}>Processing Controls</h2>
       <div className={gradientDivider} />
 
@@ -164,15 +195,15 @@ export const ProcessingPanel: React.FC<ProcessingPanelProps> = ({
       <div className="space-y-4">
         <button
           onClick={onToggleAB}
-          disabled={!hasAppliedChanges}
+          disabled={abDisabled ?? !hasAppliedChanges}
           className={cn(
             'w-full font-bold py-4 rounded-xl text-xs uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2',
-            !hasAppliedChanges
+            (abDisabled ?? !hasAppliedChanges)
               ? 'bg-slate-800/50 text-slate-500 cursor-not-allowed opacity-40 grayscale border border-slate-700/30'
               : 'bg-slate-900 text-slate-200 hover:text-white border border-slate-700/50 hover:border-orange-500/50 shadow-[3px_3px_6px_#050710,-3px_-3px_6px_#0f1828] hover:shadow-[inset_1px_1px_3px_#050710,inset_-1px_-1px_3px_#0f1828]'
           )}
         >
-          {!hasAppliedChanges ? 'A/B Compare (No Changes Yet)' : isAbComparing ? 'Listening to Original' : 'A/B Compare'}
+          {abLabel}
         </button>
 
         <button

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Echo Sound Lab - Parity Check</title>
+    <style>
+      body {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        background: #0b111b;
+        color: #e2e8f0;
+        margin: 0;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 12px;
+      }
+      pre {
+        background: #0f172a;
+        border: 1px solid #1f2937;
+        border-radius: 8px;
+        padding: 12px;
+        white-space: pre-wrap;
+      }
+      .muted {
+        color: #94a3b8;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Echo Sound Lab - Parity Check</h1>
+    <div class="muted">This page runs a developer-only parity check. Results are printed below and in the console.</div>
+    <pre id="output">Running...</pre>
+    <script type="module" src="/src/parity-check.ts"></script>
+  </body>
+</html>

@@ -8,6 +8,7 @@ class HistoryManagerService {
     private history: HistoryEntry[] = [];
     private currentIndex: number = -1;
     private maxEntries: number = MAX_HISTORY_ENTRIES;
+    private bufferSnapshots: Map<string, AudioBuffer> = new Map();
 
     constructor() {
         this.loadFromStorage();
@@ -77,16 +78,10 @@ class HistoryManagerService {
 
         // Optionally save buffer snapshot (for in-memory only, not localStorage)
         if (includeBufferSnapshot) {
-            const buffer = audioEngine.getBuffer();
+            const buffer = audioEngine.getProcessedBuffer() || audioEngine.getBuffer() || audioEngine.getOriginalBuffer();
             if (buffer) {
-                // Convert buffer to base64 for snapshot
-                const offlineCtx = new OfflineAudioContext(
-                    buffer.numberOfChannels,
-                    buffer.length,
-                    buffer.sampleRate
-                );
-                // Note: Full implementation would encode to base64
-                // For now, we'll skip buffer snapshots to save memory
+                this.bufferSnapshots.set(entry.id, buffer);
+                entry.bufferSnapshot = entry.id;
             }
         }
 
@@ -192,6 +187,7 @@ class HistoryManagerService {
     clearHistory(): void {
         this.history = [];
         this.currentIndex = -1;
+        this.bufferSnapshots.clear();
         this.saveToStorage();
     }
 
@@ -200,6 +196,20 @@ class HistoryManagerService {
      */
     clear(): void {
         this.clearHistory();
+    }
+
+    /**
+     * Get a buffer snapshot for snapshot A/B comparison
+     */
+    getBufferSnapshot(entryId: string): AudioBuffer | null {
+        return this.bufferSnapshots.get(entryId) || null;
+    }
+
+    /**
+     * Store a buffer snapshot for an entry (in-memory only)
+     */
+    setBufferSnapshot(entryId: string, buffer: AudioBuffer): void {
+        this.bufferSnapshots.set(entryId, buffer);
     }
 
     /**

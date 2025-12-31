@@ -3,7 +3,7 @@
  * Saves session state every 5 seconds and on config changes
  */
 
-import { ProcessingConfig, EchoReport, Suggestion } from '../types';
+import { ProcessingConfig, RevisionEntry } from '../types';
 
 export interface SessionState {
   version: string;
@@ -14,7 +14,8 @@ export interface SessionState {
   playheadSeconds: number;
   appliedSuggestionIds: string[];
   echoReportSummary: string | null;
-  activeMode: 'SINGLE' | 'MULTI' | 'AI_STUDIO';
+  activeMode: 'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO';
+  revisionLog: RevisionEntry[];
   // WAM plugin state
   activeWamPluginId: string | null;
 }
@@ -126,7 +127,11 @@ class SessionManager {
         const parsed = JSON.parse(data);
         // Validate version
         if (parsed.version === '2.1') {
-          return parsed as SessionState;
+          return {
+            ...this.getDefaultSession(),
+            ...parsed,
+            revisionLog: parsed.revisionLog || []
+          } as SessionState;
         }
       }
     } catch (e) {
@@ -224,6 +229,7 @@ class SessionManager {
       appliedSuggestionIds: [],
       echoReportSummary: null,
       activeMode: 'SINGLE',
+      revisionLog: [],
       activeWamPluginId: null,
     };
   }

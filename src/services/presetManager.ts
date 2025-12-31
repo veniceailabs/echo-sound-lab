@@ -57,13 +57,13 @@ const BUILTIN_PRESETS: ProcessingPreset[] = [
                 makeupGain: 3
             },
             stereoImager: {
-                lowWidth: 0.8,
-                midWidth: 1.2,
-                highWidth: 1.5,
+                lowWidth: 1.17,
+                midWidth: 1.17,
+                highWidth: 1.17,
                 crossovers: [300, 5000]
             },
             limiter: {
-                threshold: -0.8,
+                threshold: -2,
                 release: 0.05,
                 ratio: 20
             }
@@ -83,12 +83,6 @@ const BUILTIN_PRESETS: ProcessingPreset[] = [
                 { frequency: 5000, gain: 1, type: 'peaking', q: 1.2 },
                 { frequency: 12000, gain: 2, type: 'highshelf' }
             ],
-            multibandCompression: {
-                low: { threshold: -22, ratio: 3.5, attack: 0.01, release: 0.2, makeupGain: 2 },
-                mid: { threshold: -18, ratio: 2.5, attack: 0.005, release: 0.15, makeupGain: 1 },
-                high: { threshold: -16, ratio: 2, attack: 0.003, release: 0.1, makeupGain: 0.5 },
-                crossovers: [200, 3000]
-            },
             transientShaper: {
                 attack: 0.4,
                 sustain: -0.2,
@@ -123,9 +117,9 @@ const BUILTIN_PRESETS: ProcessingPreset[] = [
                 makeupGain: 4
             },
             stereoImager: {
-                lowWidth: 0.7,
-                midWidth: 1.4,
-                highWidth: 1.8,
+                lowWidth: 1.3,
+                midWidth: 1.3,
+                highWidth: 1.3,
                 crossovers: [250, 4000]
             },
             saturation: { type: 'digital', amount: 0.2, mix: 0.5 },
@@ -195,9 +189,9 @@ const BUILTIN_PRESETS: ProcessingPreset[] = [
                 makeupGain: 2
             },
             stereoImager: {
-                lowWidth: 0.9,
-                midWidth: 1.0,
-                highWidth: 1.2,
+                lowWidth: 1.03,
+                midWidth: 1.03,
+                highWidth: 1.03,
                 crossovers: [300, 5000]
             },
             limiter: {

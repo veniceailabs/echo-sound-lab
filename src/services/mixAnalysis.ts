@@ -1,4 +1,4 @@
-import { AudioMetrics, MixSignature, Suggestion, ProcessingConfig, MixIntent, EQSettings, EchoMetrics, EchoReportTool, DynamicEQBand, LimiterConfig, CompressionPreset, SaturationConfig, StereoImagerConfig, TransientShaperConfig, ReverbConfig, MultibandCompressionConfig, DeEsserConfig, DynamicEQConfig, MixReadiness, ColorFilterType } from '../types';
+import { AudioMetrics, MixSignature, Suggestion, ProcessingConfig, MixIntent, EQSettings, EchoMetrics, EchoReportTool, DynamicEQBand, LimiterConfig, CompressionPreset, SaturationConfig, StereoImagerConfig, TransientShaperConfig, ReverbConfig, DeEsserConfig, DynamicEQConfig, MixReadiness, ColorFilterType } from '../types';
 import { storageService } from './storageService';
 
 const clamp = (val: number, min: number, max: number) => Math.min(max, Math.max(min, val));
@@ -237,9 +237,9 @@ export class MixAnalysisService implements IMixAnalysisService {
             const newWidth = Math.max(0, Math.min(2, baseWidth + (intent.stereoWidthOffset * 0.5)));
             
             config.stereoImager = {
-                lowWidth: newWidth * 0.8,
+                lowWidth: newWidth,
                 midWidth: newWidth,
-                highWidth: newWidth * 1.2,
+                highWidth: newWidth,
                 crossovers: [300, 5000]
             };
         }
@@ -347,16 +347,20 @@ export class MixAnalysisService implements IMixAnalysisService {
         }
 
         if (raw.stereoImager) {
+            const lowWidth = getClampedNumber(raw.stereoImager.lowWidth, 0.0, 2.0, 1.0, 'stereoImager.lowWidth');
+            const midWidth = getClampedNumber(raw.stereoImager.midWidth, 0.0, 2.0, 1.0, 'stereoImager.midWidth');
+            const highWidth = getClampedNumber(raw.stereoImager.highWidth, 0.0, 2.0, 1.0, 'stereoImager.highWidth');
+            const width = (lowWidth + midWidth + highWidth) / 3;
             next.stereoImager = {
-                lowWidth: getClampedNumber(raw.stereoImager.lowWidth, 0.0, 2.0, 1.0, 'stereoImager.lowWidth'),
-                midWidth: getClampedNumber(raw.stereoImager.midWidth, 0.0, 2.0, 1.0, 'stereoImager.midWidth'),
-                highWidth: getClampedNumber(raw.stereoImager.highWidth, 0.0, 2.0, 1.0, 'stereoImager.highWidth'),
+                lowWidth: width,
+                midWidth: width,
+                highWidth: width,
                 crossovers: Array.isArray(raw.stereoImager.crossovers) && raw.stereoImager.crossovers.length === 2
                     ? [
                         getClampedNumber(raw.stereoImager.crossovers[0], 50, 1000, 300, 'stereoImager.crossovers[0]'),
                         getClampedNumber(raw.stereoImager.crossovers[1], 1000, 15000, 5000, 'stereoImager.crossovers[1]'),
                     ]
-                    : [300, 5000], 
+                    : [300, 5000],
             };
         }
 
@@ -389,39 +393,6 @@ export class MixAnalysisService implements IMixAnalysisService {
                 mode: getClampedEnum(band.mode, ['compress', 'expand'], 'compress', `dynamicEq[${index}].mode`) as 'compress' | 'expand',
                 enabled: typeof band.enabled === 'boolean' ? band.enabled : false,
             }));
-        }
-
-        if (raw.multibandCompression) {
-            const mb = raw.multibandCompression;
-            next.multibandCompression = {
-                low: {
-                    threshold: getClampedNumber(mb.low?.threshold, -60, 0, -24, 'multiband.low.threshold'),
-                    ratio: getClampedNumber(mb.low?.ratio, 1, 20, 3, 'multiband.low.ratio'),
-                    attack: getClampedNumber(mb.low?.attack, 0.001, 1, 0.003, 'multiband.low.attack'),
-                    release: getClampedNumber(mb.low?.release, 0.01, 2, 0.25, 'multiband.low.release'),
-                    makeupGain: getClampedNumber(mb.low?.makeupGain, -12, 12, 0, 'multiband.low.makeupGain'),
-                },
-                mid: {
-                    threshold: getClampedNumber(mb.mid?.threshold, -60, 0, -24, 'multiband.mid.threshold'),
-                    ratio: getClampedNumber(mb.mid?.ratio, 1, 20, 3, 'multiband.mid.ratio'),
-                    attack: getClampedNumber(mb.mid?.attack, 0.001, 1, 0.003, 'multiband.mid.attack'),
-                    release: getClampedNumber(mb.mid?.release, 0.01, 2, 0.25, 'multiband.mid.release'),
-                    makeupGain: getClampedNumber(mb.mid?.makeupGain, -12, 12, 0, 'multiband.mid.makeupGain'),
-                },
-                high: {
-                    threshold: getClampedNumber(mb.high?.threshold, -60, 0, -24, 'multiband.high.threshold'),
-                    ratio: getClampedNumber(mb.high?.ratio, 1, 20, 3, 'multiband.high.ratio'),
-                    attack: getClampedNumber(mb.high?.attack, 0.001, 1, 0.003, 'multiband.high.attack'),
-                    release: getClampedNumber(mb.high?.release, 0.01, 2, 0.25, 'multiband.high.release'),
-                    makeupGain: getClampedNumber(mb.high?.makeupGain, -12, 12, 0, 'multiband.high.makeupGain'),
-                },
-                crossovers: Array.isArray(mb.crossovers) && mb.crossovers.length === 2
-                    ? [
-                        getClampedNumber(mb.crossovers[0], 50, 500, 150, 'multiband.crossovers[0]'),
-                        getClampedNumber(mb.crossovers[1], 1000, 10000, 4000, 'multiband.crossovers[1]'),
-                    ]
-                    : [150, 4000],
-            };
         }
 
         if (raw.motionReverb) {
