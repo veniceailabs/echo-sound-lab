@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golden Master Archive - PDF Export</title>
+    <style>
+        html {
+            background: #1a1a1a !important;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #1a1a1a;
+            color: #e5e5e5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid #333333;
+        }
+
+        .title {
+            font-size: 2.5em;
+            font-weight: 300;
+            color: #ffffff;
+            margin: 0 0 12px 0;
+            letter-spacing: -1px;
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            color: #b3b3b3;
+            margin: 0;
+            font-weight: 300;
+        }
+
+        .description {
+            color: #808080;
+            font-size: 0.9em;
+            margin-top: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .buttons-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 40px 0;
+        }
+
+        .button {
+            padding: 20px;
+            border: 2px solid #2d2d2d;
+            border-radius: 8px;
+            background: #1f1f1f;
+            color: #e5e5e5;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .button:hover {
+            border-color: #4a9eff;
+            background: #262626;
+            box-shadow: 0 8px 20px rgba(74, 158, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button-icon {
+            font-size: 1.5em;
+        }
+
+        .button-title {
+            color: #ffffff;
+            font-size: 1.1em;
+        }
+
+        .button-desc {
+            color: #b3b3b3;
+            font-size: 0.85em;
+            font-weight: 400;
+        }
+
+        .button-primary {
+            border-color: #4a9eff;
+            background: linear-gradient(135deg, #1f3a5f 0%, #1f2d3d 100%);
+        }
+
+        .button-primary:hover {
+            background: linear-gradient(135deg, #2a4a7f 0%, #2a3d5d 100%);
+            box-shadow: 0 12px 30px rgba(74, 158, 255, 0.2);
+        }
+
+        .info-box {
+            background: linear-gradient(135deg, #1f1f1f 0%, #252525 100%);
+            border: 1px solid #2d2d2d;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+
+        .info-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #4a9eff;
+            margin: 0 0 12px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .info-content {
+            font-size: 0.95em;
+            color: #b3b3b3;
+            line-height: 1.6;
+        }
+
+        .document-list {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .document-item {
+            background: #1a1a1a;
+            padding: 12px;
+            border-left: 3px solid #4a9eff;
+            font-size: 0.9em;
+        }
+
+        .document-number {
+            font-weight: 600;
+            color: #4a9eff;
+        }
+
+        .document-name {
+            color: #e5e5e5;
+        }
+
+        .document-size {
+            color: #808080;
+            font-size: 0.85em;
+        }
+
+        .status-box {
+            background: #1a1a1a;
+            border: 1px solid #333333;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+            display: none;
+        }
+
+        .status-box.visible {
+            display: block;
+        }
+
+        .status-icon {
+            font-size: 2em;
+            margin-bottom: 12px;
+        }
+
+        .status-text {
+            color: #e5e5e5;
+            font-size: 1.1em;
+            font-weight: 600;
+        }
+
+        .status-details {
+            color: #b3b3b3;
+            font-size: 0.9em;
+            margin-top: 8px;
+        }
+
+        .footer {
+            text-align: center;
+            padding-top: 40px;
+            border-top: 1px solid #333333;
+            margin-top: 40px;
+            color: #808080;
+            font-size: 0.9em;
+        }
+
+        .instructions {
+            background: #252525;
+            border: 1px solid #2d2d2d;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 20px 0;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .instructions strong {
+            color: #4a9eff;
+        }
+
+        code {
+            background: #1a1a1a;
+            color: #4ade80;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85em;
+        }
+
+        @media (max-width: 768px) {
+            .buttons-container {
+                grid-template-columns: 1fr;
+            }
+
+            .title {
+                font-size: 1.8em;
+            }
+
+            .button {
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">Golden Master Archive</h1>
+            <p class="subtitle">Action Authority v1.4.0 + Phase 5 + Phase 7 Vision - PDF Export</p>
+            <p class="description">Generate professional PDFs from all 9 archived documents</p>
+        </div>
+
+        <div class="buttons-container">
+            <button class="button button-primary" onclick="exportAllPDFs()">
+                <span class="button-icon">📦</span>
+                <span class="button-title">Export All (9 PDFs)</span>
+                <span class="button-desc">Generate complete archive with one click</span>
+            </button>
+
+            <button class="button" onclick="openBrowser()">
+                <span class="button-icon">🌐</span>
+                <span class="button-title">Manual Export</span>
+                <span class="button-desc">Use browser print dialog for single documents</span>
+            </button>
+
+            <button class="button" onclick="copyCommand()">
+                <span class="button-icon">⌘</span>
+                <span class="button-title">Copy Terminal Command</span>
+                <span class="button-desc">Run batch script manually</span>
+            </button>
+
+            <button class="button" onclick="openInstructions()">
+                <span class="button-icon">📖</span>
+                <span class="button-title">View Instructions</span>
+                <span class="button-desc">Read detailed PDF export guide</span>
+            </button>
+        </div>
+
+        <div class="info-box">
+            <div class="info-title">📄 Archive Contents (9 Documents)</div>
+            <div class="info-content">
+                <div class="document-list">
+                    <div class="document-item">
+                        <span class="document-number">01</span> –
+                        <span class="document-name">Executive Summary</span>
+                        <span class="document-size">(~4 pages)</span>
+                    </div>
+                    <div class="document-item">
+                        <span class="document-number">02</span> –
+                        <span class="document-name">Executive White Paper</span>
+                        <span class="document-size">(~18 pages)</span>
+                    </div>
+                    <div class="document-item">
+                        <span class="document-number">03</span> –
+                        <span class="document-name">Final White Paper</span>
+                        <span class="document-size">(~22 pages)</span>
+                    </div>
+                    <div class="document-item">
+                        <span class="document-number">04</span> –
+                        <span class="document-name">Amendment Verification</span>
+                        <span class="document-size">(~19 pages)</span>
+                    </div>
+                    <div class="document-item">
+                        <span class="document-number">05</span> –
+                        <span class="document-name">Bill of Materials</span>
+                        <span class="document-size">(~11 pages)</span>
+                    </div>
+                    <div class="document-item">
+                        <span class="document-number">06</span> –
+                        <span class="document-name">Regulatory Alignment</span>
+                        <span class="document-size">(~20 pages)</span>
+                    </div>
+                    <div class="document-item">
+                        <span class="document-number">07</span> –
+                        <span class="document-name">Statement of Conformity</span>
+                        <span class="document-size">(~7 pages)</span>
+                    </div>
+                    <div class="document-item">
+                        <span class="document-number">08</span> –
+                        <span class="document-name">Phase 5: Adversarial Hardening</span>
+                        <span class="document-size">(~11 pages)</span>
+                    </div>
+                    <div class="document-item">
+                        <span class="document-number">09</span> –
+                        <span class="document-name">Phase 7: The Quantum Solver</span>
+                        <span class="document-size">(~18 pages)</span>
+                    </div>
+                </div>
+                <p style="margin-top: 16px; color: #808080; font-size: 0.9em;">
+                    <strong style="color: #e5e5e5;">Total:</strong> ~130 pages, ~9-11 MB
+                </p>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <div class="info-title">⚡ Quick Start</div>
+            <div class="info-content">
+                <p style="margin: 0;">
+                    <strong>For fastest results:</strong> Click "Export All (9 PDFs)" button above.
+                </p>
+                <p style="margin: 12px 0 0 0; color: #b3b3b3; font-size: 0.9em;">
+                    The batch script will generate all PDFs with automatic page numbering and professional formatting in 2-3 minutes.
+                </p>
+            </div>
+        </div>
+
+        <div class="status-box" id="statusBox">
+            <div class="status-icon" id="statusIcon">⏳</div>
+            <div class="status-text" id="statusText">Processing...</div>
+            <div class="status-details" id="statusDetails">Generating PDFs, please wait...</div>
+        </div>
+
+        <div class="footer">
+            <p>📍 All PDFs generated in: <code>/archive/</code></p>
+            <p>✨ Professional formatting with dark theme and page numbers</p>
+        </div>
+    </div>
+
+    <script>
+        function showStatus(icon, title, details) {
+            const box = document.getElementById('statusBox');
+            document.getElementById('statusIcon').textContent = icon;
+            document.getElementById('statusText').textContent = title;
+            document.getElementById('statusDetails').textContent = details;
+            box.classList.add('visible');
+        }
+
+        function hideStatus() {
+            document.getElementById('statusBox').classList.remove('visible');
+        }
+
+        function exportAllPDFs() {
+            showStatus('⏳', 'Starting batch export...', 'This will open Terminal and run the batch script.');
+
+            // Create a clickable command
+            const command = `cd "/Users/DRA/Desktop/Echo Sound Lab/Echo Sound Lab v2.5" && npx tsx scripts/batch-print-archive-to-pdf.ts`;
+
+            // Copy to clipboard
+            navigator.clipboard.writeText(command).then(() => {
+                alert(
+                    '✅ Command copied to clipboard!\n\n' +
+                    'Now:\n' +
+                    '1. Open Terminal (Cmd+Space → type "Terminal")\n' +
+                    '2. Paste the command (Cmd+V)\n' +
+                    '3. Press Enter\n\n' +
+                    'The batch script will generate all 7 PDFs automatically.'
+                );
+                hideStatus();
+            });
+        }
+
+        function openBrowser() {
+            showStatus('🌐', 'Manual Export Guide', 'You can print individual documents using your browser\'s print dialog (Cmd+P).');
+            setTimeout(() => {
+                alert(
+                    '📖 Manual Export Steps:\n\n' +
+                    '1. Open an HTML document in your browser:\n' +
+                    '   file:///Users/DRA/Desktop/Echo%20Sound%20Lab/Echo%20Sound%20Lab%20v2.5/archive/[FILENAME].html\n\n' +
+                    '2. Press Cmd+P (Mac) or Ctrl+P (Windows)\n\n' +
+                    '3. Settings:\n' +
+                    '   • Destination: Save as PDF\n' +
+                    '   • Background Graphics: ON ✓\n' +
+                    '   • Margins: 0.5 inches\n\n' +
+                    '4. Click "Save"\n\n' +
+                    'Repeat for each of the 7 documents.'
+                );
+                hideStatus();
+            }, 500);
+        }
+
+        function copyCommand() {
+            const command = `cd "/Users/DRA/Desktop/Echo Sound Lab/Echo Sound Lab v2.5" && npx tsx scripts/batch-print-archive-to-pdf.ts`;
+            navigator.clipboard.writeText(command).then(() => {
+                showStatus('✅', 'Command copied to clipboard!', 'Open Terminal and paste (Cmd+V) to run the batch script.');
+                setTimeout(() => hideStatus(), 3000);
+            });
+        }
+
+        function openInstructions() {
+            window.location.href = 'ARCHIVE_INSTRUCTIONS.pdf';
+        }
+    </script>
+</body>
+</html>

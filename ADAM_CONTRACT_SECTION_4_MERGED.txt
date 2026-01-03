@@ -1,0 +1,197 @@
+SECTION 4: MONEY FLOW GUARANTEE (MERGED & LOCKED)
+
+Ready to paste into ADAM_CONTRACT.md
+
+================================================================================
+
+4) Money Flow Guarantee
+
+Money is the artist's. ADAM's only role is to route it there as directly, quickly, and
+transparently as possible.
+
+This section locks how money moves and who can never touch it.
+
+================================================================================
+
+The Core Promise
+
+When a listener pays through ADAM routing:
+
+1. Artist is notified in real-time
+2. Amount to artist is shown (gross and net, fees itemized)
+3. Settlement happens on a predictable day (same-day or next-business-day)
+4. Money reaches artist's chosen account directly or ADAM compensates for delay
+5. Artist owns all data and the listener relationship
+
+No secrecy. No delays. No extraction.
+
+================================================================================
+
+Who Pays, Who Gets Paid, Who Touches Money
+
+Clarity on every transaction:
+
+- **Payer:** The listener (identified by payment method)
+- **Payee:** The artist (identified by artist account)
+- **Does ADAM touch funds?** Only if artist explicitly authorizes per transaction type.
+  Otherwise: money flows directly from listener to artist.
+
+When ADAM must be in the chain (currency conversion, batch processing):
+- Artist approves in writing
+- Timeline is stated
+- Artist can revoke anytime
+- Money returns to artist if revoked
+
+Default: Money flows around ADAM, not through it.
+
+================================================================================
+
+Fee Transparency (Before Any Money Moves)
+
+Artist sees this before approving any payment method:
+
+Listener pays: $10.00
+  - Payment processor fee: $0.30
+  - Platform fee (if applicable): $1.00
+  - ADAM fee: $0.00
+Artist receives: $8.70
+Settlement: Tomorrow by 2pm
+
+No "up to," "approximately," or "may vary."
+Every fee is exact. Every timeline is certain.
+Artist approves or chooses a different route.
+
+If a payment processor's fees change, artist is notified and can disable that method.
+Changes do not apply retroactively.
+
+================================================================================
+
+Settlement Speed (Guaranteed)
+
+All payment paths default to:
+
+- Direct support (tips, one-time payments): Same-day or within 24 hours
+- Bank transfers: Next business day
+- Special routes: Timeline stated upfront, or not offered
+
+If a payment method cannot meet these timelines, it is not available in ADAM.
+
+Artist sees exactly when they'll be paid before they approve routing.
+
+No holds for "safety."
+No batching minimums that delay payout.
+No premium tiers for faster settlement (speed is baseline, not a feature).
+
+================================================================================
+
+Who Owns What
+
+**Artist owns:**
+- All payment methods and accounts (directly, not through ADAM)
+- Listener data (emails, payment history, support patterns)
+- The listener relationship (not transferred to ADAM or platforms)
+- Right to use aggregated data for their own marketing
+- Right to exit payment processing anytime
+
+**ADAM does not:**
+- Take ownership of any payment method
+- Require exclusive payment processing
+- Own listener data
+- Bundle artist identity with payment data for resale
+- Use payment information for targeting or profiling
+- Claim rights to the work based on payment routing
+
+================================================================================
+
+Artist Control of Money Paths
+
+Artist can:
+- Choose which payment methods are available
+- Change methods anytime
+- Add new payment options anytime
+- Set payout frequency (daily, weekly, monthly, on-demand)
+- Set minimum payout thresholds (or have none)
+- Exit any payment method without penalty or restriction
+
+ADAM executes the artist's choice.
+ADAM does not architect the choice.
+
+================================================================================
+
+Real-Time Accounting & Audit Rights
+
+Artist can see at any time:
+
+- Every transaction (with timestamp, payer, amount)
+- Every fee broken down (what, why, how much)
+- Every hold or delay (reason stated, timeline to resolution)
+- What's pending, what's settled
+- Running total (today, week, month)
+- Proof of settlement to artist's account
+
+If artist questions any line item, ADAM must explain it or refund it.
+Audit disputes are resolved in artist's favor by default.
+
+Artist can audit ADAM's ledger and payment processor communications anytime.
+
+================================================================================
+
+Chargeback & Dispute Handling
+
+If a listener disputes a payment:
+
+1. Artist is notified immediately
+2. Dispute timeline is stated
+3. Artist is not penalized for the dispute
+4. If resolved in artist's favor, funds return immediately
+5. If resolved against artist, artist is not charged dispute fees
+
+Artist is not punished for listener actions.
+
+================================================================================
+
+The "Even-If" Hard Stop
+
+Even if it costs more, delays scale, or reduces adoption, ADAM will not:
+
+- Charge a percentage-based cut
+- Delay settlement beyond next business day
+- Hold money without explicit per-transaction authorization
+- Require exclusivity in payment processing
+- Extract or monetize listener data
+- Claim rights to the work or listener relationship
+- Use payment delays as leverage
+- Penalize artists for exiting payment processing
+- Change settlement terms without artist opt-in
+- Use vague or ambiguous language around fees or timing
+
+Transparency, speed, and ownership are architectural.
+These are not negotiable or relaxable.
+
+================================================================================
+
+Exit & Portability (Zero Friction)
+
+Artist can:
+- Remove ADAM routing anytime
+- Move payment processing to another system
+- Request complete data export
+- Redirect future money elsewhere
+- Receive zero penalty, service degradation, or retaliation
+
+Exit is as easy as entry.
+No switching costs.
+No hidden holdback.
+
+================================================================================
+
+Binding Statement
+
+Money is owned by the artist. Every dollar is traced end-to-end with zero hidden fees.
+Settlement is same-day or next-business-day guaranteed. ADAM never touches funds without
+explicit per-transaction authorization. Listener data belongs to the artist. Artist owns
+the listener relationship. Artist can exit payment processing anytime without penalty.
+Money flows as directly as possible from listener to artist. Everything else is clear,
+transparent, and in the artist's control.
+
+================================================================================

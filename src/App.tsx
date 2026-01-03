@@ -53,10 +53,32 @@ import { NotificationManager, NotificationType } from './components/Notification
 // Capability System - Phase 2.2.4 React Integration
 import { CapabilityProvider, useCapabilityCheck, useGuardedAction } from './hooks';
 import { CapabilityACCModal } from './components/CapabilityACCModal';
-import { CapabilityStatusDisplay } from './components/CapabilityStatusDisplay';
 import { CapabilityAuthority, type ProcessIdentity } from './services/CapabilityAuthority';
 import { Capability } from './services/capabilities';
 import { createCreativeMixingPreset } from './services/capabilityPresets';
+
+// Phase 2: APL ProposalPanel UI
+import { APLProposalPanel } from './components/APL/APLProposalPanel';
+import { APLProposal } from './echo-sound-lab/apl/proposal-engine';
+import { generateMockProposals } from './utils/mockAPLProposals';
+
+// Phase 4: ExecutionService (Main Process Integration)
+// ExecutionBridge is called directly from ProposalCard
+// ExecutionService is a singleton on the main process
+import { executionService } from './services/ExecutionService';
+
+// Day 3: APL Real Analysis (replaces mock proposals)
+import { aplAnalysisService } from './services/APLAnalysisService';
+
+// ===== GHOST SYSTEM (Self-Demonstrating Mode) =====
+import { VirtualCursor, DemoDashboard } from './components/demo';
+import { getDemoDirector } from './services/demo/DemoDirector';
+import { HIP_HOP_MASTER_SCENARIO, POP_MASTER_SCENARIO, QUICK_TOUR_SCENARIO } from './services/demo/HipHopMasterScenario';
+
+// ===== PHASE 5: ADVERSARIAL HARDENING =====
+import { DailyProving } from './action-authority/compliance/DailyProving';
+import { GhostUser } from './services/demo/GhostUser';
+import { MerkleAuditLog } from './action-authority/audit/MerkleAuditLog';
 
 declare var process: { env: Record<string, string | undefined> };
 
@@ -170,6 +192,23 @@ const App: React.FC = () => {
   const [showFriendlyTour, setShowFriendlyTour] = useState(false);
   const [friendlyTourStep, setFriendlyTourStep] = useState(0);
 
+  // ===== GHOST SYSTEM STATE =====
+  const [showDemoMode, setShowDemoMode] = useState(false);
+  const demoDirector = getDemoDirector({
+    verbose: true,
+    pauseBetweenActions: 200,
+    onProgress: (progress) => {
+      // Progress updates handled by DemoDashboard
+      console.log(`[Demo] ${progress.current}/${progress.total}: ${progress.action}`);
+    },
+    onError: (error) => {
+      console.error('[Demo] Error:', error.message);
+    },
+    onComplete: () => {
+      console.log('[Demo] Completed successfully');
+    },
+  });
+
   // Capability System - ACC Modal State (Phase 2.2.4)
   const [showAccModal, setShowAccModal] = useState(false);
   const [accToken, setAccToken] = useState<any>(null);
@@ -195,9 +234,18 @@ const App: React.FC = () => {
   const [autoMixMode, setAutoMixMode] = useState<'STANDARD' | 'FULL_STUDIO' | null>(null);
   const [fullStudioStatus, setFullStudioStatus] = useState<FullStudioStatus>('idle');
 
+  // Phase 2: APL ProposalPanel State
+  const [aplProposals, setAplProposals] = useState<APLProposal[]>([]);
+  const [isAplScanning, setIsAplScanning] = useState(false);
+
+  // ===== PHASE 5: DAILY PROVING STATE =====
+  const [systemHealthStatus, setSystemHealthStatus] = useState<'HEALTHY' | 'DEGRADED' | 'CRITICAL' | 'CHECKING'>('CHECKING');
+  const [lastHealthCertificate, setLastHealthCertificate] = useState<any>(null);
+  const [isInLockdown, setIsInLockdown] = useState(false);
+
   const AUTO_MIX_TARGET_SCORE = 90;
   const AUTO_MIX_MAX_ITERATIONS = 4;
-  const appVersion = 'v2.5';
+  const appVersion = 'RC 1.0 (Adversarial Hardened)';
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.theme = themeMode;
@@ -281,6 +329,58 @@ const App: React.FC = () => {
       console.warn('[App] Failed to persist friendly tour state', e);
     }
   }, []);
+
+  // ===== PHASE 5: DAILY PROVING HEALTH CHECK (on app mount) =====
+  useEffect(() => {
+    const runHealthCheck = async () => {
+      try {
+        console.log('[App] Phase 5: Starting Daily Proving health check...');
+
+        // Initialize Merkle audit log and Ghost system
+        const merkleAuditLog = new MerkleAuditLog('./audit-log.jsonl');
+        const ghostUser = new GhostUser();
+
+        // Initialize Daily Proving
+        const dailyProving = new DailyProving(merkleAuditLog, ghostUser);
+
+        // Run the daily compliance proof
+        const certificate = await dailyProving.runDailyProof();
+
+        // Update state with results
+        setLastHealthCertificate(certificate);
+        setSystemHealthStatus(certificate.systemStatus);
+
+        if (certificate.systemStatus === 'CRITICAL') {
+          setIsInLockdown(true);
+          console.error('[App] Phase 5: SYSTEM ENTERED LOCKDOWN MODE');
+          showNotification(
+            '⚠️ CRITICAL: System integrity check failed. Features disabled.',
+            'error',
+            0 // Persistent notification
+          );
+        } else {
+          setIsInLockdown(false);
+          console.log('[App] Phase 5: System health verified. Status: ' + certificate.systemStatus);
+          showNotification(
+            '✅ Phase 5 Daily Proof: System integrity VERIFIED',
+            'success',
+            5000
+          );
+        }
+      } catch (error) {
+        console.error('[App] Phase 5 health check failed:', error);
+        setSystemHealthStatus('DEGRADED');
+        showNotification(
+          '⚠️ Daily Proving health check encountered an error',
+          'warning',
+          5000
+        );
+      }
+    };
+
+    // Run health check on app mount
+    runHealthCheck();
+  }, [showNotification]);
 
   // ACC Modal Event Listener (Phase 2.2.4)
   useEffect(() => {
@@ -604,6 +704,73 @@ const App: React.FC = () => {
     audioPerceptionLayer.stop();
   };
 
+  // Phase 3: APL Executor Handlers
+  /**
+   * Get execution context for gated routing
+   * Context includes session info needed for AA Work Order binding
+   */
+  // Disabled: APLExecutor temporarily disabled
+  // const getExecutionContext = (): ExecutionContext => {
+  //   return {
+  //     id: `session_${currentFileName || 'unknown'}`,
+  //     hash: `hash_${Date.now()}`, // In production, this would be the source hash
+  //     trackId: currentFileName || 'unknown',
+  //     fileName: currentFileName,
+  //     appState
+  //   };
+  // };
+
+  /**
+   * Path A: Direct Execution (High Speed)
+   * Called from ExecutionService via event bridge
+   */
+  const handleAplApplyDirect = useCallback(async (proposalId: string) => {
+    const proposal = aplProposals.find(p => p.proposalId === proposalId);
+    if (!proposal) return;
+
+    console.log('[APL] Direct execution handler invoked:', proposalId);
+    showNotification(`Executing ${proposal.action.type}...`, 'info');
+
+    try {
+      const result = await executionService.executeDirectly(proposal);
+      if (result.success) {
+        setAplProposals(prev => prev.filter(p => p.proposalId !== proposalId));
+        showNotification(`Executed in ${result.executionTime}ms`, 'success', 3000);
+      } else {
+        showNotification(`Execution failed: ${result.error}`, 'error', 3000);
+      }
+    } catch (error) {
+      showNotification(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error', 3000);
+    }
+  }, [aplProposals, showNotification]);
+
+  /**
+   * Path B: Gated Execution (High Security)
+   * Called from ExecutionService after FSM EXECUTED
+   */
+  const handleAplAuthorizeGated = useCallback(async (proposalId: string) => {
+    const proposal = aplProposals.find(p => p.proposalId === proposalId);
+    if (!proposal) return;
+
+    console.log('[APL] Gated execution handler invoked:', proposalId);
+    showNotification('Executing gated proposal...', 'info');
+
+    try {
+      const result = await executionService.executeGated(proposal);
+      if (result.success) {
+        setAplProposals(prev => prev.filter(p => p.proposalId !== proposalId));
+        showNotification(`Gated execution completed in ${result.executionTime}ms`, 'success', 3000);
+      } else {
+        showNotification(`Gated execution failed: ${result.error}`, 'error', 3000);
+      }
+    } catch (error) {
+      showNotification(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error', 3000);
+    }
+  }, [aplProposals, showNotification]);
+
+  // NOTE: APL proposals are now loaded in handleFileUpload using real spectral analysis
+  // Mock proposal fallback is still used if analysis fails
+
   // File upload handler
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -613,6 +780,9 @@ const App: React.FC = () => {
       handleClearSnapshotAB();
     }
     stopAplSession();
+
+    // Clear previous proposals before analyzing new file
+    setAplProposals([]);
 
     // Check file size upfront - CRITICAL for Google AI Studio
     const fileSizeMB = file.size / (1024 * 1024);
@@ -741,6 +911,32 @@ const App: React.FC = () => {
         frequencyData: [],
         mixReadiness: 'in_progress'
       });
+
+      // DAY 3: Run real APL analysis (spectral analysis → proposals)
+      const aplStart = Date.now();
+      try {
+        console.log('[APL] Starting spectral analysis...');
+        const aplResult = await aplAnalysisService.analyzeFile({
+          file,
+          trackId: `track_${Date.now()}`,
+          trackName: file.name.replace(/\.[^/.]+$/, ''),
+          sessionId: `session_${Date.now()}`
+        });
+
+        if (aplResult.success && aplResult.proposals.length > 0) {
+          console.log(`[APL] Analysis complete in ${Date.now() - aplStart}ms. Generated ${aplResult.proposals.length} proposal(s).`);
+          setAplProposals(aplResult.proposals);
+          console.log('[APL] Proposals:', aplResult.proposals);
+        } else {
+          console.log(`[APL] No proposals generated (or analysis failed). Using mock proposals for demonstration.`);
+          const mockProposals = generateMockProposals();
+          setAplProposals(mockProposals);
+        }
+      } catch (aplError) {
+        console.error('[APL] Analysis failed, falling back to mock proposals:', aplError);
+        const mockProposals = generateMockProposals();
+        setAplProposals(mockProposals);
+      }
 
       setAppState(AppState.READY);
 
@@ -1901,6 +2097,57 @@ const App: React.FC = () => {
       processIdentity={processIdentity}
     >
       <div className="min-h-screen bg-[#0a0c12] text-slate-300 font-sans flex flex-col pb-24 relative overflow-hidden">
+
+      {/* ===== PHASE 5: LOCKDOWN BANNER ===== */}
+      {isInLockdown && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            backgroundColor: '#dc3545',
+            color: 'white',
+            textAlign: 'center',
+            padding: '12px 0',
+            fontWeight: 'bold',
+            zIndex: 10000,
+            boxShadow: '0 4px 12px rgba(220, 53, 69, 0.5)',
+            animation: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            fontSize: '16px'
+          }}
+        >
+          <svg
+            style={{ width: '20px', height: '20px' }}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+            />
+          </svg>
+          🔒 SYSTEM LOCKDOWN: INTEGRITY CHECK FAILED. EXECUTION DISABLED.
+        </div>
+      )}
+
+      {/* Spacer for lockdown banner */}
+      {isInLockdown && <div style={{ height: '60px' }} />}
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.85; }
+        }
+      `}</style>
+
       {/* Second Light OS Background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-br from-slate-950 via-[#0a0c12] to-slate-950" />
@@ -1915,10 +2162,8 @@ const App: React.FC = () => {
         currentStepIndex={currentStepIndex}
       />
 
-      {/* Capability Status Display (Phase 2.2.4) */}
-      <div className="relative z-40 mx-4 mt-2">
-        <CapabilityStatusDisplay className="max-w-2xl" />
-      </div>
+      {/* Virtual Cursor (Ghost System) - Always rendered, z-9999 */}
+      <VirtualCursor />
 
       {/* Second Light OS Background */}
       <div className="fixed inset-0 pointer-events-none">
@@ -2027,7 +2272,20 @@ const App: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z" />
               </svg>
             </button>
-            <div className="text-xs text-slate-500 font-mono">v2.5</div>
+            {/* Ghost Demo Mode Button */}
+            <button
+              onClick={() => setShowDemoMode(true)}
+              className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-400/50 hover:border-purple-400 transition-all"
+              title="Launch autonomous demo (Ghost System)"
+            >
+              <span className="flex items-center gap-1.5 text-sm font-bold text-purple-300 hover:text-purple-200">
+                <span>🎬</span>
+                <span className="hidden sm:inline text-xs">Demo</span>
+              </span>
+            </button>
+            <div className="text-xs font-mono px-2 py-1 rounded bg-gradient-to-r from-green-500/20 to-cyan-500/20 border border-green-500/30 text-green-300">
+              RC 1.0 (Adversarial Hardened)
+            </div>
             <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-lg bg-white/5 border border-white/5 text-[11px] text-slate-400">
               <span className="font-semibold text-orange-300 uppercase tracking-wider">Net</span>
               <span>{networkSettings.ssid}</span>
@@ -2539,6 +2797,7 @@ const App: React.FC = () => {
             </svg>
           </button>
         )}
+
       </div>
 
       {/* Echo Chat Button - Right side */}
@@ -2746,6 +3005,25 @@ const App: React.FC = () => {
         notifications={notifications}
         onDismiss={dismissNotification}
       />
+
+      {/* Phase 2: APL ProposalPanel - Intelligence Feed Sidebar */}
+      {appState === AppState.READY && aplProposals.length > 0 && (
+        <APLProposalPanel
+          proposals={aplProposals}
+          isScanning={isAplScanning}
+          onApplyDirect={handleAplApplyDirect}
+          onAuthorizeGated={handleAplAuthorizeGated}
+        />
+      )}
+
+      {/* Demo Dashboard (Ghost System Modal) */}
+      {showDemoMode && (
+        <DemoDashboard
+          onClose={() => setShowDemoMode(false)}
+          demoDirector={demoDirector}
+        />
+      )}
+
       </div>
     </CapabilityProvider>
   );

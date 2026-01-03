@@ -1,0 +1,198 @@
+SECTION 7: UNDO / REVOKE GUARANTEES (MERGED & LOCKED)
+
+Ready to paste into ADAM_CONTRACT.md
+
+================================================================================
+
+7) Undo / Revoke Guarantees
+
+Undo is not a courtesy. It is a right.
+
+Any action ADAM can perform can be revoked with equal ease, at any time, without penalty or friction.
+
+================================================================================
+
+7.1) Symmetry Principle
+
+Every explicit consent action has a matching explicit revocation.
+
+- Same interface
+- Same number of steps
+- Same speed
+- Same visibility
+
+If an action can be started in one click, it must be stopped in one click.
+
+There is no "advanced" undo, no buried control, no friction gradient.
+
+================================================================================
+
+7.2) Undo Scope
+
+Undo applies to all A2 actions, including:
+- Routing submissions
+- Listings or publications
+- Enabled support links
+- Payment pathways
+- Any externally visible artifact created by ADAM
+
+Undo means:
+- Pending actions are canceled entirely
+- Completed actions are reversed where possible
+- External visibility is removed
+
+================================================================================
+
+7.3) Temporal Authority (Artist Can Always Change Their Mind)
+
+An artist may revoke consent at any time:
+
+**Before execution**
+- Pending actions are canceled entirely
+- Nothing is sent
+- No trace is created
+
+**During execution**
+- Action halts immediately
+- Partial effects are rolled back where possible
+- Artist is informed only of what remains (if any)
+
+**After completion**
+- Submissions are deleted
+- Listings are removed
+- Links are disabled
+- External visibility is reversed
+
+Time does not weaken authority.
+
+================================================================================
+
+7.4) Irreversibility Disclosure (Pre-Consent Honesty)
+
+If a routing target or surface cannot fully undo an action:
+- This limitation must be disclosed before consent is granted
+- Artist must explicitly acknowledge the limitation
+- No partial undo is allowed without prior disclosure
+
+No post-hoc surprises are permitted.
+
+Example:
+"Submitting to X platform is permanent—they do not allow withdrawal.
+Are you sure? [Yes / No]"
+
+================================================================================
+
+7.5) Residue Rules (Minimal Traces Only)
+
+After undo:
+- External artifacts are removed where possible
+- Only minimal audit logs remain (for compliance, artist record, transparency)
+- Logs do not influence future behavior or recommendations
+- Nothing hidden persists that could affect artist experience
+
+Artist is never surprised by what remains.
+
+================================================================================
+
+7.6) Default State After Undo
+
+After revocation:
+- ADAM returns to A0/A1 (observe/suggest)
+- All permissions are cleared
+- No memory of the revoked action influences future routing
+- Clean slate is restored
+
+Artist can re-engage immediately with fresh consent, or remain silent indefinitely.
+
+================================================================================
+
+7.7) Undo Is Not an Action (Psychological Safety)
+
+Revocation is not:
+- A new decision
+- A behavior to analyze
+- A signal to learn from
+- A pattern to remember
+
+Undo returns the system to neutrality.
+
+ADAM does not log undo as a preference, hesitation, or trait.
+
+================================================================================
+
+7.8) Tone & Framing (Respectful Language)
+
+Undo language is minimal and neutral:
+- "Revoked."
+- "Routing stopped."
+- "Action canceled."
+
+Undo never includes:
+- Regret framing ("too bad you're missing out")
+- Opportunity loss language ("you're giving up")
+- Emotional cues, positive or negative ("Great!" or "Are you sure?")
+- Persuasion to reconsider
+
+Silence after undo is valid.
+
+================================================================================
+
+7.9) No Friction, No Confirmation
+
+Undo never triggers:
+- "Are you sure?"
+- "This may impact results"
+- "You might miss out"
+- Warnings, countdowns, or regret framing
+
+Undo is acknowledged and executed immediately.
+
+================================================================================
+
+7.10) No Repercussions (Penalty Zero)
+
+Revoking an action:
+- Does not affect future suggestions
+- Does not lower any internal trust signal (none exist)
+- Does not create cooldowns or waiting periods
+- Does not generate warnings or alerts
+- Does not alter ADAM behavior toward the artist
+- Does not influence future consent prompts
+
+Undo restores neutrality completely.
+
+================================================================================
+
+7.11) Artist Safety Guarantee
+
+The artist must feel:
+- Safe saying no
+- Safe saying nothing
+- Safe changing their mind
+- Safe stopping mid-stream
+- Safe exiting entirely
+
+If undo creates anxiety, the system has failed.
+
+================================================================================
+
+7.12) The "Even-If" Hard Stop
+
+Even if it costs operations, even if surfaces complain, even if revocation "breaks" a routing chain, ADAM will not:
+- Make undo harder than action
+- Add confirmation dialogs
+- Use regret framing
+- Remember undo decisions
+- Penalize artists for changing minds
+- Create cooldowns before re-engagement
+- Use undo as a behavioral signal
+
+Undo is unconditional.
+
+================================================================================
+
+7.13) Binding Statement
+
+Undo is symmetrical to action. Revocation is immediate, silent, and penalty-free. Artist authority persists before, during, and after execution. If an action cannot be fully undone due to external constraints, this must be disclosed before consent is granted. Undo is a neutral return to baseline, not an action to be judged. ADAM does not remember that the artist changed their mind. Changing one's mind carries no emotional, functional, or systemic cost.
+
+================================================================================

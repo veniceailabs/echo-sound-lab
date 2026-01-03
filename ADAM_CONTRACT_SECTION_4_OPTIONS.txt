@@ -1,0 +1,295 @@
+SECTION 4: MONEY FLOW GUARANTEE — Three Options
+
+================================================================================
+
+OPTION A (Direct-to-Fan-First)
+
+Emphasis: Artist gets paid immediately, no intermediaries, radical transparency on every transaction.
+
+================================================================================
+
+## 4) Money Flow Guarantee
+
+ADAM's only purpose in money is to move it as directly as possible from listener to artist.
+This section locks how that happens and who is never allowed to touch it.
+
+### Core Principle
+
+Money is the artist's. ADAM's job is to route it there, not manage it, hold it, or skim it.
+
+There is no ADAM middleman. There is no ADAM fee. There is no ADAM value-extraction layer.
+
+Every dollar that reaches an artist because of ADAM routing is 100% the artist's.
+
+### Direct-to-Fan Only (MVP)
+
+In MVP, ADAM enables money flows only through:
+- Direct support (tips, one-time payments)
+- Artist-controlled platforms (Bandcamp, Patreon, artist's own store)
+- Instant payment systems (Stripe, PayPal, direct bank transfer)
+- No marketplace, no aggregator, no platform middle tier
+
+If a payment rail exists that lets the listener pay the artist directly (without platform skim),
+ADAM uses that route first.
+
+If a route requires a platform middleman, ADAM:
+- Discloses the fee upfront
+- Makes alternative direct routes visible
+- Defaults to the artist's choice
+
+### Transparency Requirement (Non-Negotiable)
+
+Before any money path is enabled, the artist sees:
+- Where the money comes from
+- How much the artist receives
+- Fees (if any)
+- Settlement timeline
+- How to access/withdraw
+
+No hidden fees.
+No margin compression.
+No "processing costs."
+
+If ADAM cannot make this transparent, ADAM does not enable that route.
+
+### Settlement Speed
+
+Artists should earn money the same day their work is routed (or within 24 hours).
+
+Not "weekly."
+Not "monthly."
+Not "pending review."
+
+Same day.
+
+This is not aspirational. This is a requirement for MVP.
+
+### Undo / Refund Rights
+
+If a listener disputes a support payment or requests a refund:
+- Artist is notified
+- Refund is processed
+- Artist is not penalized
+- Artist is not surprised by chargebacks
+
+The artist controls the final decision on refunds.
+ADAM does not hold money hostage during disputes.
+
+### The "Even-If" Hard Stop
+
+Even if an investor says "we could take a small fee," ADAM will not:
+- Take a percentage of artist earnings
+- Hold money longer than 24 hours
+- Require artists to opt into payment delays for better rates
+- Charge artists for access to their own money
+- Bundle artist data with payment processing
+- Use payment data for targeting or optimization
+
+These are architectural, not negotiable.
+
+### Binding Statement
+
+Money flows from listener to artist as directly as possible with zero ADAM intermediation.
+Settlement is same-day or next-business-day. All fees are disclosed upfront. ADAM takes nothing.
+The artist always owns their money and the right to receive it immediately.
+
+================================================================================
+
+OPTION B (Speed & Certainty-First)
+
+Emphasis: Guaranteed same-day settlement, no delays, no surprises, predictable timelines.
+
+================================================================================
+
+## 4) Money Flow Guarantee
+
+ADAM guarantees that artists know exactly how much money they earned, how fast they'll receive it,
+and that no delays, holds, or surprises will interfere with livelihood.
+
+### The Settlement Promise
+
+When a listener pays through an ADAM-routed surface:
+
+1. Artist is notified in real-time
+2. Amount is confirmed (what the artist receives, not gross)
+3. Settlement timeline is stated upfront
+4. Money reaches artist by promised date or ADAM compensates for delay
+
+No "pending" states.
+No "processing."
+No indefinite holds.
+
+### Settlement Timeline (Locked)
+
+- Same-day routes: Settlement within 24 hours
+- Bank transfer routes: Next business day
+- Special routes: Disclosed timeline upfront, honored always
+
+If a payment route cannot meet this timeline, ADAM does not use it.
+
+### Fee Transparency (Pre-Action)
+
+Before any payment method is enabled, the artist sees:
+
+"If a listener pays $10:
+- Platform fee: $1.00
+- Payment processor fee: $0.50
+- You receive: $8.50
+- Settlement: Tomorrow by 2pm"
+
+This is shown before any payment is collected.
+Artist approves or selects a different route.
+
+No surprises. Ever.
+
+### Artist Control of Money Paths
+
+The artist can:
+- Choose which payment methods are enabled
+- Change methods anytime
+- Disable a method immediately
+- Set minimum payout thresholds (or not)
+- Withdraw anytime (no waiting periods)
+
+ADAM does not lock money in escrow.
+ADAM does not require batch payouts.
+Artist withdraws when they decide.
+
+### Real-Time Accounting
+
+Artist can see at any time:
+- Total earned today
+- Total earned this week/month
+- What's pending
+- What's settled
+- Detailed transaction log
+- Estimated next payout
+
+No guessing.
+No mystery delays.
+Full visibility.
+
+### Dispute & Refund Handling
+
+If a listener disputes or refunds a payment:
+1. Artist is notified immediately
+2. Amount is deducted from next payout (or adjusted in real-time accounting)
+3. Artist is not penalized for the dispute
+4. Artist can appeal if fraudulent dispute
+
+Artist is never surprised by chargeback or held liable for listener disputes.
+
+### The "Even-If" Hard Stop
+
+Even if a payment processor requests longer holds, ADAM will not:
+- Delay settlement beyond stated timeline
+- Hold money in ADAM accounts longer than necessary
+- Charge artists for faster payouts (i.e., no "premium settlement" fees)
+- Require batch minimums
+- Restrict withdrawal frequency
+- Use payment delays as leverage for anything
+
+Speed and certainty are not features. They are requirements.
+
+### Binding Statement
+
+ADAM guarantees same-day or next-business-day settlement, full fee transparency pre-transaction,
+and zero arbitrary holds or delays. Artist withdrawals are immediate and unrestricted.
+Real-time accounting is always visible. Money moves predictably or ADAM compensates.
+
+================================================================================
+
+OPTION C (Sovereignty-First)
+
+Emphasis: Artist owns the money path, chooses the rails, decides the terms, has final say.
+
+================================================================================
+
+## 4) Money Flow Guarantee
+
+ADAM does not own the money flow. The artist does.
+
+ADAM's role is to present options, execute the artist's choice, and stay out of the way.
+
+### Artist Sovereignty Over Money
+
+The artist:
+- Chooses which payment methods are available
+- Owns the payment account
+- Controls settlement frequency
+- Decides refund policies
+- Can audit ADAM's handling of money flows
+- Can exit any money path without penalty
+
+ADAM is the executor of artist intent, not the architect.
+
+### Money Path Options (Artist Chooses)
+
+ADAM can enable multiple parallel money paths:
+- Direct support (Stripe, PayPal, bank transfer)
+- Artist's own Bandcamp/Patreon account
+- Cryptocurrency or alternative payment systems
+- Institutional or DIY options
+
+Artist chooses which are enabled.
+Artist can add/remove at any time.
+Artist sees fees for each upfront.
+
+### Radical Transparency
+
+Before any transaction:
+- What the listener pays
+- What the artist receives (net of all fees)
+- Where the money goes
+- Settlement timeline
+- How to track it
+
+Artist approves the flow or chooses a different route.
+
+### Artist Controls Settlement Terms
+
+Artist can decide:
+- Payout frequency (daily, weekly, or manual withdrawal)
+- Minimum payout thresholds (or none)
+- Which accounts receive money
+- Whether to batch or stream payouts
+
+No ADAM defaults.
+Artist chooses.
+
+### Full Audit Rights
+
+Artist can see:
+- Every transaction in detail
+- Every fee charged
+- Every hold or delay (with reason)
+- Communication from payment processors
+- ADAM's own ledger
+
+If ADAM cannot explain a fee or delay, artist can challenge it.
+Challenge is binding.
+
+### The "Even-If" Hard Stop
+
+Even if it's more efficient or scalable, ADAM will not:
+- Override artist's payment method choice
+- Hold money longer than artist agreed
+- Take fees without explicit artist approval for each transaction type
+- Combine artist data with payment processing
+- Use payment information for any purpose other than settlement
+- Restrict artist's ability to move money to competing platforms
+- Penalize artists for exiting a payment path
+
+Artist sovereignty over money is non-negotiable.
+
+### Binding Statement
+
+Artist owns the money path and decides all terms. ADAM executes artist choices transparently.
+Every fee is disclosed. Every settlement timeline is honored. Artist has full audit rights and
+can change or exit any payment method anytime without penalty. Money belongs to the artist.
+Always.
+
+================================================================================
+
+END OF OPTIONS
+================================================================================

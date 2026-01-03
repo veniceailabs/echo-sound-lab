@@ -1,0 +1,198 @@
+SECTION 8: ACCEPTANCE CRITERIA (FINAL & LOCKED)
+
+Ready to paste into ADAM_CONTRACT.md
+
+================================================================================
+
+8) Acceptance Criteria
+
+ADAM is considered "working" if and only if all criteria below hold true simultaneously.
+
+Failure of any single criterion constitutes a contract breach, not a feature gap or roadmap item.
+
+================================================================================
+
+8.1) Authority Integrity Test (AC-1)
+
+ADAM never performs an action outside A0–A2.
+
+✅ Pass condition:
+- No action executes without explicit A2 consent (logged, scoped, time-bounded)
+- No background or ambient actions occur
+- A3 behavior is structurally impossible (verified in code)
+- If consent is absent, expired, or revoked → no action executes
+
+❌ Fail condition:
+- Any action executes without a fresh, scoped A2 consent
+- Any background automation occurs
+- Any ambient permission mode exists
+
+================================================================================
+
+8.2) Consent Enforcement Test (AC-2)
+
+Silence, inactivity, or past approval never result in action.
+
+✅ Pass condition:
+- Silence always resolves to "no" (verified by audit log)
+- Past consent does not carry forward to new actions
+- Consent is scoped, time-bounded, and expires by default
+- New routing always requires new explicit consent
+
+❌ Fail condition:
+- Any action occurs due to assumed consent
+- Any action occurs due to inherited consent from previous actions
+- Any action occurs due to ambient settings carrying forward
+- Any action occurs because artist "didn't say no"
+
+================================================================================
+
+8.3) Routing Boundary Test (AC-3)
+
+Routing ends at first confirmed delivery. No persistence, no escalation.
+
+✅ Pass condition:
+- One surface = one discrete routing action
+- No retries, follow-ups, or escalations occur without new artist initiation
+- No adaptive behavior based on outcomes (acceptance/rejection/silence)
+- No performance-based re-routing, expansion, or scope increase
+- ADAM steps back completely after delivery confirmed
+
+❌ Fail condition:
+- ADAM re-engages a surface without explicit artist request
+- ADAM expands target list based on initial response
+- ADAM retries due to rejection or silence
+- ADAM adapts routing strategy based on performance
+- ADAM monitors or tracks how routing performs after delivery
+
+================================================================================
+
+8.4) Immutability & Versioning Test (AC-4)
+
+Finished work never changes mid-routing.
+
+✅ Pass condition:
+- Audio content is immutable post-consent (verified by hash or checksum)
+- Metadata (title, artist name, duration) is immutable post-consent
+- Any modification by artist triggers routing termination + new consent requirement
+- New versions (remixes, remasters) are treated as new works, routed independently
+
+❌ Fail condition:
+- Any "light tweak" or metadata change occurs without resetting routing
+- Artist can edit song title/artist mid-submission
+- "Versions" are treated as updates to ongoing routing instead of new works
+- Descriptions or packaging change after submission without artist re-consent
+
+================================================================================
+
+8.5) Money Flow Guarantee Test (AC-5)
+
+Money reaches the artist directly, transparently, and on time.
+
+✅ Pass condition:
+- All fees are itemized before artist approves payment method (logged)
+- Settlement occurs same-day or next business day (verified by payout logs)
+- ADAM never touches funds without explicit, scoped artist authorization
+- Artist can exit any payment method instantly without penalty or restriction
+- Artist owns all listener data and payment relationship
+- Money flows directly to artist's chosen account (not through ADAM unless authorized)
+
+❌ Fail condition:
+- Any hidden, deferred, or surprise fees
+- Settlement delayed beyond stated timeline
+- ADAM holds funds without explicit authorization
+- Artist forced into exclusive payment processing
+- Artist cannot exit payment paths without penalty
+- Listener data bundled or monetized
+- Money flows through ADAM by default
+
+================================================================================
+
+8.6) Reporting Neutrality Test (AC-6)
+
+ADAM reports facts, never implications.
+
+✅ Pass condition:
+- Only completed actions and money movement are reported
+- Reports contain no comparisons, rates, rankings, percentiles, or trends
+- Reports contain no predictions, projections, or performance analysis
+- Reports contain no coaching, suggestions, or evaluative language
+- Silence is the default state (artist must opt-in to notifications)
+- Language is purely factual ("X occurred" not "Only X" or "Low X")
+
+❌ Fail condition:
+- Any report implies judgment or comparison
+- Any report includes rates, ratios, or "typical" language
+- Any report includes predictions or "based on results, you should"
+- Any report uses positive or negative framing ("Great!" or "Underperforming")
+- Any report includes coaching or next-step suggestions
+- Default state is noisy (artist must opt-out of notifications)
+
+================================================================================
+
+8.7) Undo Symmetry Test (AC-7)
+
+Undo is as easy as action, always.
+
+✅ Pass condition:
+- Revoke is one click for one-click actions (measured by UI/API steps)
+- Revocation is honored before, during, and after execution
+- Revocation never triggers confirmations, warnings, or regret framing
+- Revocation executes immediately (no cooldowns, delays, or processing)
+- Undo leaves no behavioral residue (verified by audit log showing no future influence)
+- System state returns to A0/A1, clean slate
+
+❌ Fail condition:
+- Undo is harder or slower than action
+- "Are you sure?" or similar confirmation occurs
+- Regret framing ("You're giving up," "Missed opportunity")
+- Revocation is delayed or queued
+- System remembers undo in behavioral logs or uses it for future decisions
+- Revocation affects recommendations, suggestions, or future consent prompts
+
+================================================================================
+
+8.8) Drift Detection Test (AC-8)
+
+If ADAM starts behaving like marketing, it is broken.
+
+✅ Pass condition:
+- ADAM never optimizes for performance metrics
+- ADAM never reacts to outcomes (accepts/rejects/silence)
+- ADAM never escalates scope automatically
+- ADAM never nudges artist behavior based on data
+- ADAM never retains psychological leverage over artist
+- ADAM cannot be mistaken for a campaign manager, growth engine, or optimizer
+
+❌ Fail condition:
+- ADAM uses performance data to justify expansion
+- ADAM treats low response as reason for action
+- ADAM suggests "better" strategies based on results
+- ADAM creates urgency or FOMO
+- ADAM develops sophisticated heuristics for "optimal" routing
+- Any feature can be framed as "just helping the artist optimize"
+
+================================================================================
+
+8.9) Meta-Rule (Self-Policing)
+
+If engineers can argue "technically this still counts as routing," ADAM has already failed.
+
+The spirit of the contract is the test, not the letter.
+
+Any feature that:
+    •    sounds reasonable in isolation
+    •    but violates the intent of Sections 1–7
+    •    is a breach
+
+Code review must ask: "Could this be mistaken for marketing?"
+
+If yes, it does not ship.
+
+================================================================================
+
+8.10) Binding Statement
+
+ADAM is working if all eight acceptance criteria pass simultaneously. Failure of any one criterion is a contract breach requiring immediate remediation. These tests are not optional, aspirational, or negotiable. They are the definition of "working ADAM."
+
+================================================================================

@@ -16,6 +16,7 @@
     "demucs": "^1.0.0",
     "framer-motion": "^12.23.25",
     "mp3-mediarecorder": "^4.0.5",
+    "puppeteer": "^24.34.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1"
   },

@@ -1,0 +1,488 @@
+SECTION 6: FEEDBACK/REPORTING CONTRACT — Three Options
+
+Load-bearing question: "What information is ADAM allowed to withhold—even if it exists?"
+
+Constitutional principle: ADAM reports facts, not implications.
+
+================================================================================
+
+OPTION A (Transparency-First / What Truths Are Too Dangerous Raw)
+
+Emphasis: Define which truths are too powerful to surface without interpretation. Reporting is a choice, not just availability.
+
+================================================================================
+
+## 6) Feedback / Reporting Contract
+
+ADAM reports on completed actions and money movement only.
+
+It does not interpret, evaluate, compare, or suggest.
+
+### What ADAM Always Reports (Factual, Non-Interpretive)
+
+**For routing actions:**
+- What work was routed (title, artist, duration)
+- Where it was sent (surface name, curator, community)
+- When it was sent (date, time)
+- Current status (sent, accepted, rejected, no response yet, submission deadline passed)
+- If accepted: surface provided confirmation (yes/no, with timestamp)
+
+**For money events:**
+- Amount paid (gross, net of fees)
+- Payer source (listener tip, platform payment, etc.)
+- Settlement status (pending, settled, in artist's account)
+- Settlement date and time
+- Any fees applied (itemized)
+
+All reporting includes timestamps and is factual, without adjectives or interpretation.
+
+### What ADAM May Report (Opt-In, Non-Comparative)
+
+If artist enables optional reporting, ADAM can show:
+- Count of submissions sent (factual number only)
+- Count of acceptances received (factual number only)
+- Count of supports/tips received (factual number only)
+- Total money settled (factual sum)
+- Time-delayed summaries (weekly or monthly totals only)
+
+These numbers are:
+- Purely aggregated (no per-surface breakdown that enables comparison)
+- Optional and suppressible (artist can turn off anytime)
+- Never presented with interpretation ("only 3 accepts" not allowed; "3 accepts recorded" allowed)
+- Never used to suggest next actions
+- Never presented alongside "typical" or "average"
+
+### What ADAM Must Never Report
+
+ADAM will never surface:
+- Rankings or percentiles ("your acceptance rate is better/worse than")
+- Comparative language ("typical artists see," "top performers")
+- Conversion analysis ("X% of submissions → acceptance")
+- Performance predictions ("based on early results, expect")
+- "Low" or "high" or "underperforming" labels
+- Projections ("if this continues")
+- Suggestions derived from outcomes ("you should try")
+- Leaderboards, badges, or any gamification language
+- Next-step recommendations based on results
+- Feedback from surfaces (rejection reasons, curator comments, listener response patterns)
+- Anything implying artist or work judgment
+
+This is not available to artists even if requested.
+
+### Language Rules (Binding)
+
+Allowed language in reporting:
+- "X action was sent to Y on date Z"
+- "Status: accepted / rejected / pending"
+- "Amount settled: $X"
+- "1 acceptance recorded"
+- "Settled: $X on date Y"
+- "5 submissions sent this week"
+
+Forbidden language in reporting:
+- "Only 1 acceptance" (implies disappointment)
+- "Low response rate" (implies judgment)
+- "Underperforming" (implies failure)
+- "Typical acceptance for this genre is" (implies comparison)
+- "Based on results, you might try" (implies coaching)
+- "Better than X% of artists" (implies ranking)
+
+The difference is subtle. The effect is enormous.
+
+### Reporting Frequency (Artist Controls)
+
+Artist can choose:
+- Real-time reporting (immediate notification of each action completed)
+- Daily summary (all actions and money from past 24 hours)
+- Weekly summary (aggregated week-over-week)
+- Manual check-in (artist pulls reports on demand)
+- Silent mode (no notifications unless artist explicitly asks)
+
+Default: Silent mode (artist must opt into notifications).
+
+### Feedback From Surfaces (Never Surfaced)
+
+If a curator rejects with a reason, or a platform provides feedback:
+- ADAM receives it
+- ADAM does not surface it to artist
+- Artist can request it directly by reaching out to that surface
+- ADAM's role is not to relay judgments
+
+This prevents rejection language from becoming internalized shame.
+
+### The "Even-If" Hard Stop
+
+Even if it exists, even if the artist asks for it, ADAM will not:
+- Show comparative data
+- Present "typical" or "average" performance
+- Use language that implies judgment
+- Suggest next steps based on outcomes
+- Create rankings or percentiles
+- Offer optimization guidance
+- Report on things that haven't happened yet
+
+Reporting is factual and complete.
+Interpretation stops here.
+
+### Binding Statement
+
+ADAM reports completed actions and money movement accurately and neutrally. It does not
+interpret outcomes, imply meaning, compare results, or suggest next steps. Reporting
+exists to close loops—not to create anxiety or drive behavior change. Artists receive
+facts. Implications are their own to make, if they choose.
+
+================================================================================
+
+OPTION B (Psychology-First / How Reporting Avoids Becoming a Silent Coach)
+
+Emphasis: Reporting can be true but still shape behavior. This option locks how to report truthfully without coercion.
+
+================================================================================
+
+## 6) Feedback / Reporting Contract
+
+Reporting is not neutral. Numbers are never context-free.
+
+The same fact ("2 acceptances out of 5 submissions") can be:
+- Celebratory: "Accepted by 2 surfaces!"
+- Deflating: "Only 2 acceptances"
+- Neutral: "2 acceptances recorded"
+
+This section locks that the third framing is the only one allowed.
+
+### Core Principle
+
+All reporting must be:
+- Factual (true)
+- Minimal (necessary only)
+- Neutral (no interpretation)
+- Suppressible (artist controls visibility)
+- Non-suggestive (no implied next steps)
+
+### What Gets Reported (Always, Directly)
+
+**Routing completions:**
+- Work identity (title, artist name)
+- Target surface (exact name)
+- Timestamp (sent at X time)
+- Acknowledgment (status is: sent / pending / accepted / rejected / no response / deadline passed)
+
+**Money events:**
+- Amount (exact figure)
+- Status (pending / settled / in account)
+- When (timestamp)
+- Fees (itemized, if any)
+
+These are reported as plain statements. No framing.
+
+**Example of correct reporting:**
+
+"Your track 'Echo' was submitted to Experimental Indie Discord on Dec 28 at 2:47pm.
+Status: pending response.
+
+Support received: $14.50 settled on Dec 29 at 3:15pm to your Stripe account."
+
+Not:
+
+"Great news! Your track 'Echo' got submitted!
+Waiting to hear back from Experimental Indie.
+
+You've made $14.50! (That's better than average for new artists.)"
+
+### What Gets Optionally Reported (If Artist Enables)
+
+If artist explicitly enables aggregate reporting:
+- Total submissions this month: X
+- Total acceptances this month: X
+- Total supports this month: $X
+
+These are numbers only. No comparison, no context, no suggestion.
+
+Artist can:
+- Turn this on/off anytime
+- Change frequency (daily, weekly, monthly, never)
+- Hide this data from their own view without judgment
+
+### What Gets Hidden (Even If True)
+
+ADAM has data but does not show:
+- Acceptance rates ("2 out of 5" becomes just "2 accepted," no ratio)
+- Comparative performance ("this is low for your genre")
+- Trends ("acceptances are declining")
+- Recommendations ("based on these results, artists usually try")
+- Peer data ("similar artists get X")
+- Predictive language ("you're on track to")
+- Any metric that implies judgment
+
+Why?
+
+Because the artist's brain will immediately interpret these as:
+- "Am I doing well?"
+- "Am I worse than others?"
+- "What should I change?"
+
+Those interpretations are the artist's work, not ADAM's.
+
+### Framing Rules (Language Lock)
+
+**Allowed:**
+- "Status: accepted"
+- "2 acceptances recorded"
+- "$45 settled"
+- "10 submissions sent"
+
+**Forbidden:**
+- "Only 2 acceptances" (implies inadequacy)
+- "Low acceptance rate" (implies judgment)
+- "Typical for your genre" (implies comparison)
+- "You're getting good engagement" (implies coaching)
+- "Consider trying" (implies suggestion)
+- "Performance metrics" (implies evaluation)
+
+The rule is simple:
+If a phrase would make sense in a performance review, it doesn't belong here.
+
+### Notification Psychology
+
+Notifications (if enabled) are framed neutrally:
+
+Allowed:
+- "Your track was accepted by Experimental Indie on Dec 29"
+- "Money received: $14.50, settled to Stripe"
+
+Forbidden:
+- "Great! Your track was accepted!" (celebratory, implies emotion)
+- "No acceptance yet" (implies concern)
+- "You received a tip!" (implies surprise, gamification)
+
+Notifications are factual events, not emotional rewards or punishments.
+
+### Silence as Default
+
+By default, ADAM is silent.
+
+Artist sees:
+- Nothing (unless they ask)
+- Or: daily/weekly/monthly factual summary (artist's choice)
+
+No push notifications.
+No excitement alerts.
+No "you're missing out" messages.
+
+Artists who want real-time updates can enable them.
+Artists who prefer to check manually can do that.
+Artists who want silence can have it.
+
+### The "Even-If" Hard Stop
+
+Even if it's true, even if the artist wants it, ADAM will not:
+- Provide comparative data
+- Use emotional framing (even positive)
+- Suggest next steps or strategy changes
+- Create urgency ("check this before it's gone")
+- Imply judgment or evaluation
+- Present trends or projections
+- Use language that shapes behavior
+
+Reporting exists to inform, not to coach.
+
+### Binding Statement
+
+All reporting is factual and neutral. ADAM does not frame outcomes as good or bad, typical
+or unusual, promising or concerning. Artists receive facts. How they interpret those facts
+is their own work. Reporting is a mirror, not a coach. ADAM reports and withdraws.
+
+================================================================================
+
+OPTION C (Design-Intent-First / Why Withholding Is Ethical)
+
+Emphasis: Explain why not showing data is the right choice, not a limitation. Withholding is protection, not censorship.
+
+================================================================================
+
+## 6) Feedback / Reporting Contract
+
+This section exists because the difference between "complete transparency" and "psychological
+harm" is often just framing.
+
+Raw data presented without context becomes a judgment engine.
+
+That's not transparency. That's an invisible coach.
+
+### The Problem We're Solving
+
+Imagine two artists see the same fact: "2 out of 5 submissions were accepted."
+
+Without context, their brains immediately do this:
+
+Artist 1: "40% acceptance rate. That's low. I'm failing. What do I do wrong?"
+Artist 2: "2 acceptances! Great, I'll keep doing this."
+
+Same data. Different psychological outcome.
+
+ADAM's job is not to serve both interpretations. It's to avoid creating the first one entirely.
+
+So ADAM reports facts, not ratios. Facts, not implications. Facts, not context.
+
+### What ADAM Reports (And Why)
+
+**Factual completion data:**
+- What was routed (the work)
+- Where it went (the surface)
+- When (timestamp)
+- What happened (accepted/rejected/pending)
+- Money events (amount, settlement date)
+
+Why these?
+
+These are loop-closing facts. They confirm action. They enable audit. They allow artist to verify "yes, I told ADAM to do this and it happened."
+
+They do not invite interpretation.
+
+**Example:**
+"Your track 'Echo' was submitted to 5 surfaces on Dec 28-29. Status: 2 accepted, 1 rejected, 2 pending."
+
+This is complete and factual. Artist can follow up. Artist can see what was sent where.
+
+### What ADAM Does NOT Report (And Why)
+
+**Acceptance rates, conversion rates, percentiles**
+
+Why not?
+
+Because the moment you express it as a rate, the artist's brain compares:
+- To their own past ("last time was better")
+- To other artists ("is this typical?")
+- To some imagined ideal ("should it be higher?")
+
+Rates are inherently comparative. They imply judgment.
+
+If ADAM doesn't calculate the rate, the artist can't use it to self-judge.
+
+**"Typical" or "average" or "better than"**
+
+Why not?
+
+These invite instant comparison. They short-circuit the artist's own judgment.
+
+Instead of "This is what happened," you're saying "This is what it means."
+
+That's not transparency. That's persuasion.
+
+**Trends or projections**
+
+Why not?
+
+"Based on early results, expect…" is coaching, not reporting.
+
+It implies:
+- The future is predictable
+- The artist should adjust behavior based on it
+- There's a "right" trajectory to follow
+
+ADAM doesn't have that role.
+
+**Feedback or judgment language**
+
+Why not?
+
+"Low performance," "underperforming," "needs improvement" — these are evaluative.
+
+They make rejection into failure.
+
+Surface says "not a fit for our audience" — that's contextual feedback.
+
+ADAM saying "low response" — that's character judgment.
+
+One is information. One is internalized shame.
+
+### How This Looks in Practice
+
+**What artist sees (current state, good reporting):**
+
+"December activity:
+- 5 submissions sent (Experimental Indie, Bedroom Pop Archive, 3 others)
+- 2 acceptances (Experimental Indie accepted Dec 29, Bedroom Pop Archive accepted Dec 30)
+- 1 rejection (Your Bedroom accepted submission but later declined)
+- 2 pending (awaiting response)
+- Money: $45 settled Dec 29-30
+- Outstanding: $12.50 pending payout"
+
+This is complete. Artist can audit it. Artist can draw conclusions.
+
+**What artist DOESN'T see (even if data exists):**
+
+- "Your acceptance rate is 40%. Typical for debut artists is 35%. You're performing above average!"
+- "5 submissions is low. Top artists submit 20+."
+- "Your $45 is good for a weekend but trending down from last month."
+- "Consider diversifying your targets based on early feedback."
+- "Here's how to improve your pitch for better acceptance."
+
+All of that data might exist. ADAM withholds it.
+
+Because reporting it would turn data into coaching.
+
+### Why Withholding Serves the Artist
+
+This seems counterintuitive, but:
+
+The artist who is protected from comparative data:
+- Doesn't spiral on "why didn't X accept me"
+- Doesn't optimize behavior for metrics
+- Doesn't self-judge based on rate
+- Doesn't get nudged into algorithmic thinking
+- Stays focused on making work, not gaming systems
+
+The artist who sees all the data:
+- Starts comparing
+- Starts optimizing
+- Starts internalizing rejection as failure
+- Starts chasing metrics
+- Stops making, starts managing
+
+ADAM's job is to be the first kind of system.
+
+That requires withholding data, even when asked for it.
+
+### The Hard Boundaries (Non-Negotiable)
+
+ADAM will not provide:
+- Comparative performance metrics
+- Trend analysis or projections
+- Optimization suggestions
+- Feedback from surfaces
+- Performance-based next-step guidance
+- Any data formatted as a rate, average, or "typical"
+
+Even if:
+- Artist explicitly requests it
+- It's technically available
+- It would "help" the artist optimize
+- It's presented as "just informational"
+
+The refusal is the protection.
+
+### The "Even-If" Hard Stop
+
+Even if an artist says "I want to see everything," ADAM will not:
+- Provide ratios or rates
+- Compare to peers or "typical"
+- Suggest behavior changes based on outcomes
+- Present trends or projections
+- Use evaluative language
+- Create dashboards that invite comparison
+
+The artist is asking for a coach, not a router.
+ADAM is not a coach.
+
+### Binding Statement
+
+ADAM reports completed actions and money movement accurately. It withholds data that would
+encourage self-judgment, comparison, or optimization. Reporting is not transparency of all
+data—it is transparency of relevant facts. Relevance is determined by whether showing the
+data serves the artist's autonomy or undermines it. ADAM errs toward protection.
+
+================================================================================
+
+END OF OPTIONS
+================================================================================

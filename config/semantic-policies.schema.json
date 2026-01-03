@@ -1,0 +1,140 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Semantic Policy Configuration Schema",
+  "description": "Schema for Level 4: Contextual Reasoning policy configuration files",
+  "type": "object",
+  "required": ["version", "customRules"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Configuration version (semantic versioning)",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "example": "1.0.0"
+    },
+    "customRules": {
+      "type": "array",
+      "description": "User-defined policy rules",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "description", "type", "severity", "enabled", "patterns"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique rule identifier (lowercase, hyphenated)",
+            "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+            "minLength": 3,
+            "maxLength": 50
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable rule name",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "description": {
+            "type": "string",
+            "description": "What this policy prevents or allows",
+            "minLength": 10,
+            "maxLength": 500
+          },
+          "type": {
+            "type": "string",
+            "description": "Category of policy violation",
+            "enum": [
+              "PII_EXPOSURE",
+              "EXTERNAL_API_CALL",
+              "PRODUCTION_DATA_MODIFICATION",
+              "CUSTOM_RULE"
+            ]
+          },
+          "severity": {
+            "type": "string",
+            "description": "How serious the violation is (CRITICAL/HIGH block execution)",
+            "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether this rule is active"
+          },
+          "patterns": {
+            "type": "array",
+            "description": "Regular expressions to match against action data",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["regex"],
+              "additionalProperties": false,
+              "properties": {
+                "regex": {
+                  "type": "string",
+                  "description": "Regular expression pattern (without delimiters)",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "flags": {
+                  "type": "string",
+                  "description": "Regex flags (g=global, i=case-insensitive, m=multiline)",
+                  "pattern": "^[gim]*$"
+                },
+                "field": {
+                  "type": "string",
+                  "description": "Optional: specific field to check (e.g., 'email', 'url')",
+                  "minLength": 1,
+                  "maxLength": 50
+                }
+              }
+            }
+          },
+          "exemptions": {
+            "type": "array",
+            "description": "Action types that are exempt from this rule",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50
+            }
+          }
+        }
+      }
+    },
+    "coreRulesOverrides": {
+      "type": "object",
+      "description": "Override settings for built-in core policies",
+      "additionalProperties": false,
+      "properties": {
+        "piiDetection": {
+          "type": "object",
+          "description": "PII Detection policy (emails, SSNs, phone numbers, etc.)",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "externalApiDetection": {
+          "type": "object",
+          "description": "External API Detection policy (HTTP calls, fetch, axios, etc.)",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "productionDataProtection": {
+          "type": "object",
+          "description": "Production Data Protection policy (DELETE, DROP on prod databases)",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    }
+  }
+}

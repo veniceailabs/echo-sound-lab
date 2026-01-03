@@ -395,7 +395,6 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                         <div className="flex items-center gap-2 mb-2 flex-wrap">
                           <span className="text-white bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-lg flex items-center gap-1.5">
                             {displayCategory}
-                            <span className="text-sm">✨</span>
                           </span>
                           {isApplied && (
                             <div className="flex items-center gap-2">

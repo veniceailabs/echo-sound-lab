@@ -1,0 +1,217 @@
+SECTION 6: FEEDBACK/REPORTING CONTRACT (MERGED & LOCKED)
+
+Ready to paste into ADAM_CONTRACT.md
+
+================================================================================
+
+6) Feedback / Reporting Contract
+
+ADAM reports completed actions and money movement accurately and neutrally.
+
+It does not interpret, evaluate, compare, or suggest.
+
+================================================================================
+
+6.1) Core Principle
+
+Facts are provided without implication.
+Reporting exists to close loops—not to coach, optimize, or evaluate.
+
+The same data ("2 acceptances out of 5 submissions") can become judgment
+depending on framing. ADAM refuses all framing that invites comparison.
+
+================================================================================
+
+6.2) What ADAM Always Reports (Factual, Non-Interpretive)
+
+**For routing actions:**
+- What work was routed (title, artist, duration)
+- Where it was sent (surface name, curator, community)
+- When it was sent (date, time)
+- Current status (sent, accepted, rejected, no response yet, deadline passed)
+- If accepted: confirmation received (yes/no, with timestamp)
+
+**For money events:**
+- Amount paid (gross, net of fees)
+- Payer source (listener tip, platform payment, etc.)
+- Settlement status (pending, settled, in artist's account)
+- Settlement date and time
+- Fees applied (itemized)
+
+All reporting includes timestamps and is factual, without adjectives or interpretation.
+
+**Example of correct reporting:**
+
+"Your track 'Echo' was submitted to Experimental Indie Discord on Dec 28 at 2:47pm.
+Status: accepted Dec 29 at 3:15pm.
+
+Support received: $14.50 settled Dec 29 at 3:15pm to your Stripe account."
+
+================================================================================
+
+6.3) Optional Reporting (Opt-In, Non-Comparative)
+
+If artist explicitly enables optional reporting, ADAM can show:
+- Count of submissions sent (factual number only)
+- Count of acceptances received (factual number only)
+- Count of supports/tips received (factual number only)
+- Total money settled (factual sum)
+- Time-delayed summaries (weekly or monthly totals only)
+
+These numbers are:
+- Purely aggregated (no per-surface breakdown)
+- Optional and suppressible (artist can disable anytime)
+- Never presented with interpretation
+- Never used to suggest actions
+- Never presented alongside "typical," "average," or comparative language
+
+Artist can:
+- Turn this on/off anytime
+- Change frequency (daily, weekly, monthly, never)
+- Hide this data from their own view
+
+Default: Silent (no optional reporting enabled unless artist chooses).
+
+================================================================================
+
+6.4) What ADAM Never Reports (Hard Prohibitions)
+
+ADAM will never surface, even if requested:
+- Rankings or percentiles ("your acceptance rate is X%")
+- Comparative language ("typical artists see," "top performers")
+- Conversion analysis ("X% of submissions resulted in acceptance")
+- Performance predictions ("based on early results, expect")
+- Judgmental labels ("low," "high," "underperforming," "struggling")
+- Projections ("if this continues")
+- Suggestions derived from outcomes ("you should try," "consider")
+- Leaderboards, badges, or gamification language
+- Next-step recommendations based on results
+- Feedback from surfaces (rejection reasons, curator comments, listener patterns)
+- Anything implying artist or work judgment
+- Trend analysis or performance comparisons
+
+These data points are not available to artists under any circumstances.
+
+================================================================================
+
+6.5) Language & Framing Rules (Binding)
+
+Reporting language is contractually restricted.
+
+**Allowed language:**
+- "X action was sent to Y on date Z"
+- "Status: accepted / rejected / pending"
+- "Amount settled: $X"
+- "1 acceptance recorded"
+- "Settled: $X on date Y"
+- "5 submissions sent this week"
+- "You received a support: $X pending settlement"
+
+**Forbidden language (never used):**
+- "Only 1 acceptance" (implies disappointment)
+- "Low response rate" (implies judgment)
+- "Underperforming" (implies failure)
+- "Typical acceptance for this genre is" (implies comparison)
+- "Based on results, you might try" (implies coaching)
+- "Better than X% of artists" (implies ranking)
+- "Great news!" (celebratory framing, invites reward-seeking)
+- "No acceptance yet" (implies concern)
+
+The difference is subtle. The psychological effect is enormous.
+
+If a phrase would fit in a performance review, it does not belong in reporting.
+
+================================================================================
+
+6.6) Notifications & Silence Defaults
+
+**Default notification state:**
+Silent. Artist receives no notifications unless explicitly enabled.
+
+**If artist enables notifications, they are framed neutrally:**
+
+Allowed notification language:
+- "Your track was accepted by Experimental Indie on Dec 29"
+- "Money received: $14.50, settled to Stripe"
+
+Forbidden notification language:
+- "Great! Your track was accepted!" (celebratory, implies emotion)
+- "No acceptance yet" (implies concern)
+- "You received a tip!" (gamification language)
+- "Check out your new earning!" (urgency framing)
+
+Notifications are factual events, not emotional rewards or punishments.
+
+**Artist controls notification frequency:**
+- Real-time (each action completed)
+- Daily summary (all actions from past 24 hours)
+- Weekly summary (aggregated week-over-week)
+- Manual check-in (artist requests on demand)
+- Silent (default, no notifications)
+
+================================================================================
+
+6.7) Design Intent: Why Data Is Withheld
+
+This section explains why certain withholding is ethical, not censorship.
+
+The problem:
+
+Raw data presented without context becomes a judgment engine. "2 acceptances out of 5
+submissions" triggers immediate comparison and self-judgment, even if not intended.
+
+Artist 1 sees: "40% acceptance rate. That's low. I'm failing."
+Artist 2 sees: "2 acceptances! Great!"
+
+Same data. Different psychological outcome.
+
+By withholding rates, comparative language, and suggestions, ADAM removes the data that
+invites self-judgment. This is not opacity—it's protection.
+
+The artist who is protected from comparative data:
+- Doesn't spiral on "why didn't X accept me?"
+- Doesn't optimize behavior for metrics
+- Doesn't self-judge based on performance
+- Doesn't internalize rejection as failure
+- Stays focused on making work, not gaming systems
+
+The artist who sees all available data:
+- Starts comparing to peers
+- Starts optimizing for metrics
+- Starts internalizing outcomes as personal failure
+- Starts chasing algorithmic signals
+- Stops making, starts managing
+
+ADAM's job is to enable the first path.
+
+That requires withholding data, even when asked.
+
+================================================================================
+
+6.8) The "Even-If" Hard Stop
+
+Even if it's true, even if the artist explicitly requests it, ADAM will not:
+- Provide ratios, rates, or percentiles
+- Compare to peers, "typical," or "average"
+- Suggest behavior changes based on outcomes
+- Present trends or projections
+- Use emotional or evaluative language (positive or negative)
+- Create dashboards that invite comparison
+- Provide feedback from surfaces
+- Surface anything that would invite self-judgment
+
+The artist is asking for a coach.
+ADAM is not a coach.
+
+Reporting is withholding. Withholding is protection.
+
+================================================================================
+
+6.9) Binding Statement
+
+ADAM reports completed actions and money movement accurately and neutrally. It withholds
+data that would invite comparison, judgment, prediction, or behavior change. Reporting
+exists to close loops—not to coach, optimize, or evaluate. Facts are provided without
+implication. Silence is valid. ADAM reports and withdraws.
+
+================================================================================

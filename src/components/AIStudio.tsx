@@ -451,7 +451,7 @@ const VoiceTrainingWizard: React.FC<{
                                 getStepColor(s),
                                 s === step && 'shadow-[0_0_20px_rgba(6,182,212,0.5)]'
                             )}>
-                                {s < step ? '✔' : s}
+                                {s < step ? '•' : s}
                             </div>
                             <span className={cn('text-sm font-medium', s === step ? 'text-cyan-400' : 'text-slate-400')}>
                                 {s === 1 ? 'Name' : s === 2 ? 'Record' : 'Confirm'}

@@ -179,7 +179,6 @@ export const ListeningPassCard: React.FC<ListeningPassCardProps> = ({
               aria-controls="ai-insights-content"
             >
               <div className="flex items-center gap-2 text-left">
-                <span className="text-base">✨</span>
                 <span className="text-sm font-semibold text-slate-300">
                   {aiInsightsExpanded ? 'AI INTERPRETATION (Optional)' : 'AI insights available'}
                 </span>

@@ -1,0 +1,460 @@
+/*
+  ForensicViewer.css
+  Cold, Factual, Evidentiary Aesthetic
+  GitHub Dark Theme
+  No animations, no transitions, no "delight"
+  Pure data presentation
+*/
+
+.forensic-root {
+  font-family: 'Courier New', monospace;
+  background-color: #0d1117;
+  color: #c9d1d9;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* HEADER */
+.forensic-header {
+  background-color: #161b22;
+  border-bottom: 1px solid #30363d;
+  padding: 16px 24px;
+  flex-shrink: 0;
+}
+
+.forensic-header h1 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #58a6ff;
+  letter-spacing: 1px;
+}
+
+.forensic-stats {
+  display: flex;
+  gap: 24px;
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.forensic-stats span {
+  font-family: 'Courier New', monospace;
+}
+
+/* MAIN LAYOUT */
+.forensic-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  overflow: hidden;
+  border-top: 1px solid #30363d;
+}
+
+/* TIMELINE RAIL */
+.forensic-rail {
+  background-color: #0d1117;
+  border-right: 1px solid #30363d;
+  padding: 12px 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.timeline-tick {
+  width: 40px;
+  height: 40px;
+  margin: 8px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #30363d;
+  background-color: #0d1117;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  transition: none;
+  border-radius: 2px;
+}
+
+.timeline-tick:hover {
+  border-color: #58a6ff;
+  color: #58a6ff;
+}
+
+.timeline-tick.selected {
+  border: 2px solid #58a6ff;
+  background-color: rgba(88, 166, 255, 0.1);
+  color: #58a6ff;
+}
+
+.timeline-tick-success {
+  color: #3fb950;
+}
+
+.timeline-tick-success.selected {
+  border-color: #3fb950;
+  background-color: rgba(63, 185, 80, 0.1);
+}
+
+.timeline-tick-failed {
+  color: #f85149;
+}
+
+.timeline-tick-failed.selected {
+  border-color: #f85149;
+  background-color: rgba(248, 81, 73, 0.1);
+}
+
+.timeline-number {
+  font-family: 'Courier New', monospace;
+  font-weight: 600;
+}
+
+/* DETAIL PANEL */
+.forensic-detail {
+  overflow-y: auto;
+  padding: 24px;
+  background-color: #0d1117;
+}
+
+.forensic-detail-card {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* SECTIONS */
+.forensic-section {
+  margin-bottom: 32px;
+  border-left: 3px solid #30363d;
+  padding-left: 16px;
+}
+
+.forensic-section h2 {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #58a6ff;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-family: 'Courier New', monospace;
+}
+
+.forensic-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  padding: 0 0 8px 0;
+}
+
+.forensic-section-header:hover h2 {
+  color: #79c0ff;
+}
+
+.forensic-toggle {
+  font-size: 12px;
+  color: #58a6ff;
+  margin-left: 8px;
+}
+
+.forensic-content {
+  animation: none;
+}
+
+/* GRID LAYOUT */
+.forensic-grid {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px 24px;
+  align-items: baseline;
+  margin-bottom: 16px;
+}
+
+.forensic-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8b949e;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-family: 'Courier New', monospace;
+}
+
+.forensic-value {
+  font-size: 12px;
+  color: #c9d1d9;
+  font-family: 'Courier New', monospace;
+  word-break: break-all;
+}
+
+.monospace {
+  font-family: 'Courier New', monospace;
+}
+
+/* BADGES & HIGHLIGHTS */
+.forensic-badge {
+  display: inline-block;
+  background-color: #30363d;
+  color: #c9d1d9;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  border: 1px solid #21262d;
+}
+
+.forensic-domain-badge {
+  display: inline-block;
+  background-color: rgba(88, 166, 255, 0.15);
+  color: #58a6ff;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  border: 1px solid #58a6ff;
+  font-weight: 500;
+}
+
+.forensic-status-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* HOLD DURATION (Intent Proof) */
+.forensic-hold-duration {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.forensic-hold-duration strong {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.forensic-threshold {
+  font-size: 10px;
+  opacity: 0.8;
+}
+
+/* FSM PATH */
+.forensic-fsmpath {
+  color: #79c0ff;
+  font-weight: 500;
+}
+
+/* EVIDENCE BLOCK */
+.forensic-evidence-block {
+  margin-top: 16px;
+  padding: 12px;
+  background-color: rgba(88, 166, 255, 0.05);
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  border-radius: 3px;
+}
+
+.forensic-evidence-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #58a6ff;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.forensic-evidence-json {
+  margin: 0;
+  padding: 8px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border: 1px solid #30363d;
+  border-radius: 2px;
+  font-size: 10px;
+  color: #79c0ff;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* ERROR & OUTPUT BLOCKS */
+.forensic-error-block,
+.forensic-output-block {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 3px;
+}
+
+.forensic-error-block {
+  background-color: rgba(248, 81, 73, 0.05);
+  border: 1px solid rgba(248, 81, 73, 0.2);
+}
+
+.forensic-output-block {
+  background-color: rgba(63, 185, 80, 0.05);
+  border: 1px solid rgba(63, 185, 80, 0.2);
+}
+
+.forensic-error-label,
+.forensic-output-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.forensic-error-label {
+  color: #f85149;
+}
+
+.forensic-output-label {
+  color: #3fb950;
+}
+
+.forensic-error-json,
+.forensic-output-json {
+  margin: 0;
+  padding: 8px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border: 1px solid #30363d;
+  border-radius: 2px;
+  font-size: 10px;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+}
+
+.forensic-error-json {
+  color: #f85149;
+}
+
+.forensic-output-json {
+  color: #3fb950;
+}
+
+/* SEALING SECTION */
+.forensic-sealing {
+  border-left: 3px solid #3fb950;
+  background-color: rgba(63, 185, 80, 0.03);
+  padding: 16px;
+  border-radius: 3px;
+  margin-top: 32px;
+}
+
+.forensic-sealing-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3fb950;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(63, 185, 80, 0.3);
+}
+
+.forensic-sealing-details {
+  font-size: 11px;
+}
+
+/* EMPTY & LOADING STATES */
+.forensic-empty,
+.forensic-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #8b949e;
+  text-align: center;
+}
+
+.forensic-empty p,
+.forensic-loading p {
+  margin: 0;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.forensic-empty p:last-child {
+  margin-top: 4px;
+}
+
+/* SCROLLBARS */
+.forensic-rail::-webkit-scrollbar,
+.forensic-detail::-webkit-scrollbar {
+  width: 8px;
+}
+
+.forensic-rail::-webkit-scrollbar-track,
+.forensic-detail::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.forensic-rail::-webkit-scrollbar-thumb,
+.forensic-detail::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 4px;
+}
+
+.forensic-rail::-webkit-scrollbar-thumb:hover,
+.forensic-detail::-webkit-scrollbar-thumb:hover {
+  background: #424c56;
+}
+
+/* MEDIA QUERIES */
+@media (max-width: 768px) {
+  .forensic-main {
+    grid-template-columns: 60px 1fr;
+  }
+
+  .forensic-rail {
+    padding: 8px 0;
+  }
+
+  .timeline-tick {
+    width: 35px;
+    height: 35px;
+    margin: 6px auto;
+    font-size: 10px;
+  }
+
+  .forensic-grid {
+    grid-template-columns: 140px 1fr;
+    gap: 8px 16px;
+  }
+
+  .forensic-detail {
+    padding: 16px;
+  }
+}
+
+/* PRINT STYLES */
+@media print {
+  .forensic-header {
+    background: white;
+    border: 1px solid #ccc;
+  }
+
+  .forensic-root {
+    background: white;
+    color: #000;
+  }
+
+  .timeline-tick,
+  .forensic-section {
+    border-color: #999;
+  }
+
+  .forensic-value,
+  .forensic-label {
+    color: #000;
+  }
+
+  .forensic-stats span {
+    color: #666;
+  }
+}

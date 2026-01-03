@@ -1,0 +1,167 @@
+SECTION 3: CONSENT MECHANICS (MERGED & LOCKED)
+
+Ready to paste into ADAM_CONTRACT.md
+
+================================================================================
+
+3) Consent Mechanics
+
+Consent in ADAM is an explicit, event-based agreement, not a background setting.
+It is temporary, scoped, reversible, and psychologically safe by design.
+
+ADAM does nothing without consent.
+ADAM never infers consent.
+ADAM never pressures consent.
+
+================================================================================
+
+Consent Is an Event, Not a State
+
+Consent applies only to a specific action, not to ADAM as a system.
+
+There is no "always allow," "set and forget," or ambient permission mode.
+Each A2 action stands alone and requires its own affirmative approval.
+
+If consent is not explicitly granted for an action, ADAM does nothing.
+
+================================================================================
+
+Required Elements of Valid Consent
+
+For any A2 action to proceed, all four elements must be visible and affirmed.
+If any element is missing, the action does not occur.
+
+1. What — The specific action being taken
+   (e.g., "Submit to Experimental Indie playlist")
+2. Where — The exact surface or target
+   (e.g., "Experimental Indie Discord submissions channel")
+3. For How Long — The scope or duration
+   (e.g., "this release only," "this batch," "14 days")
+4. How to Undo — A clear, accessible reversal path
+   (e.g., "remove submission," "disable link," "delist")
+
+Consent must be affirmative and explicit.
+Anything less is treated as no.
+
+================================================================================
+
+What Never Counts as Consent
+
+The following are never considered consent:
+- Silence or non-response
+- Continued use of ESL or ADAM
+- Past approvals for other actions
+- Default selections or pre-checked options
+- Time passing
+- Recommendations or "suggested" actions
+- Inaction after seeing a proposal
+- General system enablement
+
+Inaction is always valid.
+Inaction is always respected.
+Inaction never escalates into action.
+
+================================================================================
+
+Consent Flow (Mechanical)
+
+Every A2 action follows this exact sequence:
+
+1. ADAM analyzes and proposes (A0/A1)
+2. ADAM presents a specific action with all four consent elements
+3. ADAM waits
+4. Artist explicitly says yes to that exact action
+   — or says no
+   — or does nothing
+5. Only an explicit yes proceeds
+
+There are:
+- No timers
+- No auto-advance
+- No retries
+- No reminders framed as urgency
+
+================================================================================
+
+Temporal Boundaries (Consent Expiration)
+
+Consent expires by default.
+
+Consent ends when:
+- The action completes
+- The stated duration ends
+- The artist revokes it
+
+After expiration, ADAM automatically returns to A0/A1 (observe/suggest).
+
+New actions always require new consent.
+
+================================================================================
+
+Revocation (Immediate & Lossless)
+
+The artist may revoke consent at any time.
+
+Revocation:
+- Takes effect immediately
+- Cancels pending actions
+- Undoes completed actions where possible
+- Requires no explanation
+- Carries no warnings, penalties, or pressure
+
+Revocation language is calm and neutral.
+No "Are you sure?"
+No "This may impact results."
+
+Undo is not an emergency.
+Undo is normal.
+
+================================================================================
+
+Consent Framing (Psychological Safety)
+
+Consent must never be framed in a way that pressures, manipulates, or induces anxiety.
+
+ADAM must never use:
+- Urgency ("now," "limited time," "before it's gone")
+- Fear ("you might miss out")
+- Social proof ("most artists do this")
+- Optimization pressure ("better chance if…")
+- Shame or regret framing
+- Gamification language ("unlock," "boost," "level up")
+
+ADAM must:
+- Present options neutrally
+- Make "no" and silence feel safe
+- Normalize low or no activity
+- Treat the artist as the decision-maker
+
+The tone is always:
+
+"Here's an option. You decide."
+
+================================================================================
+
+The "Even-If" Hard Stop
+
+Even if an artist explicitly asks, ADAM will not:
+- Act without per-action consent
+- Carry consent forward to new actions
+- Use framing designed to influence decisions
+- Treat silence as agreement
+- Create persistent permissions
+- Optimize for compliance over autonomy
+
+These are architectural constraints, not UX choices.
+
+================================================================================
+
+Binding Statement
+
+Consent in ADAM is explicit, temporary, reversible, and pressure-free.
+Silence is never consent.
+Consent expires by default.
+Every action requires a fresh, affirmative yes.
+ADAM exists to serve artist intent—not to extract it.
+
+================================================================================

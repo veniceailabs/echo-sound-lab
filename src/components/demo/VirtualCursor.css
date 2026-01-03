@@ -1,0 +1,108 @@
+/* Virtual Cursor Styling */
+
+.virtual-cursor-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.virtual-cursor {
+  width: 28px;
+  height: 28px;
+  color: #8ab4f8;
+  filter: drop-shadow(0 0 4px rgba(138, 180, 248, 0.6));
+  transform: translate(-50%, -50%) scale(1);
+  transition: transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
+}
+
+.virtual-cursor.clicking {
+  transform: translate(-50%, -50%) scale(0.85);
+}
+
+.virtual-cursor.holding {
+  color: #34a853;
+  filter: drop-shadow(0 0 8px rgba(52, 168, 83, 0.8));
+}
+
+/* Hold progress ring */
+.hold-progress-ring {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: -1;
+  opacity: 0.8;
+  animation: holdPulse 0.5s ease-out infinite;
+}
+
+@keyframes holdPulse {
+  0% {
+    box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 8px rgba(138, 180, 248, 0);
+  }
+}
+
+/* Click ripple effect */
+.click-ripple {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border: 2px solid #8ab4f8;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: rippleOut 0.6s ease-out forwards;
+  z-index: -1;
+}
+
+.click-ripple-2 {
+  animation-delay: 0.15s;
+}
+
+@keyframes rippleOut {
+  0% {
+    width: 40px;
+    height: 40px;
+    opacity: 1;
+    border-width: 2px;
+  }
+  100% {
+    width: 80px;
+    height: 80px;
+    opacity: 0;
+    border-width: 1px;
+  }
+}
+
+/* Demo indicator (optional: show when demo is active) */
+.demo-active-indicator {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 8px 12px;
+  background: rgba(52, 168, 83, 0.9);
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  z-index: 9998;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}

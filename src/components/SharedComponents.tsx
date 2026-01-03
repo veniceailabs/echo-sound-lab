@@ -79,7 +79,7 @@ export const TestChecklistCard: React.FC<{ testChecklist: TestChecklistState }> 
     <div className="bg-slate-900 rounded-3xl p-6 shadow-lg border border-slate-700/50 w-full max-w-sm mx-auto mt-8">
       <h3 className="text-lg font-bold text-slate-200 mb-4">Test Checklist</h3>
       {Object.entries(testChecklist).map(([key, val]) => (
-        key !== 'lastUpdatedAt' && <div key={key} className="flex items-center gap-2"><span className={val ? 'text-green-500' : 'text-slate-600'}>{val ? '✅' : '⬜'}</span><span className="text-sm text-slate-300">{key}</span></div>
+        key !== 'lastUpdatedAt' && <div key={key} className="flex items-center gap-2"><span className={`font-bold ${val ? 'text-green-500' : 'text-slate-600'}`}>{val ? '✓' : '○'}</span><span className="text-sm text-slate-300">{key}</span></div>
       ))}
     </div>
 );

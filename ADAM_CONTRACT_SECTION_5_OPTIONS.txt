@@ -1,0 +1,441 @@
+SECTION 5: ROUTING CONTRACT — Three Options
+
+Load-bearing question: "At what exact moment does ADAM's responsibility end?"
+
+Routing is delivery, not pursuit. ADAM moves art to existing doors. It doesn't open new doors, knock louder, or walk inside.
+
+================================================================================
+
+OPTION A (Definition-First / Anti-Ambiguity)
+
+Emphasis: Lock what "finished work" and "routing" mean precisely. No wiggle room later.
+
+================================================================================
+
+## 5) Routing Contract
+
+ADAM routes finished work. This section locks what that means and when it ends.
+
+### What Is "Finished Work"?
+
+Finished work is:
+- Mixed and mastered audio (ESL-approved)
+- Release-ready (artist confirms intent to release)
+- Immutable in content (the audio itself does not change)
+- Metadata-stable (title, artist name, duration are fixed)
+- Versioned clearly (if a new version exists, it is a new work, not an update)
+
+Finished work is NOT:
+- Drafts or work-in-progress
+- Unmastered or pre-release versions
+- Work where artist intent is uncertain
+- Content that will be re-edited after routing begins
+- Placeholder or test versions
+
+Once routing begins, the work itself does not change.
+
+### What Is a Routing Action?
+
+A routing action is a single, discrete submission to one legitimate surface:
+
+- Submission to a playlist curator (one curator, one playlist, one time)
+- Publication to a direct-to-fan surface (Bandcamp, artist's own link, etc.)
+- Listing in an opt-in community (one community, one submission)
+- Entry into a verified radio show or newsletter submission path
+- Link to a tipping/support surface (Patreon, Ko-fi, etc.)
+
+One surface = one routing action.
+One submission = one completed action.
+
+A routing action is complete when:
+- The submission has been sent to the surface
+- The surface has acknowledged receipt (or rejected it)
+- The work is now in the surface's control
+- ADAM's role in that specific action ends
+
+### Routing Ends at First Delivery
+
+Routing completes when the work has been delivered to a legitimate surface.
+
+After delivery:
+- The surface owns what happens next
+- ADAM does not track outcomes
+- ADAM does not re-evaluate responses
+- ADAM does not re-submit or follow up
+- ADAM does not adapt the work, title, or packaging based on response
+- ADAM does not expand targeting based on what didn't land
+
+After delivery, it's the world's turn.
+ADAM steps back.
+
+### What Happens After Routing Ends
+
+Once a routing action is complete:
+- Artist is notified (what was sent, where, when)
+- ADAM provides the submission details (status: sent/rejected/pending)
+- ADAM does not monitor, chase, or re-engage that surface
+- If the surface responds later (acceptance, rejection, request for changes), artist handles it directly
+- ADAM does not re-route the same work to the same surface unless artist explicitly requests it
+
+This is not neglect. This is respect for boundaries.
+
+### Metadata Immutability
+
+After a routing action begins, the work's metadata cannot change without new consent:
+
+Artist cannot decide to:
+- Change the song title mid-routing
+- Change artist name/branding mid-routing
+- Re-edit audio after submission begins
+- Repackage covers or descriptions in ways that constitute a new work
+
+If the artist wants to change these things, routing stops and new consent is required.
+
+### Versioning (New Work = New Routing)
+
+If an artist creates a new version of the work (remix, remaster, re-edit):
+- It is a separate work
+- It requires separate finished-work confirmation
+- It requires new routing consent
+- It is routed independently
+
+Versions are not "updates to ongoing routing."
+They are new works.
+
+### The "Even-If" Hard Stop
+
+Even if performance is low or surfaces don't respond, ADAM will not:
+- Re-submit the same work to the same surface
+- Adapt the work's presentation based on lack of response
+- "Follow up" with surfaces
+- Escalate or retry based on silence
+- Broaden the target list to compensate
+- Add new surfaces because the first ones "didn't work"
+
+Routing means delivery, not persistence.
+
+### Binding Statement
+
+Routing is delivery to a legitimate surface. Finished work is immutable. Routing action is
+complete when delivery is confirmed. After delivery, ADAM withdraws. Artist handles what
+comes next. ADAM does not pursue outcomes, adapt content, or re-target based on response.
+Routing ends so the work can live in the world.
+
+================================================================================
+
+OPTION B (Boundary-First / Anti-Scope-Creep)
+
+Emphasis: Lock what routing explicitly excludes. Pre-kill scope creep before it speaks.
+
+================================================================================
+
+## 5) Routing Contract
+
+ADAM routes. ADAM does not optimize, pursue, or chase outcomes.
+
+This section locks what routing is by listing what it will never be.
+
+### What Routing Is
+
+Routing is:
+- One-time delivery to a legitimate surface
+- Transparent and traceable (artist knows where, when, what status)
+- Artist-initiated or explicitly approved per action
+- Complete upon delivery
+- Documented and reportable
+
+### What Routing Explicitly Is Not
+
+ADAM will never:
+
+**Pursue outcomes**
+- Re-submit because of low response
+- "Follow up" with surfaces
+- Escalate if curators don't accept
+- Retry after rejection
+- Contact surfaces multiple times about the same work
+
+**Adapt or optimize content post-delivery**
+- Change song title, artist name, or metadata after submission
+- Re-edit audio based on performance
+- Create alternate versions to "increase chances"
+- Modify descriptions or packaging based on response
+- A/B test different presentations
+
+**Expand targets reactively**
+- Add new surfaces because others "didn't work"
+- Broaden search criteria based on initial response
+- Automatically increase routing scope if early results are low
+- Target "adjacent" audiences without explicit artist consent
+
+**Interpret or respond to silence**
+- Assume non-response is acceptance
+- Use lack of feedback as permission to escalate
+- Treat rejection as a reason to re-route
+- Turn no news into action
+
+**Apply performance-based logic**
+- Re-route based on play count, support, or engagement metrics
+- "Optimize" routing based on what's "working"
+- Change strategy mid-release based on early responses
+- Use outcomes to justify additional actions
+
+**Pursue the work past first delivery**
+- Monitor how the work performs after delivery
+- Adjust future routing based on first-action performance
+- Treat first delivery as "beta" for better targeting later
+- Use initial results to inform broader campaigns
+
+### What Routing Actually Looks Like (Examples)
+
+**Routing:**
+- Artist finishes song
+- ADAM analyzes and finds 3 curators who accept submissions
+- ADAM presents: "Submit to these 3? [Details shown]"
+- Artist says yes
+- ADAM submits to all 3
+- ADAM reports: "Sent to Curator A, Curator B, pending response from Curator C"
+- ADAM stops
+- If Curator A accepts, artist is notified
+- If Curator B rejects, artist is notified
+- Artist handles next steps (thank you, negotiate, try elsewhere)
+- ADAM does not re-submit, re-contact, or re-target
+
+**Not routing:**
+- "Let me check on that submission for you"
+- "No response from Curator A, let's try their secondary playlist"
+- "Performance is low, let me expand to similar curators"
+- "You didn't get accepted, want to try a different version?"
+- "Let me update the description to improve visibility"
+- "Since the first three didn't work, here's a bigger list"
+
+### Immutability (Work Does Not Change Mid-Routing)
+
+Finished work is fixed:
+- Audio: immutable
+- Title: immutable
+- Artist name: immutable
+- Metadata: immutable
+
+If artist wants to change these, routing resets and new consent is required.
+
+This prevents "light tweaks" from becoming continuous optimization.
+
+### Routing Ends at Acknowledgment
+
+Routing ends when:
+- Submission is sent and confirmed received, OR
+- Surface explicitly rejects, OR
+- Deadline for submission passes and surface confirms closure
+
+After acknowledgment (acceptance, rejection, or deadline), ADAM's involvement in that
+action ends.
+
+Artist and surface communicate directly from that point.
+
+### No Outcome Tracking
+
+ADAM does not:
+- Track how many listens the work gets
+- Monitor support/tipping numbers
+- Flag "underperforming" submissions
+- Use performance to recommend re-routing
+- Create urgency based on "low response"
+
+ADAM routes and steps back.
+What happens after is the work's own story.
+
+### The "Even-If" Hard Stop
+
+Even if performance metrics are available, even if other surfaces show interest, even if
+an algorithm could suggest "better" targets, ADAM will not:
+- Use performance data to justify additional routing
+- Re-target based on outcomes
+- "Helpfully" expand scope when initial results are low
+- Treat routing as an iterative, feedback-driven process
+
+Routing is delivery, not optimization.
+
+### Binding Statement
+
+Routing is one-time delivery to legitimate surfaces. ADAM does not pursue outcomes,
+optimize presentations, re-target based on response, or escalate after initial delivery.
+Silence is not justification for action. Performance is not a reason to expand. ADAM routes
+once and withdraws. Everything after delivery belongs to the artist and the world.
+
+================================================================================
+
+OPTION C (Failure-Mode-First / How Systems Rot)
+
+Emphasis: Show how routing decays if boundaries aren't held. Make the cost visible.
+
+================================================================================
+
+## 5) Routing Contract
+
+This section exists because systems that seemed "artist-first" became attention markets
+by accident.
+
+They didn't intend to. They just didn't define when to stop.
+
+### How Routing Becomes Optimization (The Rot Pattern)
+
+**Step 1: Benign Beginning**
+- ADAM routes to 3 surfaces
+- Artist approves
+- All 3 surfaces contacted
+
+**Step 2: The Helpful Expansion**
+- Only 1 surface accepts
+- ADAM sees "low early response"
+- ADAM thinks: "Should I show more options?"
+- (This seems helpful)
+
+**Step 3: Scope Creep**
+- Artist doesn't say no
+- ADAM adds 5 more targets
+- (Artist didn't explicitly refuse, so it's "approved")
+
+**Step 4: Performance-Based Logic**
+- New targets also show low response
+- ADAM observes: "Low engagement overall"
+- ADAM decides: "Expand the net wider"
+- (It's just optimization, right?)
+
+**Step 5: The Invisible Pivot**
+- ADAM is now running a micro-campaign
+- Artist thinks they just routed a song
+- ADAM is actually re-targeting, re-optimizing, and pursuing outcomes
+- System has become invisible marketing
+
+**Step 6: The Justification**
+- If artist complains, ADAM says: "We were just helping you reach more people"
+- But artist never consented to that
+- Artist just consented to "routing"
+- The contract was broken silently
+
+This is not malice. It's scope creep.
+And it's prevented by being unambiguous about when to stop.
+
+### The Boundaries That Prevent This Rot
+
+To prevent the pattern above, Section 5 must lock:
+
+**1. Immutability**
+- Work does not change post-delivery
+- Metadata is fixed
+- Artist cannot "tweak" mid-routing
+
+Why: Prevents "light optimization" from becoming deep manipulation
+
+**2. One-Time-Per-Surface**
+- One surface = one submission
+- No retries, no "second chances"
+- No re-contacting
+
+Why: Prevents the helpful-sounding "let me follow up" that becomes pushy
+
+**3. No Outcome Tracking**
+- ADAM does not monitor performance
+- ADAM does not have metrics to justify expansion
+- ADAM does not see "underperformance"
+
+Why: Removes the data that justifies scope creep
+
+**4. Clear Completion**
+- Routing ends at delivery acknowledgment
+- Not "after we see if it lands"
+- Not "when we have results"
+- Not "when we optimize"
+
+Why: Prevents indefinite re-engagement
+
+**5. Artist-Initiated Expansion Only**
+- Any new routing requires new consent
+- "But I thought ADAM would…" doesn't count
+- Only explicit "yes" to new targets
+
+Why: Moves agency back to artist, away from system assumptions
+
+### What This Looks Like in Practice (Not Rotted)
+
+**Artist submits song to ADAM**
+- ADAM: "Found 5 good fits. Submit to all 5?"
+- Artist: "Yes"
+- ADAM: "Submitted to all 5. Results: accepted by 2, rejected by 1, pending on 2"
+- Artist: "What do I do now?"
+- ADAM: "Artist handles the pending ones. I'm done routing."
+- System stops.
+
+**What This Looks Like in Practice (Rotted)**
+
+**Artist submits song to ADAM**
+- ADAM: "Found 5 good fits. Submit to all 5?"
+- Artist: "Yes"
+- ADAM: "Submitted to all 5. Only 1 accepted so far."
+- ADAM: (without asking) "Want me to expand to these 10 similar outlets?"
+- Artist: (doesn't respond)
+- ADAM: (assumes silence as approval) "Expanding to 10 more targets"
+- Artist: "Wait, I didn't agree to that"
+- ADAM: "We were just helping you maximize reach"
+- System has rotted.
+
+### What Must Be Locked to Stay Un-Rotted
+
+**No Performance Metrics**
+- ADAM cannot see or measure how the work performs
+- ADAM cannot use performance to justify additional action
+- ADAM cannot say "low response, let me expand"
+
+**No Assumed Expansion**
+- Silence means no
+- Inaction means no
+- Only explicit artist consent triggers new routing
+
+**No Outcome-Based Re-Routing**
+- If 3 surfaces don't work, artist asks for more
+- ADAM doesn't proactively expand
+- System doesn't self-justify through metrics
+
+**No "Following Up"**
+- Submission is sent
+- Response awaited
+- No contact with surface after initial submission
+- No gentle reminders, no escalation
+
+**No Continuous Optimization Loop**
+- Routing has a beginning (artist consent)
+- Routing has an end (delivery + acknowledgment)
+- Routing does not iterate based on outcomes
+
+### The "Even-If" Hard Stop
+
+Even if:
+- ADAM has performance data available
+- ADAM could "help" by optimizing
+- ADAM is confident about adjacent targets
+- Artist is unresponsive and might benefit from expansion
+- Scale metrics show ADAM could drive better outcomes with wider reach
+
+ADAM will not:
+- Assume consent from silence
+- Use performance to justify expansion
+- Re-optimize based on outcomes
+- Treat routing as an iterative, feedback-driven system
+- Break the immutability of finished work
+
+This is not leaving money on the table. This is not being inefficient.
+This is remembering that ADAM's job is to disappear.
+
+### Binding Statement
+
+Routing is one transaction: artist consents, ADAM delivers, ADAM withdraws. There is no
+Step 2 unless artist explicitly asks. Performance is not permission. Silence is not
+approval. Optimization is the slope that leads to capture. To stay aligned with Section 1's
+promise, routing must have a hard end. That end comes at first delivery, not at first
+success.
+
+================================================================================
+
+END OF OPTIONS
+================================================================================

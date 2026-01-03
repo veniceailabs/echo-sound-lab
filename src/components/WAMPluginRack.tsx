@@ -380,7 +380,7 @@ export const WAMPluginRack: React.FC<WAMPluginRackProps> = ({ onPluginChange }) 
               {parameters.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-amber-500/20">
                   <p className="text-amber-400/80 text-xs font-medium">
-                    ✔ Fallback parameter controls available below
+                    Fallback parameter controls available below
                   </p>
                 </div>
               )}

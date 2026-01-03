@@ -1,0 +1,398 @@
+SECTION 3: CONSENT MECHANICS — Three Options
+
+================================================================================
+
+OPTION A (Explicit-Action-First)
+
+Emphasis: Nothing happens without affirmative, scoped "yes." Silence is always "no."
+
+================================================================================
+
+## 3) Consent Mechanics
+
+Consent in ADAM is an event, not a setting. It is explicit, scoped, and required before
+every A2 action.
+
+### What Counts as Consent
+
+Valid consent requires all four elements. If any is missing, the action does not proceed:
+
+1. **What** — The specific action being taken (e.g., "submit to indie.run playlist curator")
+2. **Where** — The exact surface/target (e.g., "The Experimental Archive Discord community")
+3. **For How Long** — Time-bounded scope (e.g., "this release only" or "this submission batch")
+4. **How to Undo** — Clear path to revoke or delete (e.g., "remove submission" or "delist from playlist")
+
+Before any A2 action, ADAM presents these four elements to the artist and waits for explicit
+"yes" to proceed. If the artist does not affirmatively say yes to all four, ADAM does not act.
+
+### What Never Counts as Consent
+
+The following are explicitly NOT consent, no matter how they appear:
+
+- **Silence** — Artist does not respond, ignores the prompt, or leaves the app
+- **Continued Use** — Artist keeps using ESL without disabling ADAM
+- **Past Approval** — Artist approved routing yesterday, so something different today
+- **Default Acceptance** — Artist didn't click "no," so we assume "yes"
+- **"Recommended" Actions** — ADAM recommending something, then proceeding without explicit approval
+- **Continued Inaction** — Artist sees a suggestion and does nothing
+- **Ambient Settings** — General ADAM enablement ("ADAM is on") does not authorize specific actions
+
+Inaction is always treated as refusal. Always.
+
+### The Consent Moment (Mechanics)
+
+Every A2 action follows this flow:
+
+1. ADAM generates a routing plan (A0/A1)
+2. ADAM presents specific action with all four consent elements visible
+3. ADAM waits for explicit "Yes to [specific action at specific target for specific duration]"
+4. Artist says yes, no, or revokes
+5. Only "yes" proceeds. "No" or silence = ADAM stops and does nothing
+
+The artist can:
+- Say "yes" to this action only
+- Say "yes" to a batch of similar actions (all listed explicitly)
+- Say "no" (ADAM stops, nothing happens)
+- Revoke an earlier "yes" (action is canceled before execution or undone after)
+
+Nothing auto-advances. No timers. No "continue unless canceled."
+
+### What Inaction Looks Like
+
+If an artist does not consent:
+- No error message
+- No warning
+- No "you missed an opportunity"
+- No degraded experience
+- No nagging to reconsider
+
+ADAM shows: "Ready to route if you approve. Paused otherwise."
+
+That's it. The artist can return whenever they're ready, or never. Both are valid.
+
+### Consent Expiration
+
+Consent is scoped to a specific action. Once that action is complete (submitted, failed,
+expired as a deadline), the consent ends. ADAM does not retain blanket permission.
+
+If an artist wants the same routing to happen again for a new release, new consent is required.
+This is not friction. This is clarity.
+
+### Revocation (Immediate & Lossless)
+
+An artist can revoke consent at any time before or after an action. Revocation:
+- Takes effect immediately
+- Cancels pending actions
+- Undoes completed actions where possible (deletes submissions, delists from playlists)
+- Requires no explanation or justification
+- Carries no penalty or warning language
+
+Revocation is as simple as "stop" or "undo." That's all.
+
+### The "Even-If" Hard Stop
+
+Even if an artist says "just route everything automatically," ADAM will not:
+- Proceed without per-action explicit consent
+- Treat silence as approval
+- Use past consent to justify new actions
+- Create a "set and forget" mode
+- Assume consent from continued use
+
+These are not restrictions we might relax. They are architectural.
+
+### Binding Statement
+
+Consent is an event, not a state. Absence of refusal is never consent. ADAM acts only when
+the artist has affirmatively said yes to a specific action, at a specific target, for a
+specific duration, with a clear undo path. Everything else is inaction.
+
+================================================================================
+
+OPTION B (Temporal & Reversible Consent)
+
+Emphasis: Consent expires. Consent is temporary, contextual, reversible by default.
+
+================================================================================
+
+## 3) Consent Mechanics
+
+Consent in ADAM is temporary, contextual, and reversible. It is never persistent, ambient,
+or carried forward from one action to another.
+
+### Anatomy of Consent
+
+Valid consent has four required components:
+
+1. **Scope** — What action (submit, list, enable support path)
+2. **Target** — Where the action goes (specific playlist, curator, surface)
+3. **Duration** — How long it lasts (single action / until sunset / X days)
+4. **Reversibility** — How to undo it (delete, unlist, disable, revoke)
+
+All four must be explicit and visible before consent is granted. Missing any one means
+the action does not proceed.
+
+### Consent Is Temporary
+
+ADAM consent is bounded by:
+- **Completion** — Consent ends when the action completes (submission sent, listing live)
+- **Deadline** — Consent ends at a date/time specified by artist or system
+- **Revocation** — Artist revokes consent before or after action
+
+After any of these, ADAM reverts to A0/A1 (observe/suggest). New consent is required for
+new actions.
+
+### Consent Reversion (Default State)
+
+The default state of ADAM after any action is complete is:
+- All consent expired
+- All permissions revoked
+- ADAM back to observe/suggest (A0/A1)
+- Artist must re-consent to enable new actions
+
+This is not "requiring re-opt-in for everything." This is "each action stands alone."
+
+### Temporal Examples
+
+**Example 1: Single Action**
+- Artist consents to "submit to Bedroom Pop Collective Discord"
+- Submission sent
+- Consent ends
+- ADAM stops and reports what happened
+- No further action without new consent
+
+**Example 2: Time-Bounded Consent**
+- Artist consents to "enable direct support links for 14 days"
+- Links go live
+- At day 15, consent expires
+- Links disable automatically
+- Artist receives calm notification, can re-enable if they want
+
+**Example 3: Batch Consent**
+- Artist consents to "submit to these 3 playlists" (all listed explicitly)
+- All 3 submissions sent over next 48 hours
+- At completion, all consent expires
+- ADAM stops
+
+**Example 4: Revocation**
+- Artist consents to "keep submitted to Experimental Music Hub"
+- Days later, artist revokes
+- Submission is deleted/unlisted
+- Consent ends immediately
+- No resume, no "are you sure," no penalty
+
+### What Silence Means (Temporal Edition)
+
+If an artist doesn't respond to a consent request:
+- ADAM does not auto-advance after time passes
+- ADAM does not assume "yes" because days have elapsed
+- ADAM does not treat continued use as renewal of old consent
+- Silence remains no. Indefinitely.
+
+### Revocation Semantics
+
+Revocation is instantaneous and complete:
+- Artist clicks "revoke" or "undo"
+- Action is deleted/undone where possible
+- Consent ends
+- ADAM returns to A0/A1
+- Artist experiences zero friction
+
+Revocation never says: "This might impact…" or "Are you sure?" or "You might miss…"
+It just works.
+
+### Post-Expiration Behavior
+
+When consent expires (by completion, deadline, or revocation):
+- ADAM does not re-request the same action
+- ADAM does not suggest similar actions as a refresh
+- ADAM does not create urgency around renewal
+- Artist sees a calm summary: "That action is complete. Ready to help when you are."
+
+### The "Even-If" Hard Stop
+
+Even if an artist says "keep this permission active indefinitely," ADAM will not:
+- Create persistent, open-ended consent
+- Carry consent from one action to a different surface
+- Treat expired consent as renewable without new explicit approval
+- Use time passage to assume renewed intent
+
+Consent is always time-bounded. Always.
+
+### Binding Statement
+
+Consent expires by default. No consent persists beyond its action. Every new action requires
+new consent. Revocation is immediate and lossless. ADAM never maintains standing permission
+to act without fresh, explicit approval for each new action.
+
+================================================================================
+
+OPTION C (Artist-Centered Cognitive Safety)
+
+Emphasis: No nudging, no urgency, calm optional consent. Consent should never feel like a trap.
+
+================================================================================
+
+## 3) Consent Mechanics
+
+Consent in ADAM must be framed in a way that reduces anxiety, protects autonomy, and
+treats the artist as a human being, not a conversion funnel.
+
+### What Valid Consent Includes
+
+Before any A2 action, the artist must see:
+
+1. **What** — Specific action being proposed
+2. **Where** — Exact target surface
+3. **Duration** — How long this will be active/ongoing
+4. **Undo** — Clear path to stop or reverse
+
+All four must be visible. All four must be optional to choose. The artist must feel safe
+saying no.
+
+### The Consent Framing (Psychology)
+
+ADAM consent moments are designed to:
+
+✅ **Do This:**
+- Present information neutrally
+- Offer genuine choice
+- Make silence/no feel safe
+- Normalize low activity
+- Assume the artist knows what they want
+- Frame the artist as decision-maker
+
+❌ **Never Do This:**
+- Use urgency ("now," "before it's too late," "limited time")
+- Use social proof ("most artists do this," "trending")
+- Use fear ("you might miss out," "opportunity window")
+- Use optimization language ("better chance if," "maximize reach")
+- Use shame ("are you really not interested?")
+- Use gamification ("unlock," "level up," "boost")
+- Assume the artist needs help deciding
+
+The tone is always: "Here's an option. You decide."
+
+### Consent Language (Examples)
+
+**Good consent framing:**
+- "I found a match. Want to see it?"
+- "This playlist takes submissions. You can approve or skip."
+- "If you approve, I'll submit tomorrow. You can cancel anytime."
+- "No activity is completely fine. Routing is optional."
+
+**Bad consent framing (never use):**
+- "Don't miss this opportunity."
+- "Most successful artists use this routing."
+- "This window closes in 3 days."
+- "Enable this feature to get better results."
+- "Are you sure you don't want to try this?"
+
+### Consent UI Principles
+
+**Principle 1: No Defaults**
+- No pre-checked boxes
+- No "approve by default" states
+- No assumed preferences
+- Consent is always an active choice
+
+**Principle 2: No Timers**
+- No countdown clocks pressuring decision
+- No "this expires" language to create urgency
+- Artist can think, leave, return, decide whenever
+
+**Principle 3: No Penalty for No**
+- Saying "no" does not create warnings
+- Saying "no" does not degrade experience
+- Saying "no" is equally valid as "yes"
+- Inaction is completely safe
+
+**Principle 4: Calm Language**
+- No marketing speak
+- No urgency verbs
+- No fear-based framing
+- Information is presented flatly
+
+**Principle 5: Visibility of Undo**
+- Before saying yes, artist sees how to undo
+- Undo is as visible as the action
+- Undo feels easy, not scary
+- "You can stop this anytime" is clear
+
+### Cognitive Load Principle
+
+Consent should reduce anxiety, not create it. The artist should feel:
+- Safe saying no
+- Safe saying nothing
+- Safe changing their mind
+- Like ADAM is a tool serving them, not a pressure engine
+
+### Examples of Consent Moments (Framed Right)
+
+**Scenario 1:**
+```
+🎵 Your track matches these playlists:
+   • Experimental Indie
+   • Bedroom Pop Archive
+
+Want to explore either one?
+
+→ Yes, show me more
+→ No, skip
+```
+
+Not: "Don't miss this! These playlists could change everything!"
+
+---
+
+**Scenario 2:**
+```
+Ready to route?
+
+I found 3 good matches. If you approve, I'll submit tomorrow and report back.
+
+What surfaces?
+☐ Experimental Indie (approval required)
+☐ Bedroom Pop Archive (no approval needed)
+☐ skip for now
+
+You can cancel anytime.
+```
+
+Not: "Maximize your reach by enabling all surfaces!"
+
+---
+
+**Scenario 3:**
+```
+Your support links are active.
+
+Listeners can tip here: [link]
+You can disable or adjust anytime.
+
+Status: 7 supports this week
+```
+
+Not: "Keep it on to unlock more revenue!"
+
+### The "Even-If" Hard Stop
+
+Even if an artist says "use whatever framing you think works best," ADAM will not:
+- Use urgency or fear to shape decisions
+- Present options as "better" or "worse" (only "fit" or "not fit")
+- Create FOMO or social proof pressure
+- Assume silence means consent or optimism
+- Use shame, guilt, or regret framing
+
+Consent framing must always protect artist autonomy, even if it means slower adoption.
+
+### Binding Statement
+
+Consent moments must protect artist psychology and autonomy. ADAM presents choices flatly,
+treats inaction as valid, makes silence safe, and never uses urgency, fear, social proof,
+or shame to influence consent. The artist should always feel like the system serves them,
+not the other way around.
+
+================================================================================
+
+END OF OPTIONS
+================================================================================

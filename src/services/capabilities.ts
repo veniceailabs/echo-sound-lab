@@ -68,10 +68,9 @@ export type CapabilityCheckResult = {
   timestamp: number;
 };
 
-export default {
-  Capability,
-  type CapabilityScope,
-  type CapabilityGrant,
-  type CapabilityRequest,
-  type CapabilityCheckResult
+export type {
+  CapabilityScope,
+  CapabilityGrant,
+  CapabilityRequest,
+  CapabilityCheckResult
 };

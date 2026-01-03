@@ -153,7 +153,7 @@ const DEFAULT_TRANSLATIONS: TranslationKeys = {
   },
   upload: {
     title: "Upload Your Track",
-    description: "Drop your audio file to begin mastering",
+    description: "Drop your audio file to begin mixing & mastering",
     analyzingAudio: "Analyzing Audio",
     extractingMetrics: "Extracting metrics and signatures..."
   },

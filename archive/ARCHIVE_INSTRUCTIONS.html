@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Golden Master Archive - PDF Export Instructions</title>
+    <link rel="stylesheet" href="archive-styles.css">
+    <style>
+        html {
+            background: #1a1a1a !important;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #1a1a1a;
+            color: #e5e5e5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding-bottom: 24px;
+            border-bottom: 1px solid #333333;
+        }
+
+        .title {
+            font-size: 2.5em;
+            font-weight: 300;
+            color: #ffffff;
+            margin: 0 0 12px 0;
+            letter-spacing: -1px;
+        }
+
+        .subtitle {
+            font-size: 1.1em;
+            color: #b3b3b3;
+            margin: 0;
+            font-weight: 300;
+        }
+
+        .description {
+            color: #808080;
+            font-size: 0.9em;
+            margin-top: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        h2 {
+            font-size: 1.5em;
+            font-weight: 600;
+            color: #ffffff;
+            margin: 32px 0 16px 0;
+            padding-top: 24px;
+        }
+
+        h3 {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #4a9eff;
+            margin: 20px 0 12px 0;
+        }
+
+        p {
+            color: #cbd5e1;
+            font-size: 0.95em;
+            margin: 12px 0;
+            line-height: 1.6;
+        }
+
+        ul, ol {
+            color: #cbd5e1;
+            margin: 12px 0 12px 24px;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .method-box {
+            background: linear-gradient(135deg, #1f1f1f 0%, #252525 100%);
+            border: 1px solid #2d2d2d;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 24px 0;
+        }
+
+        .method-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #4a9eff;
+            margin: 0 0 12px 0;
+        }
+
+        .highlight {
+            background: #2d2d2d;
+            color: #4ade80;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .code-block {
+            background: #0a0a0a;
+            color: #4ade80;
+            padding: 16px;
+            border-radius: 4px;
+            margin: 12px 0;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.85em;
+            overflow-x: auto;
+            line-height: 1.5;
+        }
+
+        .info-box {
+            background: linear-gradient(135deg, #1f1f1f 0%, #252525 100%);
+            border: 1px solid #2d2d2d;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 24px 0;
+        }
+
+        .info-title {
+            font-size: 1em;
+            font-weight: 600;
+            color: #4a9eff;
+            margin: 0 0 12px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .info-content {
+            font-size: 0.95em;
+            color: #b3b3b3;
+            line-height: 1.6;
+        }
+
+        .success {
+            color: #4ade80;
+            font-weight: 600;
+        }
+
+        .warning {
+            color: #fbbf24;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            margin: 24px 0;
+            border-collapse: collapse;
+            font-size: 0.9em;
+        }
+
+        table th {
+            background: #2d2d2d;
+            color: #e5e5e5;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #404040;
+        }
+
+        table td {
+            padding: 12px;
+            border-bottom: 1px solid #333333;
+            color: #cbd5e1;
+        }
+
+        table tr:nth-child(even) {
+            background: #1a1a1a;
+        }
+
+        .footer {
+            text-align: center;
+            padding-top: 40px;
+            border-top: 1px solid #333333;
+            margin-top: 40px;
+            color: #808080;
+            font-size: 0.9em;
+        }
+
+        @media print {
+            body {
+                background: white;
+                color: #1a1a1a;
+                padding: 0;
+            }
+
+            .container {
+                background: white;
+            }
+
+            h2, h3 {
+                page-break-after: avoid;
+            }
+
+            .method-box, .info-box {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">Archive Instructions</h1>
+            <p class="subtitle">How to Generate PDF Export from Golden Master Archive</p>
+            <p class="description">Complete guide for batch exporting all 8 documents to PDF format</p>
+        </div>
+
+        <h2>Archive Contents</h2>
+        <p>The Golden Master Archive contains 8 documents:</p>
+        <ol>
+            <li>Executive Summary (4 pages)</li>
+            <li>Executive White Paper (18 pages)</li>
+            <li>Final White Paper (22 pages)</li>
+            <li>Amendment Verification (19 pages)</li>
+            <li>Bill of Materials (11 pages)</li>
+            <li>Regulatory Alignment (20 pages)</li>
+            <li>Statement of Conformity (7 pages)</li>
+            <li>Phase 5: Adversarial Hardening (11 pages)</li>
+        </ol>
+        <p><strong>Total:</strong> ~112 pages, ~8-10 MB when exported to PDF</p>
+
+        <h2>Recommended: Method 1 - Batch Script (Fastest)</h2>
+        <div class="method-box">
+            <div class="method-title">⭐ Automated PDF Generation</div>
+            <p>Generate all 8 PDFs automatically with proper formatting and page numbering.</p>
+
+            <h3>Prerequisites</h3>
+            <p>Ensure Node.js and npm are installed, then install Puppeteer:</p>
+            <div class="code-block">npm install puppeteer</div>
+
+            <h3>Run the Batch Script</h3>
+            <div class="code-block">cd "/Users/DRA/Desktop/Echo Sound Lab/Echo Sound Lab v2.5"<br/>npx tsx scripts/batch-print-archive-to-pdf.ts</div>
+
+            <h3>What Happens</h3>
+            <p>The script will generate all PDFs sequentially with progress indicators:</p>
+            <div class="code-block">📄 [1/8] Converting: Executive Summary<br/>   ✅ Generated: 01_GOLDEN_MASTER_EXECUTIVE_SUMMARY.pdf (0.45 MB)<br/><br/>📄 [2/8] Converting: Executive White Paper<br/>   ✅ Generated: 02_ACTION_AUTHORITY_v1.4.0_EXECUTIVE_WHITE_PAPER.pdf (1.23 MB)<br/><br/>... (continues for all 8 documents)<br/><br/>✅ Successfully Generated: 8/8<br/>📊 Total Archive Size: 8.94 MB</div>
+
+            <h3>Output Location</h3>
+            <p>All PDFs are saved in:</p>
+            <div class="code-block">/Users/DRA/Desktop/Echo Sound Lab/Echo Sound Lab v2.5/archive/</div>
+
+            <h3>Advantages</h3>
+            <ul>
+                <li><span class="success">✅</span> Converts all 8 documents in one command</li>
+                <li><span class="success">✅</span> Automatic page numbering and footers</li>
+                <li><span class="success">✅</span> Consistent formatting across all PDFs</li>
+                <li><span class="success">✅</span> Professional output quality</li>
+                <li><span class="success">✅</span> Takes only 2-3 minutes total</li>
+            </ul>
+        </div>
+
+        <h2>Alternative: Method 2 - Manual Browser Print</h2>
+        <div class="method-box">
+            <div class="method-title">🌐 Full Control via Browser</div>
+            <p>Print each document individually using your browser's print dialog.</p>
+
+            <h3>For Each Document:</h3>
+            <ol>
+                <li><strong>Open in Browser:</strong>
+                    <div class="code-block">file:///Users/DRA/Desktop/Echo%20Sound%20Lab/Echo%20Sound%20Lab%20v2.5/archive/[FILENAME].html</div>
+                </li>
+                <li><strong>Print to PDF:</strong>
+                    <ul>
+                        <li>Press: <span class="highlight">Cmd+P</span> (Mac) or <span class="highlight">Ctrl+P</span> (Windows)</li>
+                        <li>Destination: "Save as PDF"</li>
+                        <li>Settings: Margins 0.5", Scale 100%</li>
+                        <li><span class="warning">⚠️ Enable "Background Graphics" to preserve dark theme</span></li>
+                    </ul>
+                </li>
+                <li><strong>Save in archive folder</strong></li>
+                <li><strong>Repeat for all 8 documents</strong></li>
+            </ol>
+
+            <h3>Time Required</h3>
+            <p>~8-10 minutes (8 documents × ~1 min each)</p>
+
+            <h3>Advantages</h3>
+            <ul>
+                <li><span class="success">✅</span> No extra software required</li>
+                <li><span class="success">✅</span> Full visual control over output</li>
+                <li><span class="success">✅</span> Can preview before saving</li>
+            </ul>
+        </div>
+
+        <h2>Critical Print Settings</h2>
+        <div class="info-box">
+            <div class="info-title">⚙️ Preserve Dark Theme</div>
+            <div class="info-content">
+                <p><strong>For dark theme preservation, enable these settings:</strong></p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Setting</th>
+                            <th>Value</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Background Graphics</strong></td>
+                            <td>✅ ON</td>
+                            <td>Preserves dark backgrounds</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Margins</strong></td>
+                            <td>0.5"</td>
+                            <td>Professional spacing</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Scale</strong></td>
+                            <td>100%</td>
+                            <td>True-to-size content</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Page Size</strong></td>
+                            <td>A4</td>
+                            <td>Standard document</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Orientation</strong></td>
+                            <td>Portrait</td>
+                            <td>Standard reading</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p style="margin-top: 12px; font-style: italic;"><span class="warning">⚠️ WARNING:</span> Without "Background Graphics" enabled, dark backgrounds become white.</p>
+            </div>
+        </div>
+
+        <h2>Method Comparison</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Method</th>
+                    <th>Time</th>
+                    <th>Effort</th>
+                    <th>Quality</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Method 1: Batch Script</strong></td>
+                    <td>2-3 min</td>
+                    <td>Minimal</td>
+                    <td>⭐⭐⭐⭐⭐</td>
+                </tr>
+                <tr>
+                    <td><strong>Method 2: Manual Print</strong></td>
+                    <td>8-10 min</td>
+                    <td>Moderate</td>
+                    <td>⭐⭐⭐⭐⭐</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Expected Output</h2>
+        <div class="info-box">
+            <div class="info-title">📊 File Sizes and Page Counts</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Document</th>
+                        <th>Pages</th>
+                        <th>PDF Size</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>01 - Executive Summary</td>
+                        <td>4</td>
+                        <td>~0.4 MB</td>
+                    </tr>
+                    <tr>
+                        <td>02 - Executive White Paper</td>
+                        <td>18</td>
+                        <td>~1.2 MB</td>
+                    </tr>
+                    <tr>
+                        <td>03 - Final White Paper</td>
+                        <td>22</td>
+                        <td>~1.5 MB</td>
+                    </tr>
+                    <tr>
+                        <td>04 - Amendment Verification</td>
+                        <td>19</td>
+                        <td>~1.3 MB</td>
+                    </tr>
+                    <tr>
+                        <td>05 - Bill of Materials</td>
+                        <td>11</td>
+                        <td>~0.9 MB</td>
+                    </tr>
+                    <tr>
+                        <td>06 - Regulatory Alignment</td>
+                        <td>20</td>
+                        <td>~1.4 MB</td>
+                    </tr>
+                    <tr>
+                        <td>07 - Statement of Conformity</td>
+                        <td>7</td>
+                        <td>~0.6 MB</td>
+                    </tr>
+                    <tr>
+                        <td>08 - Phase 5: Adversarial Hardening</td>
+                        <td>11</td>
+                        <td>~0.8 MB</td>
+                    </tr>
+                    <tr style="font-weight: 600; background: #2d2d2d !important;">
+                        <td><strong>TOTAL</strong></td>
+                        <td><strong>112</strong></td>
+                        <td><strong>~8-10 MB</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h2>Troubleshooting</h2>
+        <div class="info-box">
+            <div class="info-title">🔧 Common Issues</div>
+            <p><strong>Issue: "Puppeteer not found"</strong></p>
+            <div class="code-block">npm install puppeteer</div>
+
+            <p style="margin-top: 16px;"><strong>Issue: PDFs are blank or missing dark background</strong></p>
+            <ul>
+                <li>Ensure "Background Graphics" is enabled in browser print settings</li>
+                <li>Check that HTML files are in the archive folder</li>
+                <li>Try Google Chrome (best CSS support)</li>
+            </ul>
+
+            <p style="margin-top: 16px;"><strong>Issue: File permissions denied</strong></p>
+            <div class="code-block">chmod +x scripts/batch-print-archive-to-pdf.ts</div>
+
+            <p style="margin-top: 16px;"><strong>Issue: Some pages missing from output</strong></p>
+            <ul>
+                <li>Close popup windows that might interfere</li>
+                <li>Try Method 2 (browser print) instead</li>
+            </ul>
+        </div>
+
+        <h2>Archive Is Complete When</h2>
+        <div class="info-box">
+            <div class="info-title">✅ Completion Checklist</div>
+            <ul>
+                <li><span class="success">✅</span> All 8 PDFs generated</li>
+                <li><span class="success">✅</span> Each PDF has proper pagination</li>
+                <li><span class="success">✅</span> Dark theme preserved in output</li>
+                <li><span class="success">✅</span> All content included</li>
+                <li><span class="success">✅</span> File sizes reasonable (8-10 MB total)</li>
+            </ul>
+            <p style="margin-top: 16px;">Archive is ready to:</p>
+            <ul>
+                <li>Print the complete archive</li>
+                <li>Share with stakeholders</li>
+                <li>Submit to regulators</li>
+                <li>Archive in document repository</li>
+                <li>Distribute to legal/compliance teams</li>
+            </ul>
+        </div>
+
+        <div class="footer">
+            <p>📍 Golden Master Archive - PDF Export Instructions</p>
+            <p>Status: Comprehensive guide for PDF generation and archival</p>
+        </div>
+    </div>
+</body>
+</html>
