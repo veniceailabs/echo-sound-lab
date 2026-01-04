@@ -42,6 +42,7 @@ export const SELECTOR_MAP = {
   processingPanel: 'div[class*="from-white"].[class*="to-white"] > div:has(button:has-text("COMMIT"))',
   commitButton: 'button:has-text("COMMIT")',
   exportButton: 'button:has-text("EXPORT")',
+  executeButton: 'button:has-text("Apply") | button:has-text("COMMIT")',
   applyButton: 'button:has-text("Apply")',
 
   // ===== EQ CONTROLS =====
@@ -104,6 +105,7 @@ export const WAIT_FOR_STATES = {
   appLoaded: 'div[class*="app-shell"]',
   modeTabsReady: 'button[class*="text-orange-400"]', // Active tab visible
   proposalCardReady: 'div[class*="border-l-4"][class*="border-amber-400"] | div[class*="border-l-4"][class*="border-blue-500"]', // Proposal visible
+  proposalCardExecuted: 'div[class*="border-l-4"][class*="bg-green-600\\/50"]', // Executed proposal state
   holdButtonReady: 'button:has-text("HOLDING 0%") | button:has-text("PRESS ENTER")',
   reportReady: 'h2:has-text("Echo Report")',
   processingComplete: 'button:has-text("COMMIT")[not(disabled)]',
