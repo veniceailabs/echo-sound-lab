@@ -82,7 +82,7 @@
             const warning = document.createElement('div');
             warning.style.cssText = `
                 position: fixed;
-                bottom: 20px;
+                bottom: 100px;
                 right: 20px;
                 background: rgba(220, 53, 69, 0.9);
                 color: white;
