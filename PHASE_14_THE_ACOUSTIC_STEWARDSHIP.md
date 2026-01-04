@@ -23,7 +23,7 @@ This is not a roadmap. This is a covenant.
 
 ## 1. THE WHY (The Heart)
 
-Look, we spent the last few years building the most advanced audio system in history. We built safeguards, we built quantum solvers, we built a fortress.
+Look, we spent the last few months building the most advanced audio system in history. We built safeguards, we built quantum solvers, we built a fortress.
 
 But at the end of the day, I have to live here.
 
