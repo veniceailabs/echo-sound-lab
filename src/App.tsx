@@ -606,7 +606,7 @@ const App: React.FC = () => {
       { id: 'SINGLE', label: i18nService.t('modes.single'), active: activeMode === 'SINGLE', confidenceLevel: 'certain' as const },
       { id: 'MULTI', label: i18nService.t('modes.multi'), active: activeMode === 'MULTI', confidenceLevel: 'certain' as const },
       { id: 'AI_STUDIO', label: i18nService.t('modes.ai'), active: activeMode === 'AI_STUDIO', confidenceLevel: 'certain' as const },
-      { id: 'VIDEO', label: 'Video', active: activeMode === 'VIDEO', confidenceLevel: 'certain' as const },
+      { id: 'VIDEO', label: 'SFS Video Engine', active: activeMode === 'VIDEO', confidenceLevel: 'certain' as const },
     ];
     const activeLabel = tabs.find((tab) => tab.active)?.label || activeMode;
     const scan: SSCScan = {
@@ -2698,7 +2698,7 @@ const App: React.FC = () => {
                     : 'bg-slate-900/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/70 shadow-[3px_3px_6px_#050710,-3px_-3px_6px_#0f1828] border border-slate-800/30 hover:border-slate-700/50'
                 }`}
               >
-                {mode === 'SINGLE' ? i18nService.t('modes.single') : mode === 'MULTI' ? i18nService.t('modes.multi') : mode === 'AI_STUDIO' ? i18nService.t('modes.ai') : 'Video'}
+                {mode === 'SINGLE' ? i18nService.t('modes.single') : mode === 'MULTI' ? i18nService.t('modes.multi') : mode === 'AI_STUDIO' ? i18nService.t('modes.ai') : 'SFS Video Engine'}
               </button>
             ))}
           </div>

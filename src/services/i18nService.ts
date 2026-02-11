@@ -147,7 +147,7 @@ const DEFAULT_TRANSLATIONS: TranslationKeys = {
   },
   modes: {
     single: "Single Track",
-    multi: "Multi-Stem",
+    multi: "Stems",
     reference: "Reference Matching",
     ai: "AI Studio"
   },
