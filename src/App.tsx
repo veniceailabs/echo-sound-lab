@@ -804,6 +804,55 @@ const App: React.FC = () => {
     }));
   }, []);
 
+  const buildLegendaryWeightAction = useCallback((
+    metrics: AudioMetrics,
+    mode: PreservationMode
+  ): ProcessingAction => {
+    const transientSharpness = metrics.advancedMetrics?.transientSharpness ?? 60;
+    const spectral = metrics.spectralBalance;
+    const lowEnergy = (spectral?.low ?? 0) + (spectral?.lowMid ?? 0);
+    const lowBias = Math.max(0, Math.min(1, (lowEnergy - 0.25) / 0.25));
+
+    const baseAmount = mode === 'preserve' ? 0.055 : mode === 'balanced' ? 0.075 : 0.095;
+    const transientGuard = transientSharpness > 70 ? 0.9 : 1.0;
+    const amount = Math.max(0.03, Math.min(0.14, (baseAmount + lowBias * 0.02) * transientGuard));
+
+    const baseMix = mode === 'preserve' ? 0.22 : mode === 'balanced' ? 0.27 : 0.32;
+    const mix = Math.max(0.16, Math.min(0.38, baseMix + lowBias * 0.03));
+
+    return {
+      id: `legendary-weight-${Date.now()}`,
+      label: 'Legendary Weight',
+      description: 'Adds subtle even-order harmonics for low-end weight and mid warmth while preserving punch.',
+      type: 'Saturation',
+      category: 'Warmth',
+      isSelected: true,
+      isApplied: false,
+      isEnabled: true,
+      refinementType: 'parameters',
+      params: [
+        { name: 'type', value: 'tube', type: 'enum', enumOptions: ['tube'], enabledByDefault: true },
+        { name: 'amount', value: Number(amount.toFixed(3)), min: 0, max: 0.2, step: 0.005, type: 'number', enabledByDefault: true },
+        { name: 'mix', value: Number(mix.toFixed(3)), min: 0, max: 1, step: 0.01, type: 'number', enabledByDefault: true },
+      ],
+      diagnostic: {
+        metric: 'Legendary Weight',
+        currentValue: transientSharpness,
+        targetValue: 65,
+        severity: 'info',
+      },
+    };
+  }, []);
+
+  const withLegendaryWeight = useCallback((
+    actions: ProcessingAction[],
+    metrics: AudioMetrics,
+    mode: PreservationMode
+  ): ProcessingAction[] => {
+    const filtered = actions.filter((action) => action.type !== 'Saturation');
+    return [...filtered, buildLegendaryWeightAction(metrics, mode)];
+  }, [buildLegendaryWeightAction]);
+
   // Handle restore session
   const handleRestoreSession = () => {
     if (pendingSession) {
@@ -1539,7 +1588,23 @@ const App: React.FC = () => {
       return;
     }
 
-    await handleApplySuggestions(selectedActions);
+    const weightedActions = withLegendaryWeight(selectedActions, originalMetrics, preservationMode);
+
+    setAnalysisResult((prev: any) => {
+      if (!prev) return prev;
+      const weightAction = weightedActions.find((action) => action.type === 'Saturation');
+      if (!weightAction) return prev;
+      const existingActions = (prev.actions || []).filter((action: ProcessingAction) => action.type !== 'Saturation');
+      const nextActions = [...existingActions, weightAction];
+      return {
+        ...prev,
+        actions: nextActions,
+        suggestions: buildSuggestionsFromActions(nextActions),
+      };
+    });
+
+    showNotification('Legendary Weight engaged: adding analog warmth without sacrificing punch.', 'info', 2400);
+    await handleApplySuggestions(weightedActions);
   };
 
   const runAutoMix = async (mode: 'STANDARD' | 'FULL_STUDIO') => {
