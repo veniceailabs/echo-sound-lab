@@ -2512,6 +2512,64 @@ const App: React.FC = () => {
     }
   };
 
+  /**
+   * Route generated song directly into Single Track mastering flow.
+   */
+  const handleSongOpenSingleTrack = async (song: GeneratedSong) => {
+    try {
+      if (snapshotABActive) {
+        handleClearSnapshotAB();
+      }
+      stopAplSession();
+      setAplProposals([]);
+
+      setAppState(AppState.LOADING);
+      setActiveMode('SINGLE');
+
+      audioEngine.setProcessedBuffer(null);
+      audioEngine.setBuffer(song.buffer);
+
+      const metrics = mixAnalysisService.analyzeStaticMetrics(song.buffer);
+      const estimatedLUFS = metrics.rms + 3;
+      metrics.lufs = {
+        integrated: estimatedLUFS,
+        shortTerm: estimatedLUFS,
+        momentary: estimatedLUFS,
+        loudnessRange: metrics.crestFactor,
+        truePeak: metrics.peak,
+      };
+
+      setCurrentFileName(`${song.name}.wav`);
+      setOriginalMetrics(metrics);
+      setProcessedMetrics(null);
+      setOriginalBuffer(song.buffer);
+      setHasAppliedChanges(false);
+      setShadowTelemetry(null);
+      setLatestEngineVerdict(null);
+      setLatestEngineVerdictReason(null);
+      setCurrentConfig({});
+      hasUserInitiatedProcessingRef.current = false;
+      setEqSettings(defaultEqSettings);
+      setDynamicEq(defaultDynamicEq);
+      setListeningPassData(null);
+      setLLMGuidance(null);
+      setAnalysisResult({
+        metrics,
+        suggestions: [],
+        genrePrediction: 'Ready for Analysis',
+        frequencyData: [],
+        mixReadiness: 'in_progress'
+      });
+
+      historyManager.addEntry('upload', `Loaded AI Studio song: ${song.name}`, {}, metrics);
+      setAppState(AppState.READY);
+    } catch (error) {
+      console.error('[App] Failed to open generated song in single track mode:', error);
+      alert('Failed to open generated song in Single Track. Please try again.');
+      setAppState(AppState.IDLE);
+    }
+  };
+
   // Selected suggestion count (only unapplied)
   const selectedSuggestionCount = analysisResult?.suggestions.filter((s: Suggestion) => s.isSelected && !appliedSuggestionIds.includes(s.id)).length || 0;
   const displayTelemetry = shadowTelemetry
@@ -3241,7 +3299,10 @@ const App: React.FC = () => {
       {/* AI Studio Mode */}
       {activeMode === 'AI_STUDIO' && (
         <div className="w-full max-w-6xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden">
-          <AIStudio onSongGenerated={handleSongGenerated} />
+          <AIStudio
+            onSongGenerated={handleSongGenerated}
+            onSongOpenSingleTrack={handleSongOpenSingleTrack}
+          />
         </div>
       )}
 

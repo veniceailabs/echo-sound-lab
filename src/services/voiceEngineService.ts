@@ -76,6 +76,7 @@ class VoiceEngineService {
       voiceInput?: Blob | File;
       tempo?: number;
       outputName?: string;
+      songTitle?: string;
       voiceId?: string;
       instrumental?: boolean;
     }
@@ -100,6 +101,7 @@ class VoiceEngineService {
         style: requestedStyle,
         tempo,
         lyrics,
+        songTitle: options?.songTitle,
         voiceId: options?.voiceId,
         instrumental: !!options?.instrumental,
         outputPath: outputName,
@@ -120,6 +122,8 @@ class VoiceEngineService {
     return {
       id: `local-song-${Date.now()}`,
       name: `${voiceModel?.name || 'Local Voice'} - ${requestedStyle}`,
+      coverArtUrl: result.coverArtUrl,
+      coverArtPath: result.coverArtPath,
       buffer: songBuffer,
       stems: {
         vocals: vocalsBuffer,

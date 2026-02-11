@@ -16,6 +16,7 @@ import logging
 import base64
 import time
 import subprocess
+import hashlib
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -39,6 +40,13 @@ except ImportError as e:
     print(f"❌ Missing dependency: {e}")
     print("Run setup_bridge.sh first to install requirements")
     sys.exit(1)
+
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("⚠️  Pillow not available - cover art generation disabled")
 
 try:
     import demucs.separate
@@ -117,6 +125,82 @@ def cleanup_memory() -> None:
         logger.info("🧹 Memory cleaned - cache cleared, RAM released")
     except Exception as e:
         logger.warning(f"Memory cleanup warning: {e}")
+
+
+def generate_cover_art(title: str, genre: str, output_dir: Path) -> Optional[Path]:
+    """
+    Deterministic local cover art generator (Pillow).
+    """
+    if not PIL_AVAILABLE:
+        logger.warning("Cover art skipped: Pillow missing")
+        return None
+
+    safe_title = (title or "Echo Session").strip()
+    safe_genre = (genre or "Ambient").strip()
+    slug = f"{safe_title}|{safe_genre}".lower()
+    digest = hashlib.sha256(slug.encode("utf-8")).hexdigest()
+
+    filename = f"cover_{digest[:16]}.jpg"
+    output_path = output_dir / filename
+
+    width, height = 1400, 1400
+    base_palettes = {
+        "trap": ((45, 20, 78), (8, 10, 22)),
+        "lo-fi": ((149, 118, 94), (44, 35, 29)),
+        "lofi": ((149, 118, 94), (44, 35, 29)),
+        "synthwave": ((200, 63, 126), (23, 26, 58)),
+        "rock": ((115, 36, 32), (20, 18, 20)),
+        "ambient": ((39, 74, 110), (9, 22, 36)),
+    }
+    primary, secondary = base_palettes.get(safe_genre.lower(), ((44, 62, 92), (12, 18, 32)))
+
+    img = Image.new("RGB", (width, height), color=secondary)
+    draw = ImageDraw.Draw(img)
+
+    # Gradient fill
+    for y in range(height):
+        t = y / max(1, height - 1)
+        r = int(primary[0] * (1 - t) + secondary[0] * t)
+        g = int(primary[1] * (1 - t) + secondary[1] * t)
+        b = int(primary[2] * (1 - t) + secondary[2] * t)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+    # Deterministic texture
+    seed_bytes = bytes.fromhex(digest[:32])
+    for i in range(220):
+        idx = i % len(seed_bytes)
+        x = int((seed_bytes[idx] / 255.0) * width)
+        y = int((seed_bytes[(idx + 5) % len(seed_bytes)] / 255.0) * height)
+        radius = 2 + (seed_bytes[(idx + 11) % len(seed_bytes)] % 12)
+        alpha = 28 + (seed_bytes[(idx + 17) % len(seed_bytes)] % 45)
+        overlay = Image.new("RGBA", (radius * 4, radius * 4), (255, 255, 255, 0))
+        odraw = ImageDraw.Draw(overlay)
+        odraw.ellipse((0, 0, radius * 4 - 1, radius * 4 - 1), fill=(255, 255, 255, alpha))
+        img.paste(overlay, (max(0, x - radius * 2), max(0, y - radius * 2)), overlay)
+
+    # Typography
+    try:
+        font_title = ImageFont.truetype("Arial.ttf", 92)
+        font_sub = ImageFont.truetype("Arial.ttf", 36)
+    except Exception:
+        font_title = ImageFont.load_default()
+        font_sub = ImageFont.load_default()
+
+    title_text = safe_title[:58]
+    genre_text = safe_genre.upper()
+
+    bbox = draw.multiline_textbbox((0, 0), title_text, font=font_title, align="center")
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
+    tx = (width - text_w) // 2
+    ty = (height - text_h) // 2 - 36
+
+    draw.multiline_text((tx + 2, ty + 2), title_text, font=font_title, fill=(0, 0, 0), align="center")
+    draw.multiline_text((tx, ty), title_text, font=font_title, fill=(239, 241, 247), align="center")
+    draw.text((width // 2 - 120, ty + text_h + 36), genre_text, font=font_sub, fill=(214, 219, 232))
+
+    img.save(output_path, format="JPEG", quality=92, optimize=True)
+    return output_path
 
 # --- AUDIO LOADING ---
 def load_audio_file(filename: str) -> tuple:
@@ -1289,6 +1373,7 @@ async def run_music_system(websocket, payload):
     voice_id = payload.get('voice_id', '')
     instrumental = bool(payload.get('instrumental', False))
     output_path = payload.get('output_path')
+    song_title = (payload.get('song_title') or '').strip()
 
     if not voice_path or not style or not output_path:
         await websocket.send_json({
@@ -1401,6 +1486,8 @@ async def run_music_system(websocket, payload):
             return
 
         song_name = Path(final_song_path).name
+        if not song_title:
+            song_title = Path(final_song_path).stem.replace('_', ' ')
         result_payload = {
             "song_path": final_song_path,
             "song_url": f"http://{HOST}:{PORT}/stems/{song_name}",
@@ -1412,6 +1499,11 @@ async def run_music_system(websocket, payload):
         if final_instrumental_path:
             result_payload["instrumental_path"] = final_instrumental_path
             result_payload["instrumental_url"] = f"http://{HOST}:{PORT}/stems/{Path(final_instrumental_path).name}"
+
+        cover_art_path = generate_cover_art(song_title, str(style), OUTPUT_DIR)
+        if cover_art_path:
+            result_payload["cover_art_path"] = str(cover_art_path)
+            result_payload["cover_art_url"] = f"http://{HOST}:{PORT}/stems/{cover_art_path.name}"
 
         await websocket.send_json({
             "action": "RUN_MUSIC_SYSTEM",

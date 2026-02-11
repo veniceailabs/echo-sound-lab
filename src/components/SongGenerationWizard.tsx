@@ -8,6 +8,7 @@ import AudioDeviceSelector from './AudioDeviceSelector';
 interface SongGenerationWizardProps {
   voiceModels: VoiceModel[];
   onComplete: (generatedSong: GeneratedSong) => void;
+  onOpenSingleTrack?: (generatedSong: GeneratedSong) => void;
   onCancel: () => void;
 }
 
@@ -23,13 +24,6 @@ interface PersonaPreset {
   instrumental: boolean;
 }
 
-interface GeneratedEntry {
-  id: string;
-  name: string;
-  style: string;
-  createdAt: number;
-}
-
 const PERSONA_STORAGE_KEY = 'echo.aiStudio.personas.v1';
 
 const STYLE_OPTIONS: Array<{ value: LocalStyle; tags: string[]; defaultTempo: number }> = [
@@ -41,7 +35,7 @@ const STYLE_OPTIONS: Array<{ value: LocalStyle; tags: string[]; defaultTempo: nu
 
 const DEFAULT_LYRICS = `[Verse]\nCity lights and static in my chest tonight\nRunning through the noise till the silence hits right\n\n[Chorus]\nWe rise in stereo, we glow in neon rain\nEcho in the skyline, singing through the pain`;
 
-const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels, onComplete, onCancel }) => {
+const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels, onComplete, onOpenSingleTrack, onCancel }) => {
   const [pane, setPane] = useState<StudioPane>('create');
   const [isCustomMode, setIsCustomMode] = useState(true);
 
@@ -61,7 +55,7 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
   const [channelMode, setChannelMode] = useState<'mono' | 'stereo'>('mono');
 
   const [personas, setPersonas] = useState<PersonaPreset[]>([]);
-  const [generatedHistory, setGeneratedHistory] = useState<GeneratedEntry[]>([]);
+  const [generatedSongs, setGeneratedSongs] = useState<Array<GeneratedSong & { createdAt: number }>>([]);
   const [latestSong, setLatestSong] = useState<GeneratedSong | null>(null);
 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -120,7 +114,7 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
     localStorage.setItem(PERSONA_STORAGE_KEY, JSON.stringify(next));
   };
 
-  const insertLyricTag = (tag: 'Verse' | 'Chorus') => {
+  const insertLyricTag = (tag: 'Intro' | 'Verse' | 'Chorus' | 'Outro') => {
     setLyrics((prev) => `${prev.trim()}\n\n[${tag}]\n`);
   };
 
@@ -187,6 +181,7 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
         {
           voiceInput: audioBlob || voiceFile || undefined,
           tempo,
+          songTitle: title,
           voiceId,
           instrumental,
           outputName,
@@ -194,15 +189,7 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
       );
 
       setLatestSong(result);
-      setGeneratedHistory((prev) => [
-        {
-          id: result.id,
-          name: result.name,
-          style,
-          createdAt: Date.now(),
-        },
-        ...prev,
-      ]);
+      setGeneratedSongs((prev) => [{ ...result, createdAt: Date.now() }, ...prev]);
       setStatusMessage('Song built locally.');
       setPane('library');
     } catch (e) {
@@ -287,8 +274,10 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] uppercase tracking-wider text-slate-500">Lyrics Editor</label>
                       <div className="flex gap-2">
+                        <button onClick={() => insertLyricTag('Intro')} className={cn(secondaryButton, 'px-2 py-1 text-[10px]')}>+ [Intro]</button>
                         <button onClick={() => insertLyricTag('Verse')} className={cn(secondaryButton, 'px-2 py-1 text-[10px]')}>+ [Verse]</button>
                         <button onClick={() => insertLyricTag('Chorus')} className={cn(secondaryButton, 'px-2 py-1 text-[10px]')}>+ [Chorus]</button>
+                        <button onClick={() => insertLyricTag('Outro')} className={cn(secondaryButton, 'px-2 py-1 text-[10px]')}>+ [Outro]</button>
                       </div>
                     </div>
                     <textarea
@@ -448,22 +437,45 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
           {pane === 'library' && (
             <>
               <h3 className="text-lg font-bold text-white">Library</h3>
-              {!generatedHistory.length && !latestSong && (
+              {!generatedSongs.length && !latestSong && (
                 <p className="text-sm text-slate-500">No local songs generated yet.</p>
               )}
               {latestSong && (
                 <div className="rounded-2xl border border-green-500/30 bg-green-500/10 p-4 mb-4">
                   <p className="text-sm text-green-200 font-semibold">Latest: {latestSong.name}</p>
-                  <button onClick={() => onComplete(latestSong)} className={cn(glowButton, 'mt-3 px-4 py-2 text-xs')}>
-                    Route Latest To Workspace
-                  </button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button onClick={() => onComplete(latestSong)} className={cn(glowButton, 'px-4 py-2 text-xs')}>
+                      Route To Stems
+                    </button>
+                    <button
+                      onClick={() => onOpenSingleTrack?.(latestSong)}
+                      className={cn(secondaryButton, 'px-4 py-2 text-xs')}
+                    >
+                      Open In Single Track
+                    </button>
+                  </div>
                 </div>
               )}
               <div className="space-y-2">
-                {generatedHistory.map((entry) => (
-                  <div key={entry.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-                    <p className="text-sm text-slate-100">{entry.name}</p>
-                    <p className="text-xs text-slate-500">{entry.style} · {new Date(entry.createdAt).toLocaleString()}</p>
+                {generatedSongs.map((entry) => (
+                  <div key={entry.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 flex items-center gap-3">
+                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-700/60 bg-slate-950/70">
+                      {entry.coverArtUrl ? (
+                        <img src={entry.coverArtUrl} alt={`${entry.name} cover art`} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-[10px] uppercase tracking-wider text-slate-500">
+                          No Art
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-slate-100 truncate">{entry.name}</p>
+                      <p className="text-xs text-slate-500">{entry.metadata.style} · {new Date(entry.createdAt).toLocaleString()}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button onClick={() => onComplete(entry)} className={cn(secondaryButton, 'px-3 py-1.5 text-[10px]')}>To Stems</button>
+                        <button onClick={() => onOpenSingleTrack?.(entry)} className={cn(secondaryButton, 'px-3 py-1.5 text-[10px]')}>Open In Single Track</button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>

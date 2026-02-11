@@ -810,6 +810,8 @@ export interface SunoGenerationResponse {
 export interface GeneratedSong {
   id: string;
   name: string;
+  coverArtUrl?: string;
+  coverArtPath?: string;
   buffer: AudioBuffer;
   stems: {
     vocals: AudioBuffer;

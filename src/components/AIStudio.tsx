@@ -8,9 +8,10 @@ import SongGenerationWizard from './SongGenerationWizard';
 
 interface AIStudioProps {
     onSongGenerated?: (song: GeneratedSong) => void;
+    onSongOpenSingleTrack?: (song: GeneratedSong) => void;
 }
 
-const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated }) => {
+const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated, onSongOpenSingleTrack }) => {
     const [view, setView] = useState<'library' | 'training' | 'generate'>('library');
     const [models, setModels] = useState<VoiceModel[]>([]);
     const [selectedModel, setSelectedModel] = useState<VoiceModel | null>(null);
@@ -160,6 +161,7 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated }) => {
                 <SongGenerationWizard
                     voiceModels={models}
                     onComplete={handleGenerationComplete}
+                    onOpenSingleTrack={onSongOpenSingleTrack}
                     onCancel={() => setView('library')}
                 />
             )}

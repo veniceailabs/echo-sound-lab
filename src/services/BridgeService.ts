@@ -703,6 +703,7 @@ class BridgeServiceImpl {
       lyrics?: string;
       voiceId?: string;
       instrumental?: boolean;
+      songTitle?: string;
       outputPath: string;
     },
     onEvent?: (event: { percent?: number; message?: string }) => void
@@ -713,6 +714,8 @@ class BridgeServiceImpl {
     vocalsUrl?: string;
     instrumentalPath?: string;
     instrumentalUrl?: string;
+    coverArtPath?: string;
+    coverArtUrl?: string;
   }> {
     const requestId = `music-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -746,6 +749,8 @@ class BridgeServiceImpl {
             vocalsUrl: response.result.vocals_url,
             instrumentalPath: response.result.instrumental_path,
             instrumentalUrl: response.result.instrumental_url,
+            coverArtPath: response.result.cover_art_path,
+            coverArtUrl: response.result.cover_art_url,
           });
           return;
         }
@@ -765,6 +770,7 @@ class BridgeServiceImpl {
         lyrics: params.lyrics ?? '',
         voice_id: params.voiceId ?? '',
         instrumental: !!params.instrumental,
+        song_title: params.songTitle ?? '',
         output_path: params.outputPath,
       });
 

@@ -71,11 +71,13 @@ def parse_lyrics_sections(lyrics):
     text = (lyrics or '').strip()
     if not text:
         return [
+            {'tag': 'Intro', 'text': 'Echoes rise in the room'},
             {'tag': 'Verse', 'text': 'Echo rises through the night'},
             {'tag': 'Chorus', 'text': 'We go higher and the city sings'},
+            {'tag': 'Outro', 'text': 'Hold the light and let it fade'},
         ]
 
-    pattern = re.compile(r'\[(verse|chorus|bridge)\]', re.IGNORECASE)
+    pattern = re.compile(r'\[(intro|verse|chorus|bridge|outro)\]', re.IGNORECASE)
     parts = pattern.split(text)
 
     sections = []
@@ -114,18 +116,40 @@ def build_structure(sections, tempo):
     structure = []
     beat_sec = 60.0 / tempo
     for sec in sections:
+        tag = sec['tag'].lower()
         syl = section_syllables(sec['text'])
         bars = max(2, int(round(syl / 8)))
         duration = bars * 4 * beat_sec
-        is_chorus = sec['tag'].lower() == 'chorus'
+        if tag == 'intro':
+            bars = max(2, min(4, bars))
+            duration = bars * 4 * beat_sec
+        elif tag == 'outro':
+            bars = max(2, min(6, bars))
+            duration = bars * 4 * beat_sec
+
+        is_chorus = tag == 'chorus'
+        is_verse = tag == 'verse'
+        is_intro = tag == 'intro'
+        is_outro = tag == 'outro'
         structure.append({
             'tag': sec['tag'],
             'text': sec['text'],
             'syllables': syl,
             'duration': duration,
-            'energy': 1.0 if is_chorus else 0.55,
+            'energy': (
+                1.0 if is_chorus
+                else 0.75 if tag == 'bridge'
+                else 0.58 if is_verse
+                else 0.45 if is_outro
+                else 0.35 if is_intro
+                else 0.55
+            ),
             'wide_vocals': is_chorus,
             'sparse_drums': not is_chorus,
+            'half_time': is_verse or is_intro,
+            'lowpass_hz': 7600 if is_verse else (6200 if is_intro else None),
+            'max_weight': is_chorus,
+            'fade_out': is_outro,
         })
     return structure
 
@@ -161,12 +185,13 @@ def make_hat(sr, duration=0.05):
     return noise * env * 0.3
 
 
-def generate_drums_for_section(length, sr, tempo, style, sparse=False, energy=1.0):
+def generate_drums_for_section(length, sr, tempo, style, sparse=False, energy=1.0, half_time=False):
     import numpy as np
 
     out = np.zeros(length, dtype=np.float32)
     beat_samples = int((60.0 / tempo) * sr)
-    bar_samples = beat_samples * 4
+    pattern_beat = beat_samples * 2 if half_time else beat_samples
+    bar_samples = pattern_beat * 4
 
     kick = make_kick(sr)
     snare = make_snare(sr)
@@ -176,21 +201,21 @@ def generate_drums_for_section(length, sr, tempo, style, sparse=False, energy=1.
 
     for start in range(0, length, bar_samples):
         # Kick pattern
-        kick_offsets = [0, beat_samples * 2] if sparse else [0, int(beat_samples * 1.5), beat_samples * 2, int(beat_samples * 3.25)]
+        kick_offsets = [0, pattern_beat * 2] if sparse else [0, int(pattern_beat * 1.5), pattern_beat * 2, int(pattern_beat * 3.25)]
         for offset in kick_offsets:
             idx = start + int(offset)
             if idx + len(kick) < length:
                 out[idx:idx + len(kick)] += kick * (0.85 * energy if style_l == 'trap' else 0.65 * energy)
 
         # Snare backbeat
-        snare_offsets = [beat_samples * 2] if sparse else [beat_samples, beat_samples * 3]
+        snare_offsets = [pattern_beat * 2] if sparse else [pattern_beat, pattern_beat * 3]
         for offset in snare_offsets:
             idx = start + int(offset)
             if idx + len(snare) < length:
                 out[idx:idx + len(snare)] += snare * (0.5 * energy)
 
     # Hats
-    hat_step = beat_samples if sparse else max(1, beat_samples // (2 if style_l in {'trap', 'synthwave'} else 1))
+    hat_step = pattern_beat if sparse else max(1, pattern_beat // (2 if style_l in {'trap', 'synthwave'} else 1))
     for idx in range(0, length, hat_step):
         if idx + len(hat) < length:
             out[idx:idx + len(hat)] += hat * (0.5 * energy)
@@ -198,7 +223,7 @@ def generate_drums_for_section(length, sr, tempo, style, sparse=False, energy=1.
     return out
 
 
-def generate_bass_and_pads_for_section(length, sr, tempo, key_index, style, energy=1.0):
+def generate_bass_and_pads_for_section(length, sr, tempo, key_index, style, energy=1.0, max_weight=False):
     import numpy as np
 
     beat_samples = int((60.0 / tempo) * sr)
@@ -239,7 +264,23 @@ def generate_bass_and_pads_for_section(length, sr, tempo, key_index, style, ener
     if style.lower() == 'synthwave':
         pads *= 1.3
 
+    if max_weight:
+        # Chorus "Legendary Weight": subtle harmonic density.
+        bass = np.tanh(bass * 1.35) * 0.9
+        pads = np.tanh(pads * 1.2) * 0.88
+
     return bass, pads
+
+
+def apply_lowpass(signal, sr, cutoff_hz):
+    from scipy.signal import butter, lfilter
+
+    if cutoff_hz is None:
+        return signal
+    nyquist = sr * 0.5
+    safe_cutoff = max(80.0, min(float(cutoff_hz), nyquist - 120.0))
+    b, a = butter(2, safe_cutoff / nyquist, btype='low')
+    return lfilter(b, a, signal).astype(signal.dtype, copy=False)
 
 
 def compressor(x, threshold_db=-20.0, ratio=3.0, makeup_db=2.5):
@@ -291,7 +332,7 @@ def render_tts_to_wav(lyrics, voice_id, out_path):
     engine.setProperty('rate', 152)
     engine.setProperty('volume', 1.0)
 
-    plain = re.sub(r'\[(verse|chorus|bridge)\]', ' ', lyrics or '', flags=re.IGNORECASE)
+    plain = re.sub(r'\[(intro|verse|chorus|bridge|outro)\]', ' ', lyrics or '', flags=re.IGNORECASE)
     plain = re.sub(r'\s+', ' ', plain).strip() or 'Echo Sound Lab local engine'
 
     engine.save_to_file(plain, out_path)
@@ -444,9 +485,32 @@ def main():
         if end <= pos:
             continue
 
-        drums = generate_drums_for_section(end - pos, sr, float(args.tempo), args.style, sparse=sec['sparse_drums'], energy=sec['energy'])
-        bass, pads = generate_bass_and_pads_for_section(end - pos, sr, float(args.tempo), key_index, args.style, energy=sec['energy'])
-        instrumental[pos:end] += drums + bass + pads
+        section_len = end - pos
+        drums = generate_drums_for_section(
+            section_len,
+            sr,
+            float(args.tempo),
+            args.style,
+            sparse=sec['sparse_drums'],
+            energy=sec['energy'],
+            half_time=sec.get('half_time', False),
+        )
+        bass, pads = generate_bass_and_pads_for_section(
+            section_len,
+            sr,
+            float(args.tempo),
+            key_index,
+            args.style,
+            energy=sec['energy'],
+            max_weight=sec.get('max_weight', False),
+        )
+
+        section_mix = drums + bass + pads
+        section_mix = apply_lowpass(section_mix, sr, sec.get('lowpass_hz'))
+        if sec.get('fade_out'):
+            section_mix *= np.linspace(1.0, 0.0, section_len, dtype=np.float32)
+
+        instrumental[pos:end] += section_mix
         pos = end
 
     instrumental = normalize(instrumental, peak=0.9)
