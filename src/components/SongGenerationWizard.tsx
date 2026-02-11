@@ -3,6 +3,7 @@ import { VoiceModel, GeneratedSong } from '../types';
 import { voiceEngineService } from '../services/voiceEngineService';
 import { useRecorder } from '../hooks/useRecorder';
 import { glassCard, glowButton, secondaryButton, sectionHeader, cn } from '../utils/secondLightStyles';
+import AudioDeviceSelector from './AudioDeviceSelector';
 
 interface SongGenerationWizardProps {
   voiceModels: VoiceModel[];
@@ -56,6 +57,8 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
 
   const [voiceFile, setVoiceFile] = useState<File | null>(null);
   const [usingRecordedVoice, setUsingRecordedVoice] = useState(false);
+  const [selectedInputDeviceId, setSelectedInputDeviceId] = useState('');
+  const [channelMode, setChannelMode] = useState<'mono' | 'stereo'>('mono');
 
   const [personas, setPersonas] = useState<PersonaPreset[]>([]);
   const [generatedHistory, setGeneratedHistory] = useState<GeneratedEntry[]>([]);
@@ -73,6 +76,7 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
     audioUrl,
     audioBlob,
     error: recorderError,
+    inputLevel,
   } = useRecorder();
 
   useEffect(() => {
@@ -370,6 +374,14 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
 
                   <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-3">
                     <label className="text-[11px] uppercase tracking-wider text-slate-500">Record Vocal</label>
+                    <AudioDeviceSelector
+                      selectedDeviceId={selectedInputDeviceId}
+                      onSelectDevice={setSelectedInputDeviceId}
+                      channelMode={channelMode}
+                      onChannelModeChange={setChannelMode}
+                      inputLevel={inputLevel}
+                      disabled={recordingState === 'recording' || isGenerating}
+                    />
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
@@ -379,7 +391,10 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
                           } else {
                             setVoiceFile(null);
                             setUsingRecordedVoice(true);
-                            startRecording();
+                            startRecording({
+                              deviceId: selectedInputDeviceId || undefined,
+                              channelCount: channelMode === 'stereo' ? 2 : 1,
+                            });
                           }
                         }}
                         className={cn(

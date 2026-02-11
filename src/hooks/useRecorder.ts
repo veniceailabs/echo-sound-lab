@@ -5,10 +5,17 @@ export interface RecorderError {
     type: 'permission_denied' | 'not_supported' | 'device_error' | 'unknown';
 }
 
+export interface RecorderStartOptions {
+    deviceId?: string;
+    channelCount?: 1 | 2;
+    onLevel?: (level: number) => void;
+}
+
 export const useRecorder = () => {
     const [recordingState, setRecordingState] = useState<'idle' | 'recording' | 'stopped'>('idle');
     const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
+    const [inputLevel, setInputLevel] = useState(0);
     const [error, setError] = useState<RecorderError | null>(null);
     const mediaRecorder = useRef<MediaRecorder | null>(null);
     const chunks = useRef<Blob[]>([]);
@@ -16,8 +23,9 @@ export const useRecorder = () => {
     const analyser = useRef<AnalyserNode | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
 
-    const startRecording = useCallback(async () => {
+    const startRecording = useCallback(async (options?: RecorderStartOptions) => {
         setError(null); // Clear previous errors
+        setInputLevel(0);
 
         try {
             // Check if mediaDevices API is supported
@@ -25,14 +33,33 @@ export const useRecorder = () => {
                 throw new Error('UNSUPPORTED:Mic recording is not supported in this browser. Try Chrome, Firefox, or Edge.');
             }
 
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: false,  // Disable to ensure raw audio comes through
+            const baseAudioConstraints: MediaTrackConstraints = {
+                echoCancellation: false,  // Disable to ensure raw audio comes through
+                noiseSuppression: false,
+                autoGainControl: false,
+                sampleRate: 48000,
+            };
+
+            if (options?.deviceId) {
+                baseAudioConstraints.deviceId = { exact: options.deviceId };
+            }
+            if (options?.channelCount) {
+                baseAudioConstraints.channelCount = options.channelCount;
+            }
+
+            let stream: MediaStream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: baseAudioConstraints });
+            } catch (primaryErr) {
+                // Browser/device mismatch fallback: drop strict routing constraints.
+                const fallbackConstraints: MediaTrackConstraints = {
+                    echoCancellation: false,
                     noiseSuppression: false,
                     autoGainControl: false,
-                    sampleRate: 48000
-                }
-            });
+                    sampleRate: 48000,
+                };
+                stream = await navigator.mediaDevices.getUserMedia({ audio: fallbackConstraints });
+            }
 
             streamRef.current = stream;
 
@@ -84,6 +111,9 @@ export const useRecorder = () => {
                 }
                 const rms = Math.sqrt(sum / dataArray.length);
                 const level = Math.round(rms * 100);
+                const normalizedLevel = Math.max(0, Math.min(1, rms * 6));
+                setInputLevel(normalizedLevel);
+                options?.onLevel?.(normalizedLevel);
 
                 if (level > maxLevel) {
                     maxLevel = level;
@@ -161,6 +191,7 @@ export const useRecorder = () => {
                     setAudioUrl(URL.createObjectURL(blob));
                     setRecordingState('stopped');
                 }
+                setInputLevel(0);
 
                 // Clean up
                 if (streamRef.current) {
@@ -207,6 +238,7 @@ export const useRecorder = () => {
 
             setError({ message: errorMessage, type: errorType });
             setRecordingState('idle');
+            setInputLevel(0);
         }
     }, []);
 
@@ -223,6 +255,7 @@ export const useRecorder = () => {
         setRecordingState('idle');
         setAudioBlob(null);
         setAudioUrl(null);
+        setInputLevel(0);
         setError(null);
         chunks.current = [];
 
@@ -237,5 +270,5 @@ export const useRecorder = () => {
         }
     }, []);
 
-    return { startRecording, stopRecording, resetRecording, recordingState, audioBlob, audioUrl, error };
+    return { startRecording, stopRecording, resetRecording, recordingState, audioBlob, audioUrl, error, inputLevel };
 };

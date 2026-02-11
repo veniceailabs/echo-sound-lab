@@ -96,6 +96,12 @@ declare global {
 
 const ENGINE_MODE_KEY = 'echo.engineMode.v1';
 const FRIENDLY_TOUR_KEY = 'echo.friendlyTourSeen.v1';
+const MODE_LABELS: Record<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO', string> = {
+  SINGLE: 'Single Track',
+  MULTI: 'Stems',
+  AI_STUDIO: 'AI Studio',
+  VIDEO: 'SFS Video Engine',
+};
 
 // Initialize Capability Authority (Phase 2.2.4)
 const processIdentity: ProcessIdentity = {
@@ -603,10 +609,10 @@ const App: React.FC = () => {
   const buildSSCScan = useCallback(() => {
     const baseScan = audioEngine.getSSCScan();
     const tabs = [
-      { id: 'SINGLE', label: i18nService.t('modes.single'), active: activeMode === 'SINGLE', confidenceLevel: 'certain' as const },
-      { id: 'MULTI', label: i18nService.t('modes.multi'), active: activeMode === 'MULTI', confidenceLevel: 'certain' as const },
-      { id: 'AI_STUDIO', label: i18nService.t('modes.ai'), active: activeMode === 'AI_STUDIO', confidenceLevel: 'certain' as const },
-      { id: 'VIDEO', label: 'SFS Video Engine', active: activeMode === 'VIDEO', confidenceLevel: 'certain' as const },
+      { id: 'SINGLE', label: MODE_LABELS.SINGLE, active: activeMode === 'SINGLE', confidenceLevel: 'certain' as const },
+      { id: 'MULTI', label: MODE_LABELS.MULTI, active: activeMode === 'MULTI', confidenceLevel: 'certain' as const },
+      { id: 'AI_STUDIO', label: MODE_LABELS.AI_STUDIO, active: activeMode === 'AI_STUDIO', confidenceLevel: 'certain' as const },
+      { id: 'VIDEO', label: MODE_LABELS.VIDEO, active: activeMode === 'VIDEO', confidenceLevel: 'certain' as const },
     ];
     const activeLabel = tabs.find((tab) => tab.active)?.label || activeMode;
     const scan: SSCScan = {
@@ -2688,17 +2694,17 @@ const App: React.FC = () => {
 
           {/* Mode Tabs */}
           <div className="flex items-center gap-2 bg-slate-950/80 rounded-2xl p-1.5 border border-slate-800/50 shadow-[inset_2px_2px_4px_#000000,inset_-2px_-2px_4px_#0a0c12]">
-            {['SINGLE', 'MULTI', 'AI_STUDIO', 'VIDEO'].map((mode) => (
+            {(['SINGLE', 'MULTI', 'AI_STUDIO', 'VIDEO'] as const).map((mode) => (
               <button
                 key={mode}
-                onClick={() => setActiveMode(mode as any)}
+                onClick={() => setActiveMode(mode)}
                 className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
                   activeMode === mode
                     ? 'bg-slate-900 text-orange-400 shadow-[inset_3px_3px_6px_#050710,inset_-3px_-3px_6px_#0f1828] border border-orange-500/30'
                     : 'bg-slate-900/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/70 shadow-[3px_3px_6px_#050710,-3px_-3px_6px_#0f1828] border border-slate-800/30 hover:border-slate-700/50'
                 }`}
               >
-                {mode === 'SINGLE' ? i18nService.t('modes.single') : mode === 'MULTI' ? i18nService.t('modes.multi') : mode === 'AI_STUDIO' ? i18nService.t('modes.ai') : 'SFS Video Engine'}
+                {MODE_LABELS[mode]}
               </button>
             ))}
           </div>
@@ -2762,13 +2768,12 @@ const App: React.FC = () => {
                 <span className="hidden sm:inline text-xs">Demo</span>
               </span>
             </button>
-            <div className="text-xs font-mono px-2 py-1 rounded bg-gradient-to-r from-green-500/20 to-cyan-500/20 border border-green-500/30 text-green-300">
-              RC 1.0 (Adversarial Hardened)
-            </div>
-            <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-lg bg-white/5 border border-white/5 text-[11px] text-slate-400">
-              <span className="font-semibold text-orange-300 uppercase tracking-wider">Net</span>
-              <span>{networkSettings.ssid}</span>
-              {networkSettings.proxy && <span className="text-slate-500">// {networkSettings.proxy}</span>}
+            <div className="hidden lg:flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-[10px] uppercase tracking-[0.14em] text-slate-300">
+              <span className="font-semibold text-emerald-300">RC 1.0</span>
+              <span className="text-slate-600">|</span>
+              <span className="text-orange-300">Net</span>
+              <span className="text-slate-400 normal-case tracking-normal">{networkSettings.ssid}</span>
+              {networkSettings.proxy && <span className="text-slate-500 normal-case tracking-normal">({networkSettings.proxy})</span>}
             </div>
           </div>
         </div>
@@ -2844,7 +2849,7 @@ const App: React.FC = () => {
       {appState === AppState.IDLE && activeMode === 'SINGLE' && (
         <div className="mt-20 w-full max-w-4xl">
           <section className="mb-12 text-center">
-            <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-slate-100 leading-tight">
+            <h1 className="text-5xl md:text-7xl font-semibold tracking-[-0.04em] text-slate-100 leading-[0.95]">
               Mixes that think. Masters that feel.
             </h1>
             <p className="mt-4 text-base md:text-lg text-slate-400 font-medium">

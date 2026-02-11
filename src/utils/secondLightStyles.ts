@@ -5,7 +5,7 @@
 
 // Base glass card with depth (enhanced shadows)
 export const glassCard =
-  'bg-gradient-to-br from-slate-800/85 to-slate-900/95 backdrop-blur-md rounded-2xl border border-slate-700/50 shadow-[6px_6px_12px_#090e1a,-6px_-6px_12px_#15203a] transition-all duration-500 ease-out hover:border-slate-100/30 hover:shadow-[10px_10px_20px_rgba(15,118,110,0.2),-10px_-10px_20px_rgba(130,201,255,0.15)] hover:from-slate-800/90 hover:to-slate-900/70';
+  'bg-slate-900/60 backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_14px_36px_rgba(2,6,23,0.55)] transition-all duration-500 ease-out hover:border-white/20 hover:shadow-[0_16px_42px_rgba(2,6,23,0.65)]';
 
 // Primary card with neon accent
 export const neonCard = 'bg-gradient-to-br from-cyan-500/5 to-blue-500/10 backdrop-blur-xl rounded-3xl border border-cyan-500/20 shadow-[0_0_30px_rgba(6,182,212,0.15)]';
