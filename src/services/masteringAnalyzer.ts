@@ -15,6 +15,16 @@
 
 import { AudioMetrics, EchoReport, EchoAction, ProcessingConfig, ProcessingAction } from '../types';
 import { analyzeAdvancedMetrics, generateDiagnosticReport } from './advancedDiagnostics';
+import { QuantumKernel } from './dsp/QuantumKernel';
+import { getQCLSimulator } from '../echo-sound-lab/apl/qcl-simulator-adapter';
+
+const QUANTUM_SHADOW_MODE_ENABLED = true;
+const INTENTCORE_CONFIDENCE_THRESHOLD = 0.8;
+const normalizeConfidence = (value: number) => {
+  if (!Number.isFinite(value)) return 0;
+  if (value > 1) return Math.max(0, Math.min(1, value / 100));
+  return Math.max(0, Math.min(1, value));
+};
 
 /**
  * Mastering targets based on industry standards
@@ -60,8 +70,103 @@ export function analyzeAudioBuffer(buffer: AudioBuffer, metrics: AudioMetrics): 
   metrics.advancedMetrics = analyzeAdvancedMetrics(buffer, metrics);
 
   // Run standard analysis (which now has access to advanced metrics)
-  return analyzeMastering(metrics);
+  const report = analyzeMastering(metrics);
+
+  if (QUANTUM_SHADOW_MODE_ENABLED) {
+    const shadow = evaluateQuantumShadowScore(buffer, metrics, report.score?.total ?? 0);
+    report.quantumScore = shadow.quantumScore;
+    // Contract lock: Δ = Quantum − Classical
+    report.shadowDelta = shadow.quantumScore - Math.round(report.score?.total ?? 0);
+    report.quantumConfidence = normalizeConfidence(shadow.quantumConfidence);
+    report.intentCoreActive = report.quantumConfidence >= INTENTCORE_CONFIDENCE_THRESHOLD;
+    report.humanIntentIndex = report.intentCoreActive
+      ? report.quantumScore
+      : Math.round(report.score?.total ?? 0);
+    console.log(
+      `[Quantum Shadow] Classical Score: ${Math.round(report.score?.total ?? 0)} | Quantum Entanglement Score: ${shadow.quantumScore} | meanCoherence=${shadow.meanCoherence.toFixed(3)} | stereoEntanglement=${shadow.stereoEntanglement.toFixed(3)} | QCL=${shadow.qclEnabled ? 'ON' : 'OFF'}`
+    );
+  } else {
+    report.intentCoreActive = false;
+    report.humanIntentIndex = Math.round(report.score?.total ?? 0);
+  }
+
+  return report;
 }
+
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+const buildQuantumFeatureVector = (buffer: AudioBuffer, metrics: AudioMetrics): { features: number[]; stereoEntanglement: number } => {
+  const lufs = metrics.lufs?.integrated ?? (metrics.rms + 3);
+  const dynamicRange = metrics.peak - metrics.rms;
+  const lufsFitness = clamp01(1 - Math.abs(lufs - (-14)) / 12);
+  const peakFitness = clamp01(1 - Math.abs(metrics.peak - (-1.0)) / 3);
+  const dynamicsFitness = clamp01(1 - Math.abs(dynamicRange - 10) / 10);
+  const crestFitness = clamp01((metrics.crestFactor ?? dynamicRange) / 20);
+  const spectralCenter = clamp01((metrics.spectralCentroid || 2000) / 8000);
+
+  let stereoEntanglement = 0.5;
+  if (buffer.numberOfChannels >= 2) {
+    const left = buffer.getChannelData(0);
+    const right = buffer.getChannelData(1);
+    const sampleStep = Math.max(1, Math.floor(buffer.length / 12000));
+    let dot = 0;
+    let leftEnergy = 0;
+    let rightEnergy = 0;
+    for (let i = 0; i < buffer.length; i += sampleStep) {
+      const l = left[i] ?? 0;
+      const r = right[i] ?? 0;
+      dot += l * r;
+      leftEnergy += l * l;
+      rightEnergy += r * r;
+    }
+    const denom = Math.sqrt(leftEnergy * rightEnergy) || 1;
+    const correlation = dot / denom;
+    stereoEntanglement = clamp01(1 - Math.abs(correlation));
+  }
+
+  return {
+    features: [
+      lufsFitness,
+      peakFitness,
+      dynamicsFitness,
+      crestFitness,
+      spectralCenter,
+      stereoEntanglement,
+    ],
+    stereoEntanglement,
+  };
+};
+
+const evaluateQuantumShadowScore = (
+  buffer: AudioBuffer,
+  metrics: AudioMetrics,
+  classicalScore: number
+): { quantumScore: number; meanCoherence: number; stereoEntanglement: number; qclEnabled: boolean; quantumConfidence: number } => {
+  const { features, stereoEntanglement } = buildQuantumFeatureVector(buffer, metrics);
+  const quantum = QuantumKernel.analyzeAudioFeatures(features);
+  const simulator = getQCLSimulator();
+  if (!simulator.isEnabled()) {
+    simulator.enable(0.35);
+  }
+  const qclEnabled = simulator.isEnabled();
+
+  // Shadow-only score: no DSP control path, pure comparative telemetry.
+  const coherenceBoost = quantum.meanCoherence * 14;
+  const stereoBoost = stereoEntanglement * 8;
+  const simulatorBoost = qclEnabled ? 2 : 0;
+  const quantumScore = Math.max(
+    0,
+    Math.min(100, Math.round(classicalScore * 0.8 + coherenceBoost + stereoBoost + simulatorBoost))
+  );
+
+  return {
+    quantumScore,
+    meanCoherence: quantum.meanCoherence,
+    stereoEntanglement,
+    qclEnabled,
+    quantumConfidence: buffer.length > buffer.sampleRate ? 1.0 : 0.5,
+  };
+};
 
 /**
  * NEW: Generate ProcessingAction[] directly (no lossy conversion)
@@ -271,7 +376,9 @@ export function analyzeMastering(metrics: AudioMetrics): EchoReport {
       genreAccuracy: Math.max(0, Math.round(score * 0.25)),
       vocalBeatRelationship: Math.max(0, Math.round(score * 0.20)),
       creativeExcellence: Math.max(0, Math.round(score * 0.10)),
-    }
+    },
+    humanIntentIndex: Math.max(0, Math.round(score)),
+    intentCoreActive: false,
   };
 }
 

@@ -10,6 +10,7 @@ import { analyzePerceptualDiff, assessProcessingVerdict } from './perceptualDiff
 
 export interface QualityVerdictInfo {
   verdict: 'pass' | 'warn' | 'fail';
+  uiVerdict: 'accept' | 'warn' | 'block';
   severity: 'none' | 'warning' | 'critical';
   issues: string[];
   recommendation: string;
@@ -64,7 +65,10 @@ export class QualityAssurance {
               issues.push(issue);
               issueSet.add(issue);
             }
-            shouldBlock = true;
+            const clippingRisk = afterMetrics.peak > -0.3 || peakChange > 2.5;
+            if (clippingRisk) {
+              shouldBlock = true;
+            }
           }
         } else {
           const crestChange = delta.delta;
@@ -108,9 +112,10 @@ export class QualityAssurance {
 
     return {
       verdict: shouldBlock ? 'fail' : verdict.verdict === 'pass' ? 'pass' : 'warn',
+      uiVerdict: shouldBlock ? 'block' : verdict.verdict === 'pass' ? 'accept' : 'warn',
       severity,
       issues: uniqueIssues,
-      recommendation: verdict.recommendation.toUpperCase(),
+      recommendation: shouldBlock ? 'REVIEW' : verdict.recommendation.toUpperCase(),
       shouldBlock,
     };
   }

@@ -11,7 +11,7 @@
  */
 
 import { AudioBuffer } from 'web-audio-api';
-import { ProcessingAction, ProcessingConfig, AudioMetrics } from '../types';
+import { ProcessingAction, ProcessingConfig, AudioMetrics, PreservationMode } from '../types';
 import { actionsToConfig } from './processingActionUtils';
 import { audioEngine } from './audioEngine';
 import { mixAnalysisService } from './mixAnalysis';
@@ -20,6 +20,16 @@ export interface ProcessingResult {
   processedBuffer: AudioBuffer;
   metrics: AudioMetrics;
   appliedActions: ProcessingAction[];
+  preservation: {
+    mode: PreservationMode;
+    originalDynamicRange: number;
+    processedDynamicRange: number;
+    minAllowedDynamicRange: number;
+    hardCapDb: number;
+    wasAdjusted: boolean;
+    blocked: boolean;
+    reason?: string;
+  };
 }
 
 export class AudioProcessingPipeline {
@@ -28,6 +38,23 @@ export class AudioProcessingPipeline {
   private isPlayingProcessed: boolean = false;
   private readonly safetyPeakTargetDb = -1.0;
   private readonly safetyPeakThresholdDb = -0.3;
+  private readonly makeupPeakTargetDb = -0.65;
+  private readonly globalHardCapDb = 3.0;
+  private readonly preservationBudgets: Record<PreservationMode, number> = {
+    preserve: 1.2,
+    balanced: 2.0,
+    competitive: 2.7,
+  };
+  private originalMetrics: AudioMetrics | null = null;
+
+  private applyGainToBuffer(buffer: AudioBuffer, gainLinear: number) {
+    for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+      const channel = buffer.getChannelData(ch);
+      for (let i = 0; i < channel.length; i++) {
+        channel[i] *= gainLinear;
+      }
+    }
+  }
 
   /**
    * Load original audio file
@@ -36,6 +63,7 @@ export class AudioProcessingPipeline {
     this.originalBuffer = buffer;
     this.processedBuffer = null;
     this.isPlayingProcessed = false;
+    this.originalMetrics = mixAnalysisService.analyzeStaticMetrics(buffer);
     audioEngine.setBuffer(buffer);
     audioEngine.setProcessedBuffer(null);
   }
@@ -44,29 +72,49 @@ export class AudioProcessingPipeline {
    * Process audio with selected actions
    * Returns new audio buffer + updated metrics
    */
-  async processAudio(selectedActions: ProcessingAction[]): Promise<ProcessingResult> {
+  async processAudio(
+    selectedActions: ProcessingAction[],
+    options: { preservationMode?: PreservationMode } = {}
+  ): Promise<ProcessingResult> {
     if (!this.originalBuffer) throw new Error('No audio loaded');
+    const preservationMode = options.preservationMode ?? 'balanced';
+    const originalMetrics = this.originalMetrics || mixAnalysisService.analyzeStaticMetrics(this.originalBuffer);
+    const originalDynamicRange = originalMetrics.peak - originalMetrics.rms;
+    const allowedReductionDb = Math.min(this.globalHardCapDb, this.preservationBudgets[preservationMode]);
+    const minAllowedDynamicRange = originalDynamicRange - allowedReductionDb;
 
     // Convert ProcessingAction[] to ProcessingConfig
     const config = actionsToConfig(selectedActions);
+    const boundedConfig = this.applyPreservationBounds(config, originalDynamicRange, preservationMode);
 
     // Render processed audio
-    const processedBuffer = await audioEngine.renderProcessedAudio(config);
+    const processedBuffer = await audioEngine.renderProcessedAudio(boundedConfig);
 
     // Analyze new metrics
     let metrics = mixAnalysisService.analyzeStaticMetrics(processedBuffer);
+    const preTrimMetrics = metrics;
 
     // Safety trim to prevent unintended clipping from recommendations
     if (metrics.peak > this.safetyPeakThresholdDb) {
       const trimDb = this.safetyPeakTargetDb - metrics.peak;
       const linearGain = Math.pow(10, trimDb / 20);
-      for (let ch = 0; ch < processedBuffer.numberOfChannels; ch++) {
-        const channel = processedBuffer.getChannelData(ch);
-        for (let i = 0; i < channel.length; i++) {
-          channel[i] *= linearGain;
+      this.applyGainToBuffer(processedBuffer, linearGain);
+      metrics = mixAnalysisService.analyzeStaticMetrics(processedBuffer);
+
+      // Soft-knee recovery: restore part of perceived loudness when trim was aggressive.
+      const rmsDropDb = preTrimMetrics.rms - metrics.rms;
+      const availableHeadroomDb = this.makeupPeakTargetDb - metrics.peak;
+      if (rmsDropDb > 0.4 && availableHeadroomDb > 0.05) {
+        const makeupDb = Math.min(
+          rmsDropDb * 0.5,
+          availableHeadroomDb * 0.85,
+          0.5
+        );
+        if (makeupDb > 0.05) {
+          this.applyGainToBuffer(processedBuffer, Math.pow(10, makeupDb / 20));
+          metrics = mixAnalysisService.analyzeStaticMetrics(processedBuffer);
         }
       }
-      metrics = mixAnalysisService.analyzeStaticMetrics(processedBuffer);
     }
 
     metrics.lufs = {
@@ -77,6 +125,39 @@ export class AudioProcessingPipeline {
       truePeak: metrics.peak,
     };
 
+    const processedDynamicRange = metrics.peak - metrics.rms;
+    const violatesHardCeiling = processedDynamicRange < minAllowedDynamicRange;
+    if (violatesHardCeiling && this.originalBuffer) {
+      // Non-bypassable hard ceiling: reject processing if DR floor is breached.
+      this.processedBuffer = this.originalBuffer;
+      audioEngine.setProcessedBuffer(this.originalBuffer);
+      const fallbackMetrics = {
+        ...originalMetrics,
+        lufs: originalMetrics.lufs || {
+          integrated: originalMetrics.rms + 3,
+          shortTerm: originalMetrics.rms + 3,
+          momentary: originalMetrics.rms + 3,
+          loudnessRange: originalMetrics.crestFactor,
+          truePeak: originalMetrics.peak,
+        },
+      };
+      return {
+        processedBuffer: this.originalBuffer,
+        metrics: fallbackMetrics,
+        appliedActions: selectedActions,
+        preservation: {
+          mode: preservationMode,
+          originalDynamicRange,
+          processedDynamicRange,
+          minAllowedDynamicRange,
+          hardCapDb: this.globalHardCapDb,
+          wasAdjusted: boundedConfig !== config,
+          blocked: true,
+          reason: `Dynamic range floor breached (${processedDynamicRange.toFixed(2)}dB < ${minAllowedDynamicRange.toFixed(2)}dB)`,
+        },
+      };
+    }
+
     // Store processed buffer
     this.processedBuffer = processedBuffer;
     audioEngine.setProcessedBuffer(processedBuffer);
@@ -85,19 +166,73 @@ export class AudioProcessingPipeline {
       processedBuffer,
       metrics,
       appliedActions: selectedActions,
+      preservation: {
+        mode: preservationMode,
+        originalDynamicRange,
+        processedDynamicRange,
+        minAllowedDynamicRange,
+        hardCapDb: this.globalHardCapDb,
+        wasAdjusted: boundedConfig !== config,
+        blocked: false,
+      },
     };
   }
 
   /**
    * Reprocess audio with modified actions (e.g., removing one action)
    */
-  async reprocessAudio(selectedActions: ProcessingAction[]): Promise<ProcessingResult> {
+  async reprocessAudio(
+    selectedActions: ProcessingAction[],
+    options: { preservationMode?: PreservationMode } = {}
+  ): Promise<ProcessingResult> {
     if (!this.originalBuffer) throw new Error('No original audio');
 
     // Start from original, not from processed
     audioEngine.setBuffer(this.originalBuffer);
 
-    return this.processAudio(selectedActions);
+    return this.processAudio(selectedActions, options);
+  }
+
+  private applyPreservationBounds(
+    config: ProcessingConfig,
+    originalDynamicRange: number,
+    mode: PreservationMode
+  ): ProcessingConfig {
+    let mutated = false;
+    const next: ProcessingConfig = { ...config };
+    const ratioCap = mode === 'preserve' ? 1.6 : mode === 'balanced' ? 2.2 : 3.0;
+    const compressionThresholdFloor = mode === 'preserve' ? -12 : mode === 'balanced' ? -14 : -16;
+    const limiterThresholdFloor = mode === 'preserve' ? -1.0 : mode === 'balanced' ? -1.2 : -1.6;
+
+    if (next.compression) {
+      const ratio = next.compression.ratio ?? 1;
+      const threshold = next.compression.threshold ?? -12;
+      const drSensitiveRatioCap = originalDynamicRange <= 8 ? Math.min(ratioCap, 1.5) : ratioCap;
+      const clampedRatio = Math.min(ratio, drSensitiveRatioCap);
+      const clampedThreshold = Math.max(threshold, compressionThresholdFloor);
+      if (clampedRatio !== ratio || clampedThreshold !== threshold) {
+        mutated = true;
+        next.compression = {
+          ...next.compression,
+          ratio: clampedRatio,
+          threshold: clampedThreshold,
+        };
+      }
+    }
+
+    if (next.limiter) {
+      const threshold = next.limiter.threshold ?? -1.0;
+      const clampedThreshold = Math.max(threshold, limiterThresholdFloor);
+      if (clampedThreshold !== threshold) {
+        mutated = true;
+        next.limiter = {
+          ...next.limiter,
+          threshold: clampedThreshold,
+        };
+      }
+    }
+
+    return mutated ? next : config;
   }
 
   /**

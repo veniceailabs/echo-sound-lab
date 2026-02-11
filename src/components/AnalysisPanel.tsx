@@ -1,5 +1,6 @@
 import React from 'react';
-import { AnalysisResult, AudioMetrics, Suggestion, MixReadiness, ReferenceTrack } from '../types';
+import { AnalysisResult, AudioMetrics, Suggestion, MixReadiness, ReferenceTrack, PreservationMode } from '../types';
+import ShadowDeltaBadge from './ShadowDeltaBadge';
 
 // White Plugin Icons for AI Recommendations
 const PluginIcon: React.FC<{ category: string }> = ({ category }) => {
@@ -138,6 +139,17 @@ interface AnalysisPanelProps {
   autoMixMode?: 'STANDARD' | 'FULL_STUDIO' | null;
   onFullStudioAutoMix?: () => void;
   fullStudioStatus?: 'idle' | 'loading' | 'ready' | 'error';
+  shadowDelta?: number;
+  quantumConfidence?: number;
+  quantumScore?: number;
+  classicalScore?: number;
+  humanIntentIndex?: number;
+  intentCoreActive?: boolean;
+  preservationMode?: PreservationMode;
+  onPreservationModeChange?: (mode: PreservationMode) => void;
+  engineVerdict?: 'accept' | 'warn' | 'block' | null;
+  engineVerdictReason?: string | null;
+  debugTelemetry?: boolean;
 }
 
 const FRIENDLY_CATEGORY_LABELS: Record<string, string> = {
@@ -187,7 +199,18 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   autoMixError,
   autoMixMode,
   onFullStudioAutoMix,
-  fullStudioStatus
+  fullStudioStatus,
+  shadowDelta,
+  quantumConfidence,
+  quantumScore,
+  classicalScore,
+  humanIntentIndex,
+  intentCoreActive,
+  preservationMode = 'balanced',
+  onPreservationModeChange,
+  engineVerdict,
+  engineVerdictReason,
+  debugTelemetry
 }) => {
   if (!analysisResult) return null;
   const isFriendly = engineMode === 'FRIENDLY';
@@ -211,6 +234,16 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {typeof humanIntentIndex === 'number' && (
+              <span className="text-xs text-slate-500">HII: {Math.round(humanIntentIndex)}</span>
+            )}
+            <ShadowDeltaBadge
+              delta={shadowDelta}
+              confidence={quantumConfidence}
+              quantumScore={quantumScore}
+              humanIntentIndex={humanIntentIndex}
+              intentCoreActive={intentCoreActive}
+            />
             {fullStudioStatus === 'ready' && (
               <span className="text-[10px] uppercase tracking-wider font-bold text-orange-300 border border-orange-500/30 px-2 py-1 rounded-full bg-orange-500/10">
                 Full Studio Active
@@ -259,6 +292,24 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 Full Studio Auto Mix
               </button>
             )}
+            {onPreservationModeChange && (
+              <div className="flex items-center rounded-lg border border-slate-700/60 bg-slate-900/70 p-1">
+                {(['preserve', 'balanced', 'competitive'] as PreservationMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => onPreservationModeChange(mode)}
+                    className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-colors ${
+                      preservationMode === mode
+                        ? 'bg-orange-500/20 text-orange-300 border border-orange-400/40'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+            )}
             {analysisResult.suggestions.length > 0 && (
               <button
                 onClick={() => {
@@ -300,6 +351,29 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             )}
           </div>
         </div>
+        {engineVerdict && (
+          <div
+            className={`mb-4 rounded-lg border px-3 py-2 text-xs ${
+              engineVerdict === 'block'
+                ? 'border-red-500/50 bg-red-950/30 text-red-300'
+                : engineVerdict === 'warn'
+                  ? 'border-amber-500/50 bg-amber-950/20 text-amber-300'
+                  : 'border-emerald-500/40 bg-emerald-950/20 text-emerald-300'
+            }`}
+          >
+            Engine Verdict: {engineVerdict.toUpperCase()}
+            {engineVerdictReason ? ` - ${engineVerdictReason}` : ''}
+          </div>
+        )}
+        {debugTelemetry &&
+          Number.isFinite(classicalScore) &&
+          Number.isFinite(quantumScore) &&
+          Number.isFinite(shadowDelta) &&
+          Number.isFinite(quantumConfidence) && (
+            <div className="mb-4 rounded-lg border border-slate-700/60 bg-slate-900/30 px-3 py-2 text-[11px] font-mono text-slate-400">
+              HII:{Number.isFinite(humanIntentIndex) ? Math.round(humanIntentIndex as number) : '--'} | C:{Math.round(classicalScore as number)} | Q:{Math.round(quantumScore as number)} | Δ:{(shadowDelta as number) >= 0 ? '+' : ''}{Math.round(shadowDelta as number)} | conf:{(quantumConfidence as number).toFixed(2)}
+            </div>
+          )}
 
         {onAutoMix && (isAutoMixing || autoMixProgress || autoMixError) && (
           <div className="mb-5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-4 py-3 text-sm">

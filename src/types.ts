@@ -2,6 +2,7 @@ import { GenreProfile } from './services/genreProfiles';
 
 export type ProcessingMode = 'default' | 'vocal_presence';
 export type EngineMode = 'FRIENDLY' | 'ADVANCED';
+export type PreservationMode = 'preserve' | 'balanced' | 'competitive';
 
 export type HookStatus = 'draft' | 'rendering' | 'ready' | 'failed';
 
@@ -575,6 +576,16 @@ export interface EchoReport {
     confidence: number;
     verdict: EchoVerdict;
     verdictReason: string;
+    // Shadow telemetry (advisory only, no DSP authority)
+    // quantumScore: 0-100 score from QuantumKernel shadow pass
+    // shadowDelta: delta in points, where Δ = quantumScore - classicalScore
+    // quantumConfidence: normalized 0-1 confidence for displaying telemetry
+    quantumScore?: number;
+    shadowDelta?: number;
+    quantumConfidence?: number;
+    // IntentCore authoritative score (HII) according to confidence gate.
+    humanIntentIndex?: number;
+    intentCoreActive?: boolean;
     score?: {
         total: number;
         recordingQuality: number;

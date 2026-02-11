@@ -16,6 +16,20 @@ export default defineConfig(({ mode }) => {
         }
       },
       plugins: [react()],
+      build: {
+        target: 'es2022',
+        sourcemap: false,
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              'vendor-react': ['react', 'react-dom'],
+              'vendor-motion': ['framer-motion'],
+              'vendor-ai': ['@google/genai'],
+              'vendor-audio': ['@webaudiomodules/api', '@webaudiomodules/sdk', '@breezystack/lamejs'],
+            },
+          },
+        },
+      },
       define: {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),

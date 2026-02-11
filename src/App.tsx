@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AppState, AudioMetrics, ProcessingConfig, Suggestion, EchoReport, RevisionEntry, ReferenceTrack, MixSignature, GeneratedSong, Stem, EQSettings, DynamicEQConfig, EngineMode, ProcessingAction, SSCScan } from './types';
+import { AppState, AudioMetrics, ProcessingConfig, Suggestion, EchoReport, RevisionEntry, ReferenceTrack, MixSignature, GeneratedSong, Stem, EQSettings, DynamicEQConfig, EngineMode, ProcessingAction, SSCScan, PreservationMode } from './types';
 import { audioEngine } from './services/audioEngine';
 import { audioPerceptionLayer } from './services/audioPerceptionLayer';
 import { mixAnalysisService } from './services/mixAnalysis';
@@ -9,7 +9,6 @@ import { reasonAboutListeningPass } from './services/geminiService';
 // NEW: Refactored pipeline
 import { AudioSessionProvider, useAudioSession } from './context/AudioSessionContext';
 import { audioProcessingPipeline } from './services/audioProcessingPipeline';
-import { generateProcessingActions } from './services/masteringAnalyzer';
 import { qualityAssurance, QualityVerdictInfo } from './services/qualityAssurance';
 import { FEATURE_FLAGS } from './config/featureFlags';
 import { SAFE_TEST_CONFIG } from './services/testConfig';
@@ -79,6 +78,10 @@ import { HIP_HOP_MASTER_SCENARIO, POP_MASTER_SCENARIO, QUICK_TOUR_SCENARIO } fro
 import { DailyProving } from './action-authority/compliance/DailyProving';
 import { GhostUser } from './services/demo/GhostUser';
 import { MerkleAuditLog } from './action-authority/audit/MerkleAuditLog';
+
+// ===== PHASE 3: HYBRID BRIDGE =====
+import { BridgeTest } from './components/BridgeTest';
+import { DemoFactory } from './modules/demo-factory/DemoFactory';
 
 declare var process: { env: Record<string, string | undefined> };
 
@@ -152,6 +155,21 @@ const App: React.FC = () => {
   // Echo Report state
   const [echoReport, setEchoReport] = useState<EchoReport | null>(null);
   const [echoReportStatus, setEchoReportStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [shadowTelemetry, setShadowTelemetry] = useState<{
+    analysisRunId: number;
+    classicalScore?: number;
+    quantumScore?: number;
+    shadowDelta?: number;
+    quantumConfidence?: number;
+    humanIntentIndex?: number;
+    intentCoreActive?: boolean;
+  } | null>(null);
+  const [preservationMode, setPreservationMode] = useState<PreservationMode>('balanced');
+  const [latestEngineVerdict, setLatestEngineVerdict] = useState<'accept' | 'warn' | 'block' | null>(null);
+  const [latestEngineVerdictReason, setLatestEngineVerdictReason] = useState<string | null>(null);
+  const analysisRunIdRef = useRef(0);
+  const debugTelemetry = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('debugTelemetry') === '1';
   const [echoActionStatus, setEchoActionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [echoActionError, setEchoActionError] = useState<string | null>(null);
 
@@ -261,7 +279,6 @@ const App: React.FC = () => {
   const handleResetToOriginal = useCallback(() => {
     audioEngine.resetToOriginal();
     setHasAppliedChanges(false);
-    setProcessedBuffer(null);
     setSnapshotABActive(false);
     setSnapshotAId(null);
     setSnapshotBId(null);
@@ -317,6 +334,14 @@ const App: React.FC = () => {
     setNotifications(prev => [...prev, { id, message, type, duration }]);
   }, []);
 
+  const syncEngineVerdict = useCallback((verdict: 'accept' | 'warn' | 'block', reason?: string) => {
+    setLatestEngineVerdict(verdict);
+    setLatestEngineVerdictReason(reason ?? null);
+    if (verdict === 'block') {
+      setEchoReportStatus('error');
+    }
+  }, []);
+
   const dismissNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
@@ -334,7 +359,10 @@ const App: React.FC = () => {
   useEffect(() => {
     const runHealthCheck = async () => {
       try {
-        console.log('[App] Phase 5: Starting Daily Proving health check...');
+        console.log('[App] Phase 5: Daily Proving health check DISABLED for demo generation...');
+
+        // TEMPORARILY DISABLED for demo recording stability.
+        return;
 
         // Initialize Merkle audit log and Ghost system
         const merkleAuditLog = new MerkleAuditLog('./audit-log.jsonl');
@@ -517,13 +545,22 @@ const App: React.FC = () => {
 
   // Session autosave - check for existing session on mount
   useEffect(() => {
-    const savedSession = sessionManager.init();
-    if (savedSession && savedSession.fileName) {
-      setPendingSession(savedSession);
-      setShowRestoreDialog(true);
-    }
+    let isMounted = true;
+
+    (async () => {
+      const savedSession = await sessionManager.init();
+      if (!isMounted) return;
+      if (savedSession && savedSession.fileName) {
+        setPendingSession(savedSession);
+        setShowRestoreDialog(true);
+      }
+    })();
+
     sessionManager.startAutosave();
-    return () => sessionManager.stopAutosave();
+    return () => {
+      isMounted = false;
+      sessionManager.stopAutosave();
+    };
   }, []);
 
   // Language change listener - force re-render when language changes
@@ -672,8 +709,8 @@ const App: React.FC = () => {
   };
 
   // Handle dismiss restore
-  const handleDismissRestore = () => {
-    sessionManager.clearSession();
+  const handleDismissRestore = async () => {
+    await sessionManager.clearSession();
     setShowRestoreDialog(false);
     setPendingSession(null);
   };
@@ -891,6 +928,9 @@ const App: React.FC = () => {
       setProcessedMetrics(null); // Don't set processed until actual processing happens
       setOriginalBuffer(buffer); // Store pristine original for A/B and reprocessing
       setHasAppliedChanges(false); // Reset on new file
+      setShadowTelemetry(null);
+      setLatestEngineVerdict(null);
+      setLatestEngineVerdictReason(null);
       setCurrentConfig({});
       hasUserInitiatedProcessingRef.current = false;
       setEqSettings(defaultEqSettings);
@@ -949,6 +989,11 @@ const App: React.FC = () => {
   const handleRequestAIAnalysis = async () => {
     if (!analysisResult || !originalMetrics || !currentFileName) return;
 
+    const analysisRunId = ++analysisRunIdRef.current;
+    setShadowTelemetry(null);
+    setLatestEngineVerdict(null);
+    setLatestEngineVerdictReason(null);
+
     setAnalysisResult((prev: any) => ({
       ...prev,
       genrePrediction: 'Analyzing...',
@@ -967,10 +1012,22 @@ const App: React.FC = () => {
       if (originalBuffer) {
         try {
           const advancedReport = analyzeAudioBuffer(originalBuffer, originalMetrics);
+          if (analysisRunId !== analysisRunIdRef.current) {
+            return;
+          }
           console.log('[ANALYSIS] Advanced report generated:', {
             actionCount: advancedReport.recommended_actions.length,
             issues: advancedReport.explanation,
             score: advancedReport.score?.total
+          });
+          setShadowTelemetry({
+            analysisRunId,
+            classicalScore: advancedReport.score?.total,
+            quantumScore: advancedReport.quantumScore,
+            shadowDelta: advancedReport.shadowDelta,
+            quantumConfidence: advancedReport.quantumConfidence,
+            humanIntentIndex: advancedReport.humanIntentIndex,
+            intentCoreActive: advancedReport.intentCoreActive
           });
         } catch (advError) {
           console.warn('[ANALYSIS] Advanced analysis had partial failure, continuing:', advError);
@@ -1105,8 +1162,15 @@ const App: React.FC = () => {
 
         // NEW: Load original buffer and reprocess
         await audioProcessingPipeline.loadAudio(originalBuffer);
-        const result = await audioProcessingPipeline.reprocessAudio(remainingActions);
+        const result = await audioProcessingPipeline.reprocessAudio(remainingActions, { preservationMode });
         const newMetrics = result.metrics;
+
+        if (result.preservation.blocked) {
+          syncEngineVerdict('block', result.preservation.reason);
+          setApplySuggestionsError(result.preservation.reason || 'Processing blocked by Dynamic Preservation hard ceiling.');
+          showNotification('Processing blocked by Dynamic Preservation hard ceiling.', 'warning', 5000);
+          return;
+        }
 
         // Update audio engine
         audioEngine.setProcessedBuffer(result.processedBuffer);
@@ -1119,6 +1183,7 @@ const App: React.FC = () => {
         // Regenerate Echo Report with updated audio
         handleGenerateEchoReport(newMetrics);
 
+        syncEngineVerdict('accept');
         showNotification(`Removed processor. Re-rendered audio.`, 'success', 2000);
 
       } catch (error) {
@@ -1144,6 +1209,10 @@ const App: React.FC = () => {
 
     setApplySuggestionsError(null);
 
+    let applySucceeded = false;
+    let qualityBlocked = false;
+    let qualityWarned = false;
+
     await runWithSteps([
       'Suspending Audio Engine',
       'Configuring DSP Chain',
@@ -1160,10 +1229,19 @@ const App: React.FC = () => {
         }
 
         // NEW: Process audio using the clean pipeline
-        const result = await audioProcessingPipeline.processAudio(selectedActions);
+        const result = await audioProcessingPipeline.processAudio(selectedActions, { preservationMode });
         const newMetrics = result.metrics;
 
         console.log('[APPLY SUGGESTIONS] Processing complete. Metrics:', newMetrics);
+
+        if (result.preservation.blocked) {
+          const warningMsg = result.preservation.reason || 'Processing blocked by Dynamic Preservation hard ceiling.';
+          setApplySuggestionsError(warningMsg);
+          showNotification(warningMsg, 'warning', 5000);
+          syncEngineVerdict('block', warningMsg);
+          qualityBlocked = true;
+          return;
+        }
 
         // NEW: Check quality using Perceptual Diff
         if (originalMetrics) {
@@ -1180,7 +1258,18 @@ const App: React.FC = () => {
             setApplySuggestionsError(warningMsg);
             showNotification(warningMsg, 'warning', 5000);
             console.warn('[QUALITY] Processing blocked - quality verdict:', qualityVerdict);
+            syncEngineVerdict('block', warningMsg);
+            qualityBlocked = true;
             return;
+          }
+
+          if (qualityVerdict.uiVerdict === 'warn') {
+            const warningMsg = qualityVerdict.issues[0] || 'Processing completed with warnings.';
+            syncEngineVerdict('warn', warningMsg);
+            showNotification(`Applied with warning: ${warningMsg}`, 'warning', 3500);
+            qualityWarned = true;
+          } else {
+            syncEngineVerdict('accept');
           }
         }
 
@@ -1203,17 +1292,24 @@ const App: React.FC = () => {
         handleGenerateEchoReport(newMetrics);
 
         // Show success notification
-        showNotification(`${selectedActions.length} fix${selectedActions.length > 1 ? 'es' : ''} applied successfully`, 'success', 2000);
+        if (!qualityWarned) {
+          showNotification(`${selectedActions.length} fix${selectedActions.length > 1 ? 'es' : ''} applied successfully`, 'success', 2000);
+        }
+        applySucceeded = true;
 
       } catch (error) {
         console.error('Failed to apply suggestions:', error);
         const errorMsg = 'Failed to apply suggestions: ' + (error as Error).message;
         setApplySuggestionsError(errorMsg);
+        syncEngineVerdict('block', errorMsg);
         showNotification(errorMsg, 'error', 3000);
       }
     });
 
-    return true;
+    if (qualityBlocked) {
+      return false;
+    }
+    return applySucceeded;
   };
 
   const handleCancelAutoMix = () => {
@@ -1323,14 +1419,27 @@ const App: React.FC = () => {
         });
 
         await audioProcessingPipeline.loadAudio(originalBuffer);
-        const result = await audioProcessingPipeline.processAudio(accumulatedActions);
+        const result = await audioProcessingPipeline.processAudio(accumulatedActions, { preservationMode });
+        if (result.preservation.blocked) {
+          const warningMsg = result.preservation.reason || 'Auto Mix blocked by Dynamic Preservation hard ceiling.';
+          showNotification(warningMsg, 'warning', 5000);
+          syncEngineVerdict('block', warningMsg);
+          accumulatedActions.splice(-newActions.length);
+          break;
+        }
         const qualityVerdict = qualityAssurance.assessProcessingQuality(workingMetrics, result.metrics);
         if (qualityVerdict.shouldBlock) {
           const warningMsg = `Auto Mix halted: ${qualityVerdict.issues.join(', ')}`;
           showNotification(warningMsg, 'warning', 5000);
           console.warn('[AutoMix] Processing blocked - quality verdict:', qualityVerdict);
+          syncEngineVerdict('block', warningMsg);
           accumulatedActions.splice(-newActions.length);
           break;
+        }
+        if (qualityVerdict.uiVerdict === 'warn') {
+          syncEngineVerdict('warn', qualityVerdict.issues[0] || 'Auto Mix completed with warnings.');
+        } else {
+          syncEngineVerdict('accept');
         }
 
         workingBuffer = result.processedBuffer;
@@ -1379,6 +1488,7 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('[AutoMix] Failed:', error);
       setAutoMixError((error as Error).message);
+      syncEngineVerdict('block', (error as Error).message);
       showNotification('Auto Mix failed: ' + (error as Error).message, 'error', 3000);
     } finally {
       setIsAutoMixing(false);
@@ -1571,6 +1681,7 @@ const App: React.FC = () => {
         // Pass newMetrics directly to avoid React state timing issues
         handleGenerateEchoReport(newMetrics);
 
+        syncEngineVerdict('accept');
         showNotification('Applied Successfully - Score Updated!', 'success', 2000);
         setEchoActionStatus('idle'); // Reset status immediately
         success = true;
@@ -1618,6 +1729,7 @@ const App: React.FC = () => {
 
             setProcessedMetrics(newMetrics);
             setHasAppliedChanges(true); // Mark changes applied on commit
+            syncEngineVerdict('accept');
 
             // Persist EQ settings to localStorage
             saveEQSettings(eqSettings);
@@ -1844,7 +1956,7 @@ const App: React.FC = () => {
   };
 
   // Track Delete + Reset - returns to upload state
-  const handleDeleteTrack = () => {
+  const handleDeleteTrack = async () => {
     if (!confirm('Delete current track and start over? All unsaved changes will be lost.')) return;
 
     // Stop playback
@@ -1876,12 +1988,15 @@ const App: React.FC = () => {
     setAppliedSuggestionIds([]);
     setEchoReport(null);
     setEchoReportStatus('idle');
+    setShadowTelemetry(null);
+    setLatestEngineVerdict(null);
+    setLatestEngineVerdictReason(null);
     setReferenceTrack(null);
     setReferenceSignature(null);
     setRevisionLog([]);
 
     // Clear autosave
-    sessionManager.clearSession();
+    await sessionManager.clearSession();
 
     // Clear history
     historyManager.clear();
@@ -1927,6 +2042,9 @@ const App: React.FC = () => {
     setAppliedSuggestionIds([]);
     setEchoReport(null);
     setEchoReportStatus('idle');
+    setShadowTelemetry(null);
+    setLatestEngineVerdict(null);
+    setLatestEngineVerdictReason(null);
     setReferenceTrack(null);
     setReferenceSignature(null);
     setRevisionLog([]);
@@ -2089,6 +2207,19 @@ const App: React.FC = () => {
 
   // Selected suggestion count (only unapplied)
   const selectedSuggestionCount = analysisResult?.suggestions.filter((s: Suggestion) => s.isSelected && !appliedSuggestionIds.includes(s.id)).length || 0;
+  const displayTelemetry = shadowTelemetry
+    ? shadowTelemetry
+    : (echoReport
+      ? {
+          analysisRunId: -1,
+          classicalScore: echoReport.score?.total,
+          quantumScore: echoReport.quantumScore,
+          shadowDelta: echoReport.shadowDelta,
+          quantumConfidence: echoReport.quantumConfidence,
+          humanIntentIndex: echoReport.humanIntentIndex,
+          intentCoreActive: echoReport.intentCoreActive
+        }
+      : null);
 
   return (
     <CapabilityProvider
@@ -2164,6 +2295,11 @@ const App: React.FC = () => {
 
       {/* Virtual Cursor (Ghost System) - Always rendered, z-9999 */}
       <VirtualCursor />
+
+      {/* ===== PHASE 3: HYBRID BRIDGE TEST ===== */}
+      <div className="fixed bottom-4 right-4 z-40 max-w-sm">
+        <BridgeTest />
+      </div>
 
       {/* Second Light OS Background */}
       <div className="fixed inset-0 pointer-events-none">
@@ -2363,7 +2499,22 @@ const App: React.FC = () => {
 
       {/* Upload Screen - Second Light OS Glass Card */}
       {appState === AppState.IDLE && activeMode === 'SINGLE' && (
-        <div className="mt-24">
+        <div className="mt-20 w-full max-w-4xl">
+          <section className="mb-12 text-center">
+            <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-slate-100 leading-tight">
+              Mixes that think. Masters that feel.
+            </h1>
+            <p className="mt-4 text-base md:text-lg text-slate-400 font-medium">
+              Engineered with measurable human intent.
+            </p>
+            <div className="mt-7 flex items-center justify-center gap-3 md:gap-4 text-[11px] md:text-xs uppercase tracking-[0.22em] text-slate-500">
+              <span>Analyze your track.</span>
+              <span className="text-slate-700">•</span>
+              <span>See the delta.</span>
+              <span className="text-slate-700">•</span>
+              <span>Master with intent.</span>
+            </div>
+          </section>
           <label className="relative cursor-pointer group block">
             {/* Glass card */}
             <div className="relative bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-3xl p-16 border-[0.5px] border-orange-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)] hover:border-orange-500/40 hover:shadow-[inset_4px_4px_12px_rgba(0,0,0,0.6),inset_-2px_-2px_8px_rgba(255,255,255,0.02)] hover:translate-y-[2px] active:shadow-[inset_6px_6px_16px_rgba(0,0,0,0.7),inset_-2px_-2px_6px_rgba(255,255,255,0.01)] active:translate-y-[4px] transition-all duration-200">
@@ -2390,69 +2541,55 @@ const App: React.FC = () => {
           <input type="file" onChange={handleFileUpload} className="hidden" accept="audio/*" />
         </label>
 
-        {/* Subtle Stats Ticker - Below Upload Card */}
-        <div className="mt-11 flex flex-col items-center gap-6">
-          {/* Stats */}
-          <div className="flex items-center gap-8 animate-in fade-in slide-in-from-left-8 duration-700 delay-1000">
-            <div className="text-center">
-              <p className="text-2xl font-black text-white/90">Grammy-Level</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Audio Quality</p>
-            </div>
-            <div className="w-px h-8 bg-white/10" />
-            <div className="text-center">
-              <p className="text-2xl font-black text-white/90">All-in-One</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Studio Suite</p>
-            </div>
-            <div className="w-px h-8 bg-white/10" />
-            <div className="text-center">
-              <p className="text-2xl font-black text-white/90">Instant</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Results</p>
-            </div>
-          </div>
-
-          {/* Simple Feature Highlights */}
-          <div className="flex items-center gap-6">
-            {/* 99 Club Scoring */}
-            <div className="relative group/badge flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity duration-300 animate-in fade-in slide-in-from-left-6 delay-1100">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-orange-500/20 to-orange-600/10 flex items-center justify-center border border-orange-500/30">
-                <span className="text-orange-400 font-black text-[10px]">99</span>
-              </div>
-              <span className="text-xs text-slate-400">99 Club Scoring</span>
-              {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900/95 backdrop-blur-xl rounded-lg border border-orange-500/30 shadow-lg opacity-0 group-hover/badge:opacity-100 pointer-events-none transition-opacity duration-200 whitespace-nowrap z-50">
-                <p className="text-xs text-slate-300">Grammy-level audio analysis for professional quality</p>
-              </div>
-            </div>
-
-            {/* AI Studio */}
-            <div className="relative group/badge flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity duration-300 animate-in fade-in slide-in-from-left-6 delay-1200">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-sky-500/20 to-blue-500/10 flex items-center justify-center border border-sky-400/40">
-                <svg className="w-3 h-3 text-sky-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <span className="text-xs text-slate-400">AI Studio</span>
-              {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900/95 backdrop-blur-xl rounded-lg border border-sky-500/30 shadow-lg opacity-0 group-hover/badge:opacity-100 pointer-events-none transition-opacity duration-200 whitespace-nowrap z-50">
-                <p className="text-xs text-slate-300">AI-powered mastering recommendations and analysis</p>
-              </div>
-            </div>
-
-            {/* Real-time A/B */}
-            <div className="relative group/badge flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity duration-300 animate-in fade-in slide-in-from-left-6 delay-1300">
-              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-green-500/20 to-emerald-500/10 flex items-center justify-center border border-green-500/30">
-                <svg className="w-3 h-3 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-                </svg>
-              </div>
-              <span className="text-xs text-slate-400">Real-time A/B</span>
-              {/* Tooltip */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900/95 backdrop-blur-xl rounded-lg border border-green-500/30 shadow-lg opacity-0 group-hover/badge:opacity-100 pointer-events-none transition-opacity duration-200 whitespace-nowrap z-50">
-                <p className="text-xs text-slate-300">Compare before and after instantly with one click</p>
-              </div>
-            </div>
-          </div>
+        <div className="mt-8 flex justify-center">
+          <p className="text-xs text-slate-500 tracking-wide">
+            Powered by IntentCore™
+          </p>
         </div>
+
+        <section className="mt-12 grid gap-4 md:grid-cols-3">
+          <article className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Step 01</p>
+            <h3 className="mt-2 text-lg font-semibold text-slate-100">Analyze</h3>
+            <p className="mt-2 text-sm text-slate-400">Read loudness, dynamics, spectral balance, and transient behavior in seconds.</p>
+          </article>
+          <article className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Step 02</p>
+            <h3 className="mt-2 text-lg font-semibold text-slate-100">See the Delta</h3>
+            <p className="mt-2 text-sm text-slate-400">IntentCore™ compares classical and quantum shadow scoring with confidence-gated telemetry.</p>
+          </article>
+          <article className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Step 03</p>
+            <h3 className="mt-2 text-lg font-semibold text-slate-100">Master with Intent</h3>
+            <p className="mt-2 text-sm text-slate-400">Apply only what helps. Quality gates block harmful moves before they touch your final.</p>
+          </article>
+        </section>
+
+        <section className="mt-6 rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.08] to-white/[0.03] p-6 md:p-7">
+          <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+            <div className="max-w-xl">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-orange-400/90">Why Echo Sound Lab</p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-100">Intent-Measured Mastering</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-400">
+                ESL is engineered to preserve dynamics, expose measurable change, and keep artists in control of every meaningful decision.
+              </p>
+            </div>
+            <div className="grid flex-1 gap-3 sm:grid-cols-3 md:max-w-[52%]">
+              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Telemetry</p>
+                <p className="mt-2 text-sm font-semibold text-slate-100">HII + Shadow Delta</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Safety</p>
+                <p className="mt-2 text-sm font-semibold text-slate-100">Dynamic Preservation</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Control</p>
+                <p className="mt-2 text-sm font-semibold text-slate-100">Artist-Led Decisions</p>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
       )}
 
@@ -2603,6 +2740,17 @@ const App: React.FC = () => {
               autoMixMode={autoMixMode}
               onFullStudioAutoMix={handleFullStudioAutoMix}
               fullStudioStatus={fullStudioStatus}
+              shadowDelta={displayTelemetry?.shadowDelta}
+              quantumConfidence={displayTelemetry?.quantumConfidence}
+              quantumScore={displayTelemetry?.quantumScore}
+              classicalScore={displayTelemetry?.classicalScore}
+              humanIntentIndex={displayTelemetry?.humanIntentIndex}
+              intentCoreActive={displayTelemetry?.intentCoreActive}
+              preservationMode={preservationMode}
+              onPreservationModeChange={setPreservationMode}
+              engineVerdict={latestEngineVerdict}
+              engineVerdictReason={latestEngineVerdictReason}
+              debugTelemetry={debugTelemetry}
             />
           </div>
 
@@ -3005,6 +3153,8 @@ const App: React.FC = () => {
         notifications={notifications}
         onDismiss={dismissNotification}
       />
+
+      <DemoFactory />
 
       {/* Phase 2: APL ProposalPanel - Intelligence Feed Sidebar */}
       {appState === AppState.READY && aplProposals.length > 0 && (
