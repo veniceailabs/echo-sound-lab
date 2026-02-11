@@ -235,6 +235,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif action == "RUN_VIDEO_SYSTEM":
                     await run_video_system(websocket, payload)
 
+                elif action == "RUN_MUSIC_SYSTEM":
+                    await run_music_system(websocket, payload)
+
                 elif action == "ASSEMBLE_DEMO":
                     await run_demo_assembly(websocket, payload)
 
@@ -1271,6 +1274,151 @@ async def run_video_system(websocket, payload):
             "request_id": request_id,
             "status": "error",
             "message": f"RUN_VIDEO_SYSTEM failed: {str(e)}"
+        })
+
+
+async def run_music_system(websocket, payload):
+    """
+    Execute root-level music-system.py with canonical CLI args and stream JSON events.
+    """
+    request_id = payload.get('request_id')
+    voice_path = payload.get('voice_path')
+    style = payload.get('style')
+    tempo = payload.get('tempo', 120)
+    output_path = payload.get('output_path')
+
+    if not voice_path or not style or not output_path:
+        await websocket.send_json({
+            "action": "RUN_MUSIC_SYSTEM",
+            "request_id": request_id,
+            "status": "error",
+            "message": "Missing required args: voice_path, style, output_path"
+        })
+        return
+
+    script_path = Path(__file__).resolve().parent.parent / "music-system.py"
+    if not script_path.exists():
+        await websocket.send_json({
+            "action": "RUN_MUSIC_SYSTEM",
+            "request_id": request_id,
+            "status": "error",
+            "message": f"music-system.py not found at {script_path}"
+        })
+        return
+
+    output_target = Path(output_path)
+    if not output_target.is_absolute():
+        output_target = OUTPUT_DIR / output_target.name
+    output_target.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        sys.executable,
+        str(script_path),
+        "--voice", str(voice_path),
+        "--style", str(style),
+        "--tempo", str(tempo),
+        "--output", str(output_target),
+    ]
+
+    logger.info(f"🎵 RUN_MUSIC_SYSTEM request {request_id}: {' '.join(cmd)}")
+
+    await websocket.send_json({
+        "action": "RUN_MUSIC_SYSTEM",
+        "request_id": request_id,
+        "status": "processing",
+        "progress": 2,
+        "message": "Launching music-system.py..."
+    })
+
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT
+    )
+
+    final_song_path = str(output_target)
+    final_vocals_path = ""
+    final_instrumental_path = ""
+
+    try:
+        while True:
+            line = await process.stdout.readline()
+            if not line:
+                break
+
+            raw = line.decode("utf-8", errors="replace").strip()
+            if not raw:
+                continue
+
+            try:
+                event = json.loads(raw)
+            except json.JSONDecodeError:
+                await websocket.send_json({
+                    "action": "RUN_MUSIC_SYSTEM",
+                    "request_id": request_id,
+                    "status": "processing",
+                    "message": raw
+                })
+                continue
+
+            status = event.get("status")
+            if status == "progress":
+                await websocket.send_json({
+                    "action": "RUN_MUSIC_SYSTEM",
+                    "request_id": request_id,
+                    "status": "processing",
+                    "progress": event.get("percent", 0),
+                    "message": event.get("message", "")
+                })
+            elif status == "complete":
+                final_song_path = event.get("path", str(output_target))
+                final_vocals_path = event.get("vocals_path", "")
+                final_instrumental_path = event.get("instrumental_path", "")
+            elif status == "error":
+                await websocket.send_json({
+                    "action": "RUN_MUSIC_SYSTEM",
+                    "request_id": request_id,
+                    "status": "error",
+                    "message": event.get("message", "music-system.py reported an error")
+                })
+                return
+
+        return_code = await process.wait()
+        if return_code != 0:
+            await websocket.send_json({
+                "action": "RUN_MUSIC_SYSTEM",
+                "request_id": request_id,
+                "status": "error",
+                "message": f"music-system.py exited with code {return_code}"
+            })
+            return
+
+        song_name = Path(final_song_path).name
+        result_payload = {
+            "song_path": final_song_path,
+            "song_url": f"http://{HOST}:{PORT}/stems/{song_name}",
+        }
+
+        if final_vocals_path:
+            result_payload["vocals_path"] = final_vocals_path
+            result_payload["vocals_url"] = f"http://{HOST}:{PORT}/stems/{Path(final_vocals_path).name}"
+        if final_instrumental_path:
+            result_payload["instrumental_path"] = final_instrumental_path
+            result_payload["instrumental_url"] = f"http://{HOST}:{PORT}/stems/{Path(final_instrumental_path).name}"
+
+        await websocket.send_json({
+            "action": "RUN_MUSIC_SYSTEM",
+            "request_id": request_id,
+            "status": "complete",
+            "result": result_payload
+        })
+    except Exception as e:
+        logger.error(f"RUN_MUSIC_SYSTEM failed: {e}")
+        await websocket.send_json({
+            "action": "RUN_MUSIC_SYSTEM",
+            "request_id": request_id,
+            "status": "error",
+            "message": f"RUN_MUSIC_SYSTEM failed: {str(e)}"
         })
 
 

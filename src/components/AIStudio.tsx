@@ -90,7 +90,7 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated }) => {
                     <div>
                         <h2 className={cn(sectionHeader, 'text-3xl mb-2')}>AI Studio</h2>
                         <p className="text-sm text-slate-400">
-                            Clone voice, craft a custom song or cover, and build a full release-ready track.
+                            Voice-first local production suite. Record vocals, choose a style, and build songs on-device.
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -121,8 +121,8 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated }) => {
                             accent: 'from-orange-500/20 to-orange-600/10 border-orange-500/30',
                         },
                         {
-                            title: 'Generate Song',
-                            description: 'Create a full song or cover with your AI voice and reference input.',
+                            title: 'Build Song Locally',
+                            description: 'Generate a full song from your recorded/uploaded voice without external APIs.',
                             accent: 'from-sky-500/20 to-blue-500/10 border-sky-500/30',
                         },
                         {

@@ -691,6 +691,85 @@ class BridgeServiceImpl {
   }
 
   /**
+   * Run root-level music-system.py through bridge backend.
+   * Canonical args:
+   * --voice --style --tempo --output
+   */
+  async runMusicSystem(
+    params: {
+      voicePath: string;
+      style: string;
+      tempo?: number;
+      outputPath: string;
+    },
+    onEvent?: (event: { percent?: number; message?: string }) => void
+  ): Promise<{
+    songPath: string;
+    songUrl?: string;
+    vocalsPath?: string;
+    vocalsUrl?: string;
+    instrumentalPath?: string;
+    instrumentalUrl?: string;
+  }> {
+    const requestId = `music-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    if (!this.getIsConnected()) {
+      this.connect();
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    return new Promise((resolve, reject) => {
+      const unsubscribe = this.subscribe((response: BridgeMessage & { action?: string; request_id?: string }) => {
+        if (response.action !== 'RUN_MUSIC_SYSTEM' || response.request_id !== requestId) {
+          return;
+        }
+
+        if (response.status === 'processing' || response.status === 'rendering' || response.status === 'loading') {
+          if (onEvent) {
+            onEvent({
+              percent: response.progress,
+              message: response.message || response.stage,
+            });
+          }
+          return;
+        }
+
+        if (response.status === 'complete' && response.result?.song_path) {
+          unsubscribe();
+          resolve({
+            songPath: response.result.song_path,
+            songUrl: response.result.song_url,
+            vocalsPath: response.result.vocals_path,
+            vocalsUrl: response.result.vocals_url,
+            instrumentalPath: response.result.instrumental_path,
+            instrumentalUrl: response.result.instrumental_url,
+          });
+          return;
+        }
+
+        if (response.status === 'error') {
+          unsubscribe();
+          reject(new Error(response.error || response.message || 'RUN_MUSIC_SYSTEM failed'));
+        }
+      });
+
+      this.send({
+        action: 'RUN_MUSIC_SYSTEM',
+        request_id: requestId,
+        voice_path: params.voicePath,
+        style: params.style,
+        tempo: params.tempo ?? 120,
+        output_path: params.outputPath,
+      });
+
+      setTimeout(() => {
+        unsubscribe();
+        reject(new Error('RUN_MUSIC_SYSTEM timeout'));
+      }, 240000);
+    });
+  }
+
+  /**
    * Save video via chunked stream then finalize to MP4.
    * Uses SAVE_SCREEN_RECORDING_CHUNK + FINALIZE_RECORDING actions.
    */
