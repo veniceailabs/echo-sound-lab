@@ -1,252 +1,402 @@
-import { VoiceModel, Stem, GeneratedSong } from "../types";
-import { audioEngine } from "./audioEngine";
-import { encoderService } from "./encoderService";
-import { sunoApiService } from "./sunoApiService";
-import { fxMatchingEngine } from "./fxMatchingEngine";
-import { voiceApiService } from "./voiceApiService";
+import { VoiceModel, GeneratedSong } from '../types';
+import { audioEngine } from './audioEngine';
 
-// Basic persistent storage simulation using localStorage
+// Local-first persistent storage
 const storage = {
-    async get<T>(key: string): Promise<T | null> {
-        try {
-            const result = localStorage.getItem(key);
-            return result ? JSON.parse(result) : null;
-        } catch (e) {
-            return null;
-        }
-    },
-    async set(key: string, value: any): Promise<void> {
-         try {
-            localStorage.setItem(key, JSON.stringify(value));
-        } catch (e) {
-            console.error(e);
-        }
-    },
-    async remove(key: string): Promise<void> {
-         try {
-            localStorage.removeItem(key);
-        } catch (e) {
-            console.error(e);
-        }
-    },
-    async list(prefix: string): Promise<string[]> {
-        return Object.keys(localStorage).filter(k => k.startsWith(prefix));
+  async get<T>(key: string): Promise<T | null> {
+    try {
+      const result = localStorage.getItem(key);
+      return result ? JSON.parse(result) : null;
+    } catch {
+      return null;
     }
+  },
+  async set(key: string, value: unknown): Promise<void> {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+      console.error(e);
+    }
+  },
+  async remove(key: string): Promise<void> {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.error(e);
+    }
+  },
+  async list(prefix: string): Promise<string[]> {
+    return Object.keys(localStorage).filter((k) => k.startsWith(prefix));
+  }
 };
 
 const VOICE_MODEL_PREFIX = 'voice-model:';
 
+const STYLE_TEMPO: Record<string, number> = {
+  'hip-hop': 88,
+  'r&b': 74,
+  pop: 108,
+  electronic: 126,
+  rock: 118,
+  indie: 96,
+  country: 92,
+};
+
 class VoiceEngineService {
-    async trainVoiceModel(samples: string[], name: string, persona?: string): Promise<VoiceModel> {
-        if (voiceApiService.isConfigured()) {
-            return voiceApiService.trainVoiceModel(samples, name, persona);
-        }
+  async trainVoiceModel(samples: string[], name: string, persona?: string): Promise<VoiceModel> {
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
-        await new Promise(resolve => setTimeout(resolve, 1500));
+    const newModel: VoiceModel = {
+      id: `vm-${Date.now()}`,
+      name,
+      trainedAt: Date.now(),
+      samples,
+      apiVoiceId: `local-${Date.now()}`,
+      persona,
+    };
 
-        const newModel: VoiceModel = {
-            id: `vm-${Date.now()}`,
-            name,
-            trainedAt: Date.now(),
-            samples,
-            apiVoiceId: `simulated-${Date.now()}`,
-            persona
-        };
+    await storage.set(`${VOICE_MODEL_PREFIX}${newModel.id}`, newModel);
+    return newModel;
+  }
 
-        await storage.set(`${VOICE_MODEL_PREFIX}${newModel.id}`, newModel);
-        return newModel;
+  async getVoiceModels(): Promise<VoiceModel[]> {
+    const keys = await storage.list(VOICE_MODEL_PREFIX);
+    const models: VoiceModel[] = [];
+    for (const key of keys) {
+      const model = await storage.get<VoiceModel>(key);
+      if (model) models.push(model);
     }
+    return models.sort((a, b) => b.trainedAt - a.trainedAt);
+  }
 
-    async getVoiceModels(): Promise<VoiceModel[]> {
-        if (voiceApiService.isConfigured()) {
-            return voiceApiService.listVoiceModels();
-        }
+  async deleteVoiceModel(id: string): Promise<void> {
+    await storage.remove(`${VOICE_MODEL_PREFIX}${id}`);
+  }
 
-        const keys = await storage.list(VOICE_MODEL_PREFIX);
-        const models: VoiceModel[] = [];
-        for (const key of keys) {
-            const model = await storage.get<VoiceModel>(key);
-            if (model) {
-                models.push(model);
-            }
-        }
-        return models.sort((a, b) => b.trainedAt - a.trainedAt);
+  async generateSong(
+    voiceModel: VoiceModel | null,
+    lyrics: string,
+    style: string,
+    options?: {
+      referenceTrack?: AudioBuffer;
+      userVocals?: Blob;
+      generateHarmonies?: boolean;
+      instrumental?: boolean;
+      sourceBeat?: AudioBuffer;
+      coverAudio?: Blob | File;
+      styleTags?: string;
+      weirdness?: number;
+      styleInfluence?: number;
+      voiceInput?: Blob | File;
     }
-    
-    async deleteVoiceModel(id: string): Promise<void> {
-        if (voiceApiService.isConfigured()) {
-            return voiceApiService.deleteVoiceModel(id);
-        }
+  ): Promise<GeneratedSong> {
+    const sampleRate = audioEngine.getSampleRate() || 44100;
+    const durationSec = this.estimateDuration(lyrics, !!options?.instrumental);
 
-        await storage.remove(`${VOICE_MODEL_PREFIX}${id}`);
-    }
-    
-    async generateSong(
-        voiceModel: VoiceModel | null,
-        lyrics: string,
-        style: string,
-        options?: {
-            referenceTrack?: AudioBuffer;
-            userVocals?: Blob;
-            generateHarmonies?: boolean;
-            instrumental?: boolean;
-            sourceBeat?: AudioBuffer;
-            coverAudio?: Blob | File;
-            styleTags?: string;
-            weirdness?: number;
-            styleInfluence?: number;
-            voiceInput?: Blob | File;
-        }
-    ): Promise<GeneratedSong> {
-        console.log('[VoiceEngine] Starting song generation:', { voiceModel: voiceModel?.name, style, options });
+    const instrumental = options?.sourceBeat
+      ? this.fitBufferToDuration(options.sourceBeat, durationSec, sampleRate)
+      : await this.renderInstrumental(style, durationSec, sampleRate);
 
-        // 1. Call Suno API to generate song
-        let referenceAudioUrl: string | undefined;
-        let voiceSampleUrl: string | undefined;
-
-        if (options?.coverAudio) {
-            referenceAudioUrl = await sunoApiService.uploadAudioAsset(options.coverAudio);
-        } else if (options?.sourceBeat) {
-            const beatBlob = await encoderService.exportAsWav(options.sourceBeat);
-            referenceAudioUrl = await sunoApiService.uploadAudioAsset(beatBlob);
-        }
-
-        if (options?.voiceInput) {
-            voiceSampleUrl = await sunoApiService.uploadAudioAsset(options.voiceInput);
-        }
-
-        const response = await sunoApiService.generateSong({
-            prompt: options?.instrumental ? `${style} instrumental beat` : `${style} song`,
-            lyrics,
-            style,
-            voiceModelId: voiceModel?.apiVoiceId,
-            instrumental: options?.instrumental || false,
-            styleTags: options?.styleTags,
-            weirdness: options?.weirdness,
-            styleInfluence: options?.styleInfluence,
-            referenceAudioUrl,
-            voiceSampleUrl,
-            coverMode: referenceAudioUrl ? 'reference' : undefined
+    const voiceSource = options?.userVocals || options?.voiceInput;
+    const vocals = options?.instrumental
+      ? this.createSilentBuffer(durationSec, sampleRate)
+      : await this.renderVocals({
+          source: voiceSource,
+          lyrics,
+          style,
+          durationSec,
+          sampleRate,
+          harmonies: !!options?.generateHarmonies,
+          voiceModel,
         });
 
-        // 2. Poll until complete
-        let status = response;
-        while (status.status !== 'completed') {
-            if (status.status === 'failed') {
-                throw new Error(status.error || 'Generation failed');
-            }
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Poll every 2 seconds
-            status = await sunoApiService.pollGenerationStatus(status.songId);
-        }
+    const mastered = this.mixToMaster(instrumental, vocals, options?.instrumental ? 1.0 : 0.85, options?.instrumental ? 0.0 : 0.9);
 
-        if (!status.audioUrl) {
-            throw new Error('No audio URL in completed response');
-        }
+    return {
+      id: `local-song-${Date.now()}`,
+      name: options?.instrumental ? `${style} Instrumental` : `${voiceModel?.name || 'Local Voice'} - ${style}`,
+      buffer: mastered,
+      stems: {
+        vocals,
+        instrumental,
+      },
+      metadata: {
+        prompt: options?.instrumental ? `${style} instrumental` : `${style} song`,
+        style,
+        voiceModelId: voiceModel?.id || 'local-instrumental',
+        generatedAt: Date.now(),
+      }
+    };
+  }
 
-        // 3. Download and extract stems
-        console.log('[VoiceEngine] Downloading song...');
-        const buffer = await sunoApiService.downloadSong(status.audioUrl);
+  private estimateDuration(lyrics: string, instrumental: boolean): number {
+    if (instrumental) return 28;
+    const lineCount = lyrics.split('\n').filter((l) => l.trim().length > 0).length;
+    return Math.min(48, Math.max(20, 14 + lineCount * 1.6));
+  }
 
-        console.log('[VoiceEngine] Extracting stems...');
-        const stems = await sunoApiService.extractStems(status.songId);
+  private createSilentBuffer(durationSec: number, sampleRate: number): AudioBuffer {
+    const frames = Math.max(1, Math.floor(durationSec * sampleRate));
+    return new AudioBuffer({ numberOfChannels: 2, length: frames, sampleRate });
+  }
 
-        // 4. Apply FX matching if reference provided
-        if (options?.referenceTrack) {
-            console.log('[VoiceEngine] Applying reference track FX matching...');
-            const fxMatch = await fxMatchingEngine.matchReference(options.referenceTrack);
+  private fitBufferToDuration(buffer: AudioBuffer, durationSec: number, sampleRate: number): AudioBuffer {
+    const targetFrames = Math.max(1, Math.floor(durationSec * sampleRate));
+    const out = new AudioBuffer({ numberOfChannels: 2, length: targetFrames, sampleRate });
 
-            // Apply matched FX to vocals
-            const processedVocals = await audioEngine.renderProcessedAudio(fxMatch.suggestedConfig);
-            stems.vocals = processedVocals;
+    for (let ch = 0; ch < 2; ch++) {
+      const inData = buffer.getChannelData(Math.min(ch, buffer.numberOfChannels - 1));
+      const outData = out.getChannelData(ch);
+      for (let i = 0; i < targetFrames; i++) {
+        outData[i] = inData[i % inData.length] * 0.92;
+      }
+    }
+    return out;
+  }
 
-            console.log('[VoiceEngine] FX matching applied with confidence:', fxMatch.matchConfidence);
-        }
+  private async renderInstrumental(style: string, durationSec: number, sampleRate: number): Promise<AudioBuffer> {
+    const tempo = STYLE_TEMPO[style] || 96;
+    const beatsPerSecond = tempo / 60;
+    const beatDur = 1 / beatsPerSecond;
+    const frameCount = Math.max(1, Math.floor(durationSec * sampleRate));
 
-        // 5. Mix with user vocals if provided (hybrid workflow)
-        if (options?.userVocals) {
-            console.log('[VoiceEngine] Creating hybrid vocal mix...');
-            const userBuffer = await this.convertBlobToBuffer(options.userVocals);
+    const ctx = new OfflineAudioContext(2, frameCount, sampleRate);
+    const master = ctx.createGain();
+    master.gain.value = 0.78;
+    master.connect(ctx.destination);
 
-            if (options.generateHarmonies) {
-                // Generate AI harmonies and mix all together
-                const aiHarmonies = await sunoApiService.generateHarmonies(
-                    options.userVocals,
-                    voiceModel.apiVoiceId,
-                    'harmonies'
-                );
-                stems.vocals = await this.mixHybridVocals(userBuffer, aiHarmonies, stems.instrumental);
-            } else {
-                // Just mix user vocals with instrumental
-                stems.vocals = await this.mixHybridVocals(userBuffer, stems.vocals, stems.instrumental);
-            }
-        }
-
-        return {
-            id: status.songId,
-            name: options?.instrumental ? `${style} Instrumental` : `${voiceModel?.name || 'AI'} - ${style}`,
-            buffer,
-            stems,
-            metadata: {
-                prompt: options?.instrumental ? `${style} instrumental beat` : `${style} song`,
-                style,
-                voiceModelId: voiceModel?.id || 'instrumental',
-                generatedAt: Date.now()
-            }
-        };
+    // Kick + snare skeleton
+    for (let t = 0; t < durationSec; t += beatDur) {
+      this.spawnKick(ctx, master, t);
+      const beatIndex = Math.floor(t / beatDur) % 4;
+      if (beatIndex === 1 || beatIndex === 3) {
+        this.spawnSnare(ctx, master, t + beatDur * 0.02);
+      }
+      this.spawnHat(ctx, master, t + beatDur * 0.5);
     }
 
-    /**
-     * Convert Blob to AudioBuffer
-     */
-    private async convertBlobToBuffer(blob: Blob): Promise<AudioBuffer> {
-        const arrayBuffer = await blob.arrayBuffer();
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        return await audioContext.decodeAudioData(arrayBuffer);
+    // Bass
+    const bass = ctx.createOscillator();
+    bass.type = 'triangle';
+    const bassGain = ctx.createGain();
+    bassGain.gain.value = 0.0;
+    bass.connect(bassGain);
+    bassGain.connect(master);
+
+    const bassPattern = [48, 48, 43, 45, 48, 50, 43, 45];
+    for (let step = 0; step < durationSec / beatDur; step++) {
+      const st = step * beatDur;
+      const midi = bassPattern[step % bassPattern.length];
+      const hz = 440 * Math.pow(2, (midi - 69) / 12);
+      bass.frequency.setValueAtTime(hz, st);
+      bassGain.gain.setValueAtTime(0.0, st);
+      bassGain.gain.linearRampToValueAtTime(0.22, st + 0.01);
+      bassGain.gain.exponentialRampToValueAtTime(0.04, Math.min(durationSec, st + beatDur * 0.95));
+    }
+    bass.start(0);
+    bass.stop(durationSec);
+
+    // Pad/wash
+    const pad = ctx.createOscillator();
+    pad.type = 'sawtooth';
+    const padFilter = ctx.createBiquadFilter();
+    padFilter.type = 'lowpass';
+    padFilter.frequency.value = style === 'electronic' ? 3800 : 2200;
+    const padGain = ctx.createGain();
+    padGain.gain.value = style === 'rock' ? 0.08 : 0.12;
+    pad.connect(padFilter);
+    padFilter.connect(padGain);
+    padGain.connect(master);
+    pad.frequency.value = 220;
+    pad.start(0);
+    pad.stop(durationSec);
+
+    return ctx.startRendering();
+  }
+
+  private spawnKick(ctx: OfflineAudioContext, destination: AudioNode, at: number): void {
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(destination);
+
+    osc.frequency.setValueAtTime(110, at);
+    osc.frequency.exponentialRampToValueAtTime(42, at + 0.11);
+
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(0.95, at + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.18);
+
+    osc.start(at);
+    osc.stop(at + 0.2);
+  }
+
+  private spawnSnare(ctx: OfflineAudioContext, destination: AudioNode, at: number): void {
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.16), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
     }
 
-    /**
-     * Mix user vocals with AI harmonies/doubles and instrumental
-     */
-    private async mixHybridVocals(
-        userLead: AudioBuffer,
-        aiVocals: AudioBuffer,
-        instrumental: AudioBuffer
-    ): Promise<AudioBuffer> {
-        const sampleRate = audioEngine.getSampleRate();
-        const maxDuration = Math.max(userLead.duration, aiVocals.duration, instrumental.duration);
-        const frameCount = Math.floor(sampleRate * maxDuration);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 1800;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.28, at);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.14);
 
-        const offlineCtx = new OfflineAudioContext(2, frameCount, sampleRate);
+    source.connect(hp);
+    hp.connect(gain);
+    gain.connect(destination);
+    source.start(at);
+  }
 
-        // User lead vocals (0dB - main vocal)
-        const userSource = offlineCtx.createBufferSource();
-        userSource.buffer = userLead;
-        const userGain = offlineCtx.createGain();
-        userGain.gain.value = 1.0; // Unity gain for lead
-        userSource.connect(userGain);
-        userGain.connect(offlineCtx.destination);
-        userSource.start();
-
-        // AI harmonies/doubles (-4dB - blend under lead)
-        const aiSource = offlineCtx.createBufferSource();
-        aiSource.buffer = aiVocals;
-        const aiGain = offlineCtx.createGain();
-        aiGain.gain.value = 0.63; // -4dB
-        aiSource.connect(aiGain);
-        aiGain.connect(offlineCtx.destination);
-        aiSource.start();
-
-        // Instrumental (-6dB - duck for vocals)
-        const instSource = offlineCtx.createBufferSource();
-        instSource.buffer = instrumental;
-        const instGain = offlineCtx.createGain();
-        instGain.gain.value = 0.5; // -6dB
-        instSource.connect(instGain);
-        instGain.connect(offlineCtx.destination);
-        instSource.start();
-
-        return await offlineCtx.startRendering();
+  private spawnHat(ctx: OfflineAudioContext, destination: AudioNode, at: number): void {
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.05), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
     }
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 6000;
+    const gain = ctx.createGain();
+    gain.gain.value = 0.08;
+
+    source.connect(hp);
+    hp.connect(gain);
+    gain.connect(destination);
+    source.start(at);
+  }
+
+  private async renderVocals(params: {
+    source?: Blob | File;
+    lyrics: string;
+    style: string;
+    durationSec: number;
+    sampleRate: number;
+    harmonies: boolean;
+    voiceModel: VoiceModel | null;
+  }): Promise<AudioBuffer> {
+    if (params.source) {
+      const sourceBuffer = await this.convertBlobToBuffer(params.source);
+      const fitted = this.fitBufferToDuration(sourceBuffer, params.durationSec, params.sampleRate);
+      if (!params.harmonies) return fitted;
+      return this.addSimpleHarmony(fitted);
+    }
+
+    return this.renderSyntheticLead(params.lyrics, params.style, params.durationSec, params.sampleRate, params.harmonies, params.voiceModel?.name || 'local');
+  }
+
+  private async renderSyntheticLead(
+    lyrics: string,
+    style: string,
+    durationSec: number,
+    sampleRate: number,
+    harmonies: boolean,
+    voiceSeed: string
+  ): Promise<AudioBuffer> {
+    const frameCount = Math.max(1, Math.floor(durationSec * sampleRate));
+    const ctx = new OfflineAudioContext(2, frameCount, sampleRate);
+    const out = ctx.createGain();
+    out.gain.value = 0.82;
+    out.connect(ctx.destination);
+
+    const lead = ctx.createOscillator();
+    lead.type = style === 'rock' ? 'sawtooth' : 'triangle';
+    const leadGain = ctx.createGain();
+    leadGain.gain.value = 0.0;
+    lead.connect(leadGain);
+
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1450;
+    bp.Q.value = 1.1;
+
+    leadGain.connect(bp);
+    bp.connect(out);
+
+    const syllables = Math.max(8, lyrics.split(/\s+/).filter(Boolean).length);
+    const stepDur = Math.max(0.18, durationSec / syllables);
+
+    const baseMidi = style === 'r&b' ? 58 : style === 'hip-hop' ? 55 : 60;
+    let h = 0;
+    const seed = `${lyrics}|${voiceSeed}`;
+    for (let i = 0; i < seed.length; i++) h = ((h << 5) - h + seed.charCodeAt(i)) | 0;
+
+    for (let i = 0; i < syllables; i++) {
+      const t = i * stepDur;
+      const variation = ((h + i * 13) % 7) - 3;
+      const midi = baseMidi + variation;
+      const hz = 440 * Math.pow(2, (midi - 69) / 12);
+      lead.frequency.setValueAtTime(hz, t);
+
+      leadGain.gain.setValueAtTime(0.0001, t);
+      leadGain.gain.linearRampToValueAtTime(0.19, t + 0.03);
+      leadGain.gain.exponentialRampToValueAtTime(0.0001, Math.min(durationSec, t + stepDur * 0.9));
+    }
+
+    lead.start(0);
+    lead.stop(durationSec);
+
+    if (harmonies) {
+      const harm = ctx.createOscillator();
+      harm.type = 'sine';
+      const harmGain = ctx.createGain();
+      harmGain.gain.value = 0.06;
+      harm.frequency.value = lead.frequency.value * 1.25;
+      harm.connect(harmGain);
+      harmGain.connect(out);
+      harm.start(0);
+      harm.stop(durationSec);
+    }
+
+    return ctx.startRendering();
+  }
+
+  private addSimpleHarmony(vocal: AudioBuffer): AudioBuffer {
+    const out = new AudioBuffer({ numberOfChannels: 2, length: vocal.length, sampleRate: vocal.sampleRate });
+    for (let ch = 0; ch < 2; ch++) {
+      const src = vocal.getChannelData(Math.min(ch, vocal.numberOfChannels - 1));
+      const dst = out.getChannelData(ch);
+      const delaySamples = Math.floor(vocal.sampleRate * 0.03);
+      for (let i = 0; i < dst.length; i++) {
+        const dry = src[i] || 0;
+        const wet = i - delaySamples >= 0 ? src[i - delaySamples] * 0.45 : 0;
+        dst[i] = Math.max(-1, Math.min(1, dry * 0.8 + wet));
+      }
+    }
+    return out;
+  }
+
+  private mixToMaster(instrumental: AudioBuffer, vocals: AudioBuffer, instGain = 0.9, vocalGain = 1.0): AudioBuffer {
+    const sampleRate = instrumental.sampleRate;
+    const maxLen = Math.max(instrumental.length, vocals.length);
+    const out = new AudioBuffer({ numberOfChannels: 2, length: maxLen, sampleRate });
+
+    for (let ch = 0; ch < 2; ch++) {
+      const inst = instrumental.getChannelData(Math.min(ch, instrumental.numberOfChannels - 1));
+      const voc = vocals.getChannelData(Math.min(ch, vocals.numberOfChannels - 1));
+      const dst = out.getChannelData(ch);
+      for (let i = 0; i < maxLen; i++) {
+        const v = (inst[i] || 0) * instGain + (voc[i] || 0) * vocalGain;
+        dst[i] = Math.max(-1, Math.min(1, v));
+      }
+    }
+    return out;
+  }
+
+  private async convertBlobToBuffer(blob: Blob | File): Promise<AudioBuffer> {
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioContext = new (window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)();
+    return audioContext.decodeAudioData(arrayBuffer);
+  }
 }
 
 export const voiceEngineService = new VoiceEngineService();

@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { VoiceModel, GeneratedSong } from '../types';
 import { voiceEngineService } from '../services/voiceEngineService';
-import { sunoApiService } from '../services/sunoApiService';
 import { fxMatchingEngine } from '../services/fxMatchingEngine';
-import { generateSongLyrics } from '../services/geminiService';
 import { useRecorder } from '../hooks/useRecorder';
 import { glassCard, glowButton, secondaryButton, sectionHeader, gradientDivider, cn } from '../utils/secondLightStyles';
 
@@ -63,8 +61,6 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
         }
     }, [recordingState, audioBlob, isRecordingVoice]);
 
-    const rateLimit = sunoApiService.checkRateLimit();
-
     useEffect(() => {
         if (recorderError) {
             setError(recorderError.message);
@@ -121,18 +117,30 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
     };
 
     const handleGenerateLyrics = async () => {
-        console.log('[Wizard] Generate lyrics clicked! Style:', style);
         setIsGeneratingLyrics(true);
         setError(null);
 
         try {
-            // Use Gemini AI to generate original lyrics
-            console.log('[Wizard] Calling generateSongLyrics...');
-            const generatedLyrics = await generateSongLyrics(style, prompt || undefined);
-            console.log('[Wizard] Lyrics received, length:', generatedLyrics.length);
-            setLyrics(generatedLyrics);
+            const theme = prompt?.trim() || `${style} vibe`;
+            const generated = [
+                `Verse 1:`,
+                `City lights and ${theme} in my chest tonight,`,
+                `Running through the noise but my focus stays bright.`,
+                ``,
+                `Chorus:`,
+                `We rise, we glow, we turn it up slow,`,
+                `From the floor to the sky let the whole world know.`,
+                ``,
+                `Verse 2:`,
+                `Every scar made a map, every map found a way,`,
+                `Now the pressure sounds like music when we play.`,
+                ``,
+                `Bridge:`,
+                `Hold the line, breathe in time,`,
+                `Let the rhythm lift the weight off our minds.`
+            ].join('\n');
+            setLyrics(generated);
         } catch (err: any) {
-            console.error('[Wizard] Lyric generation error:', err);
             setError(`Failed to generate lyrics: ${err.message}`);
         } finally {
             setIsGeneratingLyrics(false);
@@ -164,11 +172,6 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
     const handleGenerate = async () => {
         if (!selectedModel && !isInstrumental) {
             setError('Please select a voice model');
-            return;
-        }
-
-        if (!rateLimit.allowed) {
-            setError(`Daily limit reached. Resets at ${rateLimit.resetAt.toLocaleTimeString()}`);
             return;
         }
 
@@ -244,15 +247,13 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h2 className={cn(sectionHeader, 'text-3xl mb-2')}>Generate Song</h2>
-                    <p className="text-sm text-slate-400">Create AI-generated music with your cloned voice</p>
+                    <p className="text-sm text-slate-400">Create music locally with your cloned voice and on-device generation</p>
                 </div>
                 <div className="flex items-center gap-4">
-                    {/* Credit Badge */}
                     <div className={cn(
-                        'px-4 py-2 rounded-xl text-xs font-bold',
-                        rateLimit.remaining > 5 ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                        'px-4 py-2 rounded-xl text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30'
                     )}>
-                        {rateLimit.remaining}/{rateLimit.limit} remaining today
+                        Local Engine Active
                     </div>
                     <button onClick={onCancel} className="text-slate-400 hover:text-white transition-colors text-2xl">
                         ✕
@@ -366,7 +367,7 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
                                 <div>
                                     <span className="text-white font-bold">Instrumental Remix Mode</span>
                                     <p className="text-xs text-orange-300/80 mt-1">
-                                        Upload a beat to create a completely new AI-generated instrumental (like Suno's remix feature)
+                                        Upload a beat to create a brand-new local instrumental remix
                                     </p>
                                 </div>
                             </label>
@@ -391,9 +392,9 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
                                                 <span className="text-2xl"></span>
                                             </div>
                                             <p className="text-white font-medium mb-1">Upload Beat</p>
-                                            <p className="text-xs text-slate-400">AI will create a new instrumental inspired by this beat</p>
-                                        </div>
-                                    </label>
+                                        <p className="text-xs text-slate-400">Engine creates a local instrumental inspired by this beat</p>
+                                    </div>
+                                </label>
                                 ) : (
                                     <div className="flex items-center justify-between bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
                                         <div className="flex items-center gap-3">
@@ -1026,8 +1027,7 @@ Chorus:
                                 </button>
                                 <button
                                     onClick={handleGenerate}
-                                    disabled={!rateLimit.allowed}
-                                    className={cn(glowButton, 'flex-1 py-4 disabled:opacity-40 disabled:grayscale')}
+                                    className={cn(glowButton, 'flex-1 py-4')}
                                 >
                                     Generate Song
                                 </button>
