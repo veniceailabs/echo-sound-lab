@@ -628,7 +628,7 @@ export interface FeedbackPayload {
   message: string;
   userEmail?: string;
   includeTechnicalDetails: boolean;
-  currentTab?: "Single Track" | "Multi-Stem" | "AI Studio";
+  currentTab?: "Single Track" | "Stems" | "AI Studio" | "SFS Video Engine";
   trackName?: string | null;
   echoSummarySnippet?: string;
   aiRecommendationsApplied?: boolean;

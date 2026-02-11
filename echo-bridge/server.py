@@ -14,6 +14,8 @@ import sys
 import tempfile
 import logging
 import base64
+import time
+import subprocess
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -33,8 +35,6 @@ try:
     import uvicorn
     import pyttsx3
     import ffmpeg
-import time
-import subprocess
 except ImportError as e:
     print(f"❌ Missing dependency: {e}")
     print("Run setup_bridge.sh first to install requirements")

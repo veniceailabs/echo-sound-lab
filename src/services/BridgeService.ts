@@ -515,52 +515,17 @@ class BridgeServiceImpl {
     demoName: string,
     onProgress?: (progress: number) => void
   ): Promise<{ videoPath: string; duration: number }> {
-    return new Promise((resolve, reject) => {
-      try {
-        // Read blob as base64 for JSON transmission
-        const reader = new FileReader();
+    const result = await this.saveVideoRecording(
+      videoBlob,
+      demoName,
+      256 * 1024,
+      onProgress
+    );
 
-        reader.onload = () => {
-          const base64Data = (reader.result as string).split(',')[1]; // Remove data: URL prefix
-
-          const request = {
-            action: 'SAVE_SCREEN_RECORDING',
-            demo_name: demoName,
-            video_data: base64Data,
-            mime_type: videoBlob.type,
-            file_size: videoBlob.size
-          };
-
-          const requestHandler = (response: BridgeMessage) => {
-            if (response.status === 'complete' && response.result?.video_path) {
-              resolve({
-                videoPath: response.result.video_path,
-                duration: response.result.duration || 0
-              });
-            } else if (response.status === 'error') {
-              reject(new Error(response.error || 'Video save failed'));
-            }
-          };
-
-          const unsubscribe = this.subscribe(requestHandler);
-          this.send(request);
-
-          setTimeout(() => {
-            unsubscribe();
-            reject(new Error('Video streaming timeout'));
-          }, 180000); // 3 minute timeout
-        };
-
-        reader.onerror = () => {
-          reject(new Error('Failed to read video blob'));
-        };
-
-        reader.readAsDataURL(videoBlob);
-
-      } catch (error) {
-        reject(error);
-      }
-    });
+    return {
+      videoPath: result.videoPath,
+      duration: result.duration,
+    };
   }
 
   /**
@@ -573,79 +538,19 @@ class BridgeServiceImpl {
     chunkSize: number = 256 * 1024, // 256KB chunks
     onProgress?: (bytesWritten: number, totalBytes: number) => void
   ): Promise<{ videoPath: string; duration: number }> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const totalChunks = Math.ceil(videoBlob.size / chunkSize);
-        let bytesWritten = 0;
+    const result = await this.saveVideoRecording(
+      videoBlob,
+      demoName,
+      chunkSize,
+      onProgress
+        ? (percent) => onProgress(Math.round((percent / 100) * videoBlob.size), videoBlob.size)
+        : undefined
+    );
 
-        console.log(`[BridgeService] Starting chunked video stream: ${totalChunks} chunks of ${chunkSize} bytes`);
-
-        for (let i = 0; i < totalChunks; i++) {
-          const start = i * chunkSize;
-          const end = Math.min(start + chunkSize, videoBlob.size);
-          const chunk = videoBlob.slice(start, end);
-
-          const isLastChunk = i === totalChunks - 1;
-
-          // Convert chunk to base64
-          const base64Data = await new Promise<string>((res, rej) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              res((reader.result as string).split(',')[1]);
-            };
-            reader.onerror = rej;
-            reader.readAsDataURL(chunk);
-          });
-
-          // Send chunk
-          const request = {
-            action: 'SAVE_SCREEN_RECORDING_CHUNK',
-            demo_name: demoName,
-            chunk_index: i,
-            chunk_data: base64Data,
-            is_last: isLastChunk,
-            total_chunks: totalChunks
-          };
-
-          await new Promise<void>((res) => {
-            const unsubscribe = this.subscribe((response: BridgeMessage) => {
-              if (response.status === 'complete' || response.status === 'processing') {
-                unsubscribe();
-                bytesWritten = end;
-
-                if (onProgress) {
-                  onProgress(bytesWritten, videoBlob.size);
-                }
-
-                res();
-              } else if (response.status === 'error') {
-                unsubscribe();
-                rej(new Error(response.error || 'Chunk save failed'));
-              }
-            });
-
-            this.send(request);
-
-            // Timeout per chunk
-            setTimeout(() => {
-              unsubscribe();
-              rej(new Error(`Chunk ${i} timeout`));
-            }, 60000);
-          });
-
-          console.log(`[BridgeService] Chunk ${i + 1}/${totalChunks} sent (${bytesWritten} / ${videoBlob.size} bytes)`);
-        }
-
-        // Wait for finalization
-        resolve({
-          videoPath: `/tmp/screen_recordings/${demoName}/recording.webm`,
-          duration: Math.floor(videoBlob.size / 100000) // Rough estimate
-        });
-
-      } catch (error) {
-        reject(error);
-      }
-    });
+    return {
+      videoPath: result.videoPath,
+      duration: result.duration,
+    };
   }
 
   /**
