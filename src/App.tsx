@@ -5,6 +5,8 @@ import { audioPerceptionLayer } from './services/audioPerceptionLayer';
 import { mixAnalysisService } from './services/mixAnalysis';
 import { listeningPassService } from './services/listeningPassService';
 import { reasonAboutListeningPass } from './services/geminiService';
+import { calculateLoudnessRange } from './services/dsp/analysisUtils';
+import { generateStressStem } from './services/debug/stressTestEngine';
 
 // NEW: Refactored pipeline
 import { AudioSessionProvider, useAudioSession } from './context/AudioSessionContext';
@@ -84,6 +86,11 @@ import { BridgeTest } from './components/BridgeTest';
 import { DemoFactory } from './modules/demo-factory/DemoFactory';
 
 declare var process: { env: Record<string, string | undefined> };
+declare global {
+  interface Window {
+    runESLDiagnostic?: () => Promise<void>;
+  }
+}
 
 const ENGINE_MODE_KEY = 'echo.engineMode.v1';
 const FRIENDLY_TOUR_KEY = 'echo.friendlyTourSeen.v1';
@@ -357,6 +364,94 @@ const App: React.FC = () => {
       setEchoReportStatus('error');
     }
   }, []);
+
+  const runDiagnosticStressTest = useCallback(async () => {
+    try {
+      const verdictRunId = beginVerdictRun();
+      console.log('🚀 [Diagnostic] Generating synthetic high-transiency stem...');
+
+      const sampleRate = audioEngine.getSampleRate() || 44100;
+      const syntheticBuffer = await generateStressStem(sampleRate);
+      const sourceDR = calculateLoudnessRange(syntheticBuffer);
+      console.log(`📊 [Diagnostic] Original DR: ${sourceDR.toFixed(2)}dB`);
+
+      const baseMetrics = mixAnalysisService.analyzeStaticMetrics(syntheticBuffer);
+      baseMetrics.lufs = {
+        integrated: baseMetrics.rms + 3,
+        shortTerm: baseMetrics.rms + 3,
+        momentary: baseMetrics.rms + 3,
+        loudnessRange: baseMetrics.crestFactor,
+        truePeak: baseMetrics.peak,
+      };
+
+      const { generateProcessingActions, analyzeAudioBuffer } = await import('./services/masteringAnalyzer');
+      const report = analyzeAudioBuffer(syntheticBuffer, baseMetrics);
+      const actions = generateProcessingActions(baseMetrics).map((action) => ({
+        ...action,
+        isSelected: true,
+      }));
+
+      await audioProcessingPipeline.loadAudio(syntheticBuffer);
+      const result = await audioProcessingPipeline.processAudio(actions, { preservationMode: 'competitive' });
+      const finalDR = calculateLoudnessRange(result.processedBuffer);
+      const drReduction = sourceDR - finalDR;
+
+      console.log(`✅ [Diagnostic] Final DR: ${finalDR.toFixed(2)}dB`);
+      console.log(`🛡️ [Diagnostic] DR Reduction: ${drReduction.toFixed(2)}dB`);
+      console.log(`🧠 [Diagnostic] HII: ${Math.round(report.humanIntentIndex ?? report.score?.total ?? 0)} | Δ(Q-C): ${(report.shadowDelta ?? 0).toFixed(2)} | confidence: ${(report.quantumConfidence ?? 0).toFixed(3)}`);
+
+      if (result.preservation.blocked) {
+        const reason = result.preservation.reason || 'Diagnostic processing blocked by preservation guard.';
+        console.warn(`🚫 [Diagnostic] ${reason}`);
+        syncEngineVerdict('block', reason, verdictRunId);
+      } else if (drReduction <= 2.05) {
+        console.log('🌟 [Diagnostic] DOCTRINE VERIFIED: hard ceiling enforced.');
+        syncEngineVerdict('accept', 'Diagnostic stress test passed.', verdictRunId);
+      } else {
+        const reason = `Doctrine breach risk: DR reduction ${drReduction.toFixed(2)}dB > 2.0dB cap`;
+        console.error(`🚨 [Diagnostic] ${reason}`);
+        syncEngineVerdict('block', reason, verdictRunId);
+      }
+
+      // Bind diagnostic result to UI state for immediate A/B inspection.
+      setOriginalBuffer(syntheticBuffer);
+      setOriginalMetrics(baseMetrics);
+      setProcessedMetrics(result.metrics);
+      setAnalysisResult({
+        metrics: result.metrics,
+        suggestions: buildSuggestionsFromActions(actions),
+        actions,
+        genrePrediction: 'Diagnostic Stress Stem',
+        frequencyData: [],
+        mixReadiness: 'in_progress',
+      });
+      setShadowTelemetry({
+        analysisRunId: analysisRunIdRef.current,
+        classicalScore: report.score?.total,
+        quantumScore: report.quantumScore,
+        shadowDelta: report.shadowDelta,
+        quantumConfidence: report.quantumConfidence,
+        humanIntentIndex: report.humanIntentIndex,
+        intentCoreActive: report.intentCoreActive,
+      });
+      audioEngine.setProcessedBuffer(result.processedBuffer);
+      audioEngine.enableProcessedSignal();
+      setHasAppliedChanges(true);
+      setCurrentFileName('Synthetic Stress Stem');
+      setAppState(AppState.READY);
+      showNotification('Diagnostic stress stem completed. Check console for doctrine logs.', 'info', 3500);
+    } catch (error) {
+      console.error('🚨 [Diagnostic] Stress test failed:', error);
+      showNotification('Diagnostic stress test failed: ' + (error as Error).message, 'error', 4000);
+    }
+  }, [beginVerdictRun, showNotification, syncEngineVerdict]);
+
+  useEffect(() => {
+    window.runESLDiagnostic = runDiagnosticStressTest;
+    return () => {
+      delete window.runESLDiagnostic;
+    };
+  }, [runDiagnosticStressTest]);
 
   const dismissNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
