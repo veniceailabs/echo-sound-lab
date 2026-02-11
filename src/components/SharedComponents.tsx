@@ -4,32 +4,32 @@ import { FeedbackPayload, RevisionLog, RevisionEntry, TestChecklistState } from 
 
 export const FeedbackButton: React.FC<{ onClick?: () => void }> = ({ onClick }) => {
   const handleClick = () => {
-    const email = 'liveconsciouslyllc@gmail.com';
-    const subject = encodeURIComponent('Echo Sound Lab Feedback');
-    const body = encodeURIComponent(`Hey! 👋
+    const email = 'beta@echosoundlab.com';
+    const subject = encodeURIComponent('Echo Sound Lab Beta Feedback');
+    const body = encodeURIComponent(
+`Type: Bug | Suggestion | UX | Audio Quality | Other
 
-What's up? Tell us what's on your mind:
+What happened:
 
-[ ] Something's broken
-[ ] Cool idea
-[ ] Just a question
-[ ] Other
+What you expected:
 
----
+How to reproduce:
+1.
+2.
+3.
 
-So what happened?
+Track (optional):
 
+Browser / Device:
+${navigator.userAgent}
 
-What were you doing when it happened?
-
-
-Anything else we should know?
-
-Browser & device info:
-
-`);
-
-    window.open(`mailto:${email}?subject=${subject}&body=${body}`, '_blank');
+Page:
+${window.location.href}
+`
+    );
+    const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`;
+    // Use direct navigation for better cross-browser mailto reliability.
+    window.location.href = mailtoUrl;
     onClick?.();
   };
 
