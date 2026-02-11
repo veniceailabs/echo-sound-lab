@@ -776,7 +776,7 @@ async def run_video_generation(ws: WebSocket, payload: Dict[str, Any]) -> None:
             logger.info(f"  → {step} ({progress}%)")
 
         # --- MOCK RESULT ---
-        output_path = str(STEM_DIR / "scene_output.mp4")
+        output_path = str(OUTPUT_DIR / "scene_output.mp4")
 
         await ws.send_json({
             "status": "complete",
