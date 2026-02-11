@@ -1102,6 +1102,7 @@ async def run_video_system(websocket, payload):
     input_video = payload.get('input_video')
     text_overlay = payload.get('text_overlay')
     color_grade = payload.get('color_grade')
+    scenes = payload.get('scenes')
 
     if mode not in {'generate', 'edit'}:
         await websocket.send_json({
@@ -1122,13 +1123,16 @@ async def run_video_system(websocket, payload):
         return
 
     if mode == 'generate' and (not audio_path or not prompt or not style or reactivity is None):
-        await websocket.send_json({
-            "action": "RUN_VIDEO_SYSTEM",
-            "request_id": request_id,
-            "status": "error",
-            "message": "Generate mode requires: audio_path, prompt, style, reactivity, output_path"
-        })
-        return
+        # Allow scene-based generation without single global style/prompt/reactivity
+        has_scenes = isinstance(scenes, list) and len(scenes) > 0
+        if not has_scenes:
+            await websocket.send_json({
+                "action": "RUN_VIDEO_SYSTEM",
+                "request_id": request_id,
+                "status": "error",
+                "message": "Generate mode requires: audio_path, prompt, style, reactivity, output_path (or provide scenes)"
+            })
+            return
 
     if mode == 'edit' and not input_video:
         await websocket.send_json({
@@ -1176,6 +1180,11 @@ async def run_video_system(websocket, payload):
         cmd.extend(["--text_overlay", str(text_overlay)])
     if color_grade:
         cmd.extend(["--color_grade", str(color_grade)])
+    if isinstance(scenes, list) and len(scenes) > 0:
+        encoded_scenes = base64.b64encode(
+            json.dumps(scenes, separators=(",", ":")).encode("utf-8")
+        ).decode("utf-8")
+        cmd.extend(["--scenes_json", encoded_scenes])
 
     logger.info(f"🎬 RUN_VIDEO_SYSTEM request {request_id}: {' '.join(cmd)}")
 

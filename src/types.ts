@@ -5,6 +5,17 @@ export type EngineMode = 'FRIENDLY' | 'ADVANCED';
 export type PreservationMode = 'preserve' | 'balanced' | 'competitive';
 
 export type HookStatus = 'draft' | 'rendering' | 'ready' | 'failed';
+export type VideoStyle = 'Noir' | 'Glitch' | 'Cinematic' | 'Abstract';
+
+export interface VideoScene {
+  id: string;
+  startTime: number; // Seconds
+  endTime: number;
+  style: VideoStyle;
+  prompt: string;
+  reactivity: number; // 0.0 - 1.0
+  caption?: string;
+}
 
 export interface AnimateArtRequest {
   sourceImageUrl?: string;

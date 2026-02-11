@@ -618,6 +618,15 @@ class BridgeServiceImpl {
       outputPath: string;
       textOverlay?: string;
       colorGrade?: string;
+      scenes?: Array<{
+        id: string;
+        startTime: number;
+        endTime: number;
+        style: 'Noir' | 'Glitch' | 'Cinematic' | 'Abstract';
+        prompt: string;
+        reactivity: number;
+        caption?: string;
+      }>;
     },
     onEvent?: (event: { percent?: number; message?: string }) => void
   ): Promise<{ videoPath: string; videoUrl?: string }> {
@@ -671,6 +680,7 @@ class BridgeServiceImpl {
         output_path: params.outputPath,
         text_overlay: params.textOverlay,
         color_grade: params.colorGrade,
+        scenes: params.scenes,
       });
 
       setTimeout(() => {
