@@ -819,6 +819,7 @@ const App: React.FC = () => {
 
     const baseMix = mode === 'preserve' ? 0.22 : mode === 'balanced' ? 0.27 : 0.32;
     const mix = Math.max(0.16, Math.min(0.38, baseMix + lowBias * 0.03));
+    const analogFloor = mode === 'preserve' ? 0.06 : mode === 'balanced' ? 0.09 : 0.12;
 
     return {
       id: `legendary-weight-${Date.now()}`,
@@ -834,6 +835,7 @@ const App: React.FC = () => {
         { name: 'type', value: 'tube', type: 'enum', enumOptions: ['tube'], enabledByDefault: true },
         { name: 'amount', value: Number(amount.toFixed(3)), min: 0, max: 0.2, step: 0.005, type: 'number', enabledByDefault: true },
         { name: 'mix', value: Number(mix.toFixed(3)), min: 0, max: 1, step: 0.01, type: 'number', enabledByDefault: true },
+        { name: 'analogFloor', value: Number(analogFloor.toFixed(3)), min: 0, max: 0.2, step: 0.005, type: 'number', enabledByDefault: true },
       ],
       diagnostic: {
         metric: 'Legendary Weight',

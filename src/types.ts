@@ -166,6 +166,8 @@ export interface SaturationConfig {
   type: 'tape' | 'tube' | 'digital' | 'density' | 'console' | 'spiral' | 'channel' | 'totape' | 'purestdrive';
   amount: number;
   mix?: number;
+  // Optional grit bed for silent passages (0-1 intensity).
+  analogFloor?: number;
 }
 
 export interface GateExpanderConfig {
@@ -229,6 +231,12 @@ export interface StereoImagerConfig {
     midWidth: number; 
     highWidth: number; 
     crossovers: [number, number];
+    vocalShield?: {
+      enabled: boolean;
+      lowHz?: number;
+      highHz?: number;
+      reduction?: number; // 0-1
+    };
 }
 
 export interface DeEsserConfig {

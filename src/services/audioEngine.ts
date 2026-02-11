@@ -44,6 +44,14 @@ const normalizeStereoImagerConfig = (config?: StereoImagerConfig): StereoImagerC
     midWidth: width,
     highWidth: width,
     crossovers,
+    vocalShield: config.vocalShield
+      ? {
+          enabled: !!config.vocalShield.enabled,
+          lowHz: config.vocalShield.lowHz ?? 1000,
+          highHz: config.vocalShield.highHz ?? 4000,
+          reduction: config.vocalShield.reduction ?? 0.2,
+        }
+      : undefined,
   };
 };
 const sanitizeProcessingConfig = (config: ProcessingConfig): ProcessingConfig => {
@@ -169,6 +177,10 @@ export class AudioEngine {
   private wamPluginChain: string[] = []; // IDs of loaded WAM plugins in order
   private wamInitialized: boolean = false;
   private wamInsertPoint: GainNode | null = null; // Insert point for WAM plugins in chain
+  private connectionNodeIds: WeakMap<AudioNode, string> = new WeakMap();
+  private connectionNodes: Set<AudioNode> = new Set();
+  private connectionEdges: Map<string, { source: AudioNode; destination: AudioNode }> = new Map();
+  private connectionCounter: number = 0;
 
   constructor() {
     this.initializeAudioContext();
@@ -192,6 +204,7 @@ export class AudioEngine {
     }
     this.analyser = this.audioContext.createAnalyser();
     this.analyser.fftSize = 2048;
+    this.resetConnectionGraph();
     void localPluginService.init(this.audioContext);
     void pitchCorrectionService.ensureWorklet(this.audioContext);
 
@@ -206,15 +219,99 @@ export class AudioEngine {
     this.wetGain.gain.value = 0;
 
     // Persistent routing: masterInput always feeds dry path
-    this.masterInput.connect(this.dryGain);
+    this.safeConnect(this.masterInput, this.dryGain, 'init: masterInput->dry');
 
     // Both paths merge to output -> destination
-    this.dryGain.connect(this.outputGain);
-    this.wetGain.connect(this.outputGain);
-    this.outputGain.connect(this.audioContext.destination);
+    this.safeConnect(this.dryGain, this.outputGain, 'init: dry->output');
+    this.safeConnect(this.wetGain, this.outputGain, 'init: wet->output');
+    this.safeConnect(this.outputGain, this.audioContext.destination, 'init: output->destination');
   }
 
-  private prepareNativePlayback(file: File) {
+  private resetConnectionGraph() {
+    this.connectionNodeIds = new WeakMap();
+    this.connectionNodes.clear();
+    this.connectionEdges.clear();
+    this.connectionCounter = 0;
+  }
+
+  private getNodeId(node: AudioNode): string {
+    const existing = this.connectionNodeIds.get(node);
+    if (existing) return existing;
+    const id = `n${++this.connectionCounter}`;
+    this.connectionNodeIds.set(node, id);
+    this.connectionNodes.add(node);
+    return id;
+  }
+
+  private safeConnect(
+    source: AudioNode | null | undefined,
+    destination: AudioNode | null | undefined,
+    reason?: string
+  ): boolean {
+    if (!source || !destination) return false;
+    const edgeKey = `${this.getNodeId(source)}->${this.getNodeId(destination)}`;
+    if (this.connectionEdges.has(edgeKey)) return true;
+    try {
+      source.connect(destination);
+      this.connectionEdges.set(edgeKey, { source, destination });
+      return true;
+    } catch (error) {
+      console.warn(`[audioEngine] safeConnect failed${reason ? ` (${reason})` : ''}`, error);
+      return false;
+    }
+  }
+
+  private safeDisconnect(
+    source: AudioNode | null | undefined,
+    destination?: AudioNode | null,
+    reason?: string
+  ) {
+    if (!source) return;
+    const sourceId = this.getNodeId(source);
+    try {
+      if (destination) {
+        source.disconnect(destination);
+      } else {
+        source.disconnect();
+      }
+    } catch (error) {
+      console.debug(`[audioEngine] safeDisconnect noop${reason ? ` (${reason})` : ''}`, error);
+    }
+
+    if (destination) {
+      const edgeKey = `${sourceId}->${this.getNodeId(destination)}`;
+      this.connectionEdges.delete(edgeKey);
+      return;
+    }
+
+    for (const [edgeKey, edge] of this.connectionEdges.entries()) {
+      if (edge.source === source) {
+        this.connectionEdges.delete(edgeKey);
+      }
+    }
+  }
+
+  private tearDownConnectionGraph(reason: string) {
+    for (const { source, destination } of this.connectionEdges.values()) {
+      try {
+        source.disconnect(destination);
+      } catch (error) {
+        console.debug(`[audioEngine] teardown disconnect noop (${reason})`, error);
+      }
+    }
+    this.connectionEdges.clear();
+  }
+
+  private async ensureAudioContextRunning() {
+    if (this.audioContext.state === 'running') return;
+    try {
+      await this.audioContext.resume();
+    } catch (error) {
+      console.warn('[audioEngine] Failed to resume AudioContext', error);
+    }
+  }
+
+  private async prepareNativePlayback(file: File) {
     if (this.rawObjectUrl) {
       URL.revokeObjectURL(this.rawObjectUrl);
       this.rawObjectUrl = null;
@@ -238,14 +335,15 @@ export class AudioEngine {
       this.rawElementGain = null;
     }
 
+    await this.ensureAudioContextRunning();
     this.rawElementSource = this.audioContext.createMediaElementSource(this.rawElement);
     this.rawElementGain = this.audioContext.createGain();
-    this.rawElementSource.connect(this.rawElementGain);
-    this.rawElementGain.connect(this.audioContext.destination);
+    this.safeConnect(this.rawElementSource, this.rawElementGain, 'nativePlayback: source->gain');
+    this.safeConnect(this.rawElementGain, this.audioContext.destination, 'nativePlayback: gain->destination');
     this.connectAnalyserTap(this.rawElementSource);
   }
 
-  private rebuildNativePlayback() {
+  private async rebuildNativePlayback() {
     if (!this.rawObjectUrl) return;
     if (this.rawElement) {
       try { this.rawElement.pause(); } catch {}
@@ -257,10 +355,11 @@ export class AudioEngine {
         this.resetPlaybackState();
       }
     };
+    await this.ensureAudioContextRunning();
     this.rawElementSource = this.audioContext.createMediaElementSource(this.rawElement);
     this.rawElementGain = this.audioContext.createGain();
-    this.rawElementSource.connect(this.rawElementGain);
-    this.rawElementGain.connect(this.audioContext.destination);
+    this.safeConnect(this.rawElementSource, this.rawElementGain, 'rebuildNativePlayback: source->gain');
+    this.safeConnect(this.rawElementGain, this.audioContext.destination, 'rebuildNativePlayback: gain->destination');
     this.connectAnalyserTap(this.rawElementSource);
   }
 
@@ -297,10 +396,10 @@ export class AudioEngine {
 
   private connectAnalyserTap(source: AudioNode) {
     if (this.analyserSource) {
-      try { this.analyserSource.disconnect(this.analyser); } catch (e) {}
+      this.safeDisconnect(this.analyserSource, this.analyser, 'analyserTap: previous');
     }
     this.analyserSource = source;
-    source.connect(this.analyser);
+    this.safeConnect(source, this.analyser, 'analyserTap: source->analyser');
   }
 
   private setMonitorMix(dry: number, wet: number) {
@@ -320,9 +419,9 @@ export class AudioEngine {
 
   private connectMasterInputToChain() {
     if (!this.liveChainInput) return;
-    try { this.masterInput.disconnect(this.wetGain); } catch (e) {}
-    try { this.masterInput.disconnect(this.liveChainInput); } catch (e) {}
-    this.masterInput.connect(this.liveChainInput);
+    this.safeDisconnect(this.masterInput, this.wetGain, 'connectMasterInputToChain: remove wet');
+    this.safeDisconnect(this.masterInput, this.liveChainInput, 'connectMasterInputToChain: remove existing chain');
+    this.safeConnect(this.masterInput, this.liveChainInput, 'connectMasterInputToChain: attach chain');
   }
 
   private async reinitializeAudioContext(sampleRate: number) {
@@ -334,6 +433,7 @@ export class AudioEngine {
     console.log(`[audioEngine] Reinitializing AudioContext for ${sampleRate}Hz (was ${currentRate}Hz)`);
     this.stopSource();
     localPluginService.destroyAll();
+    this.tearDownConnectionGraph('reinitializeAudioContext');
 
     try {
       await this.audioContext.close();
@@ -358,7 +458,7 @@ export class AudioEngine {
     void pitchCorrectionService.ensureWorklet(this.audioContext);
 
     if (this.rawElement) {
-      this.rebuildNativePlayback();
+      await this.rebuildNativePlayback();
     }
   }
 
@@ -403,8 +503,6 @@ export class AudioEngine {
     const arrayBuffer = await file.arrayBuffer();
     console.log(`[audioEngine] ArrayBuffer size: ${arrayBuffer.byteLength} bytes`);
 
-    this.prepareNativePlayback(file);
-
     const wavSampleRate = this.getWavSampleRate(arrayBuffer);
     if (wavSampleRate) {
       console.log(`[audioEngine] WAV sample rate detected: ${wavSampleRate}Hz`);
@@ -412,6 +510,7 @@ export class AudioEngine {
     }
 
     if (this.audioContext.state === 'suspended') await this.audioContext.resume();
+    await this.prepareNativePlayback(file);
 
     console.log('[audioEngine] Starting decodeAudioData...');
     const decodeStart = Date.now();
@@ -789,7 +888,7 @@ export class AudioEngine {
           chainInput = inputNode;
         }
         if (currentNode) {
-          currentNode.connect(inputNode);
+          this.safeConnect(currentNode, inputNode, 'buildChain: connectNext');
         }
         chainNodes.push(inputNode);
         if (inputNode !== outputNode) {
@@ -857,7 +956,7 @@ export class AudioEngine {
         this.connectWAMPlugins(pluginInput, this.wetGain);
       } else {
         // No WAM plugins, connect directly to wetGain
-        pluginInput.connect(this.wetGain);
+        this.safeConnect(pluginInput, this.wetGain, 'buildChain: pluginInput->wetGain');
       }
 
       this.liveChainInput = chainInput;
@@ -871,12 +970,12 @@ export class AudioEngine {
 
       // If currently playing, reconnect masterInput to the chain
       if (this.isPlaying && this.source && this.liveChainInput) {
-        try { this.masterInput.disconnect(this.wetGain); } catch (e) {}
+        this.safeDisconnect(this.masterInput, this.wetGain, 'buildChain: remove wet while playing');
         if (previousChainInput) {
-          try { this.masterInput.disconnect(previousChainInput); } catch (e) {}
+          this.safeDisconnect(this.masterInput, previousChainInput, 'buildChain: remove previous chain');
         }
-        try { this.masterInput.disconnect(this.liveChainInput); } catch (e) {}
-        this.masterInput.connect(this.liveChainInput);
+        this.safeDisconnect(this.masterInput, this.liveChainInput, 'buildChain: remove stale chain');
+        this.safeConnect(this.masterInput, this.liveChainInput, 'buildChain: attach new chain');
       }
 
       console.log('[audioEngine] Processing chain built successfully');
@@ -884,16 +983,16 @@ export class AudioEngine {
       console.error('[audioEngine] _buildProcessingChain failed', err);
       this.isChainInitialized = false;
       // Fallback: direct connection
-      try { this.masterInput.disconnect(); } catch (e) {}
-      this.masterInput.connect(this.wetGain);
-      this.masterInput.connect(this.dryGain);
+      this.safeDisconnect(this.masterInput, undefined, 'buildChain fallback: clear masterInput');
+      this.safeConnect(this.masterInput, this.wetGain, 'buildChain fallback: master->wet');
+      this.safeConnect(this.masterInput, this.dryGain, 'buildChain fallback: master->dry');
     }
   }
 
   private _disconnectProcessingNodes() {
     // Disconnect all chain nodes but keep masterInput connections intact
     this.liveProcessingChain.forEach(node => {
-      try { node.disconnect(); } catch (e) {}
+      this.safeDisconnect(node, undefined, 'disconnectProcessingNodes');
     });
     this.liveProcessingChain = [];
     this.liveNodes = null;
@@ -931,11 +1030,11 @@ export class AudioEngine {
     const previousChainInput = this.liveChainInput;
     this._disconnectProcessingNodes();
     if (previousChainInput) {
-      try { this.masterInput.disconnect(previousChainInput); } catch (e) {}
+      this.safeDisconnect(this.masterInput, previousChainInput, 'disconnectLiveProcessingChain: previous chain');
     }
     // Re-establish direct path if no chain
-    try { this.masterInput.disconnect(this.wetGain); } catch (e) {}
-    this.masterInput.connect(this.wetGain);
+    this.safeDisconnect(this.masterInput, this.wetGain, 'disconnectLiveProcessingChain: reset wet');
+    this.safeConnect(this.masterInput, this.wetGain, 'disconnectLiveProcessingChain: master->wet');
   }
 
   // A/B bypass control - switches between original and processed buffers
@@ -1447,6 +1546,18 @@ export class AudioEngine {
 
     const renderedBuffer = await offlineCtx.startRendering();
 
+    if (isStereoImagerActive(config.stereoImager)) {
+      const shield = config.stereoImager?.vocalShield ?? {
+        enabled: true,
+        lowHz: 1000,
+        highHz: 4000,
+        reduction: 0.2,
+      };
+      if (shield.enabled) {
+        this.applyVocalShieldStereo(renderedBuffer, shield.lowHz ?? 1000, shield.highHz ?? 4000, shield.reduction ?? 0.2);
+      }
+    }
+
     console.log('[audioEngine.renderWithWebAudio] Rendering complete:', {
       channels: renderedBuffer.numberOfChannels,
       length: renderedBuffer.length,
@@ -1467,9 +1578,73 @@ export class AudioEngine {
       applySoftClipper(renderedBuffer, config.clipper);
     }
 
+    if (isSaturationActive(config.saturation) && (config.saturation?.analogFloor ?? 0) > 0) {
+      this.applyAnalogFloor(renderedBuffer, config.saturation?.analogFloor ?? 0);
+    }
+
     console.log('[audioEngine] No post-processing applied, returning rendered buffer as-is');
     return renderedBuffer;
   } // End of renderWithWebAudio
+
+  private applyVocalShieldStereo(
+    buffer: AudioBuffer,
+    lowHz: number = 1000,
+    highHz: number = 4000,
+    reduction: number = 0.2
+  ): void {
+    if (buffer.numberOfChannels < 2) return;
+    const left = buffer.getChannelData(0);
+    const right = buffer.getChannelData(1);
+    const sampleRate = buffer.sampleRate;
+    const clampedReduction = clamp(reduction, 0, 0.9);
+    const low = clamp(lowHz, 200, sampleRate * 0.45);
+    const high = clamp(highHz, low + 100, sampleRate * 0.49);
+
+    const dt = 1 / sampleRate;
+    const rcHp = 1 / (2 * Math.PI * low);
+    const rcLp = 1 / (2 * Math.PI * high);
+    const hpAlpha = rcHp / (rcHp + dt);
+    const lpAlpha = dt / (rcLp + dt);
+
+    let prevSideIn = 0;
+    let hpState = 0;
+    let lpState = 0;
+
+    for (let i = 0; i < left.length; i++) {
+      const mid = (left[i] + right[i]) * 0.5;
+      const side = (left[i] - right[i]) * 0.5;
+      hpState = hpAlpha * (hpState + side - prevSideIn);
+      prevSideIn = side;
+      lpState += lpAlpha * (hpState - lpState);
+      const bandSide = lpState;
+      const shieldedSide = side - bandSide * clampedReduction;
+      left[i] = mid + shieldedSide;
+      right[i] = mid - shieldedSide;
+    }
+  }
+
+  private applyAnalogFloor(buffer: AudioBuffer, amount: number): void {
+    const floorAmount = clamp(amount, 0, 1);
+    if (floorAmount <= 0) return;
+    const floorDb = -78 + floorAmount * 12;
+    const floorLinear = dbToLinear(floorDb);
+    const gateLinear = dbToLinear(-45 + floorAmount * 5);
+
+    for (let channelIndex = 0; channelIndex < buffer.numberOfChannels; channelIndex++) {
+      const channel = buffer.getChannelData(channelIndex);
+      let seed = (0x9e3779b9 ^ ((channelIndex + 1) * 0x85ebca6b)) >>> 0;
+      for (let i = 0; i < channel.length; i++) {
+        const sample = channel[i];
+        const abs = Math.abs(sample);
+        if (abs < gateLinear) {
+          seed = (1664525 * seed + 1013904223) >>> 0;
+          const rand = (seed / 0x100000000) * 2 - 1;
+          const silenceWeight = 1 - abs / Math.max(gateLinear, 1e-8);
+          channel[i] = sample + rand * floorLinear * silenceWeight;
+        }
+      }
+    }
+  }
 
   setInputTrim(db: number = 0) {
       const inputTrim = this.liveNodes?.inputTrim;
@@ -1891,7 +2066,7 @@ export class AudioEngine {
   connectWAMPlugins(inputNode: AudioNode, outputNode: AudioNode): AudioNode {
     if (this.wamPluginChain.length === 0) {
       // No WAM plugins, connect directly
-      inputNode.connect(outputNode);
+      this.safeConnect(inputNode, outputNode, 'wamChain: passthrough');
       return inputNode;
     }
 
@@ -1902,10 +2077,10 @@ export class AudioEngine {
       const nodeAny = pluginNode as unknown as { input?: AudioNode; output?: AudioNode };
       try {
         if (nodeAny.input && nodeAny.output) {
-          currentSource.connect(nodeAny.input);
+          this.safeConnect(currentSource, nodeAny.input, `wamChain: ${pluginId}:source->input`);
           currentSource = nodeAny.output;
         } else {
-          currentSource.connect(pluginNode);
+          this.safeConnect(currentSource, pluginNode, `wamChain: ${pluginId}:source->node`);
           currentSource = pluginNode;
         }
       } catch (err) {
@@ -1914,7 +2089,7 @@ export class AudioEngine {
     }
 
     // Connect final plugin to output
-    currentSource.connect(outputNode);
+    this.safeConnect(currentSource, outputNode, 'wamChain: final->output');
     return currentSource;
   }
 
@@ -1927,7 +2102,7 @@ export class AudioEngine {
     let currentSource = inputNode;
     for (const instance of instances) {
       localPluginService.disconnect(instance.id);
-      currentSource.connect(instance.inputNode);
+      this.safeConnect(currentSource, instance.inputNode, `localChain: ${instance.pluginId}:source->input`);
       currentSource = instance.outputNode;
     }
 

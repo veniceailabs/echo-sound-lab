@@ -73,6 +73,7 @@ export const actionsToConfig = (actions: ProcessingAction[]): ProcessingConfig =
           type: getParamValue(action.params, 'type', 'tape'),
           amount: getParamValue(action.params, 'amount', 0.08),
           mix: getParamValue(action.params, 'mix', 0.35),
+          analogFloor: getParamValue(action.params, 'analogFloor', 0),
         };
       }
 
@@ -93,6 +94,12 @@ export const actionsToConfig = (actions: ProcessingAction[]): ProcessingConfig =
             getParamValue(action.params, 'lowCrossover', 250),
             getParamValue(action.params, 'highCrossover', 5000),
           ],
+          vocalShield: {
+            enabled: true,
+            lowHz: getParamValue(action.params, 'vocalShieldLowHz', 1000),
+            highHz: getParamValue(action.params, 'vocalShieldHighHz', 4000),
+            reduction: getParamValue(action.params, 'vocalShieldReduction', 0.2),
+          },
         };
       }
     }
@@ -116,6 +123,12 @@ export const actionsToConfig = (actions: ProcessingAction[]): ProcessingConfig =
         midWidth: width,
         highWidth: width,
         crossovers: [250, 5000],
+        vocalShield: {
+          enabled: true,
+          lowHz: 1000,
+          highHz: 4000,
+          reduction: 0.2,
+        },
       };
     }
   }
