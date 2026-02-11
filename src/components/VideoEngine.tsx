@@ -17,6 +17,8 @@ interface JobState {
   finishedAt?: number;
 }
 
+type ColorGradePreset = 'none' | 'teal-orange' | 'bw-contrast' | 'vibrant' | 'matrix';
+
 const VideoEngine: React.FC = () => {
   const [bridgeOnline, setBridgeOnline] = useState(false);
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -24,6 +26,9 @@ const VideoEngine: React.FC = () => {
   const [style, setStyle] = useState<SfsStyle>('Cinematic');
   const [reactivity, setReactivity] = useState(0.65);
   const [outputName, setOutputName] = useState('sfs_output.mp4');
+  const [isPostOpen, setIsPostOpen] = useState(false);
+  const [colorGrade, setColorGrade] = useState<ColorGradePreset>('none');
+  const [textOverlay, setTextOverlay] = useState('');
   const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
   const [job, setJob] = useState<JobState>({
     status: 'idle',
@@ -55,6 +60,11 @@ const VideoEngine: React.FC = () => {
     ]);
   };
 
+  const hasPostFx = useMemo(
+    () => colorGrade !== 'none' || textOverlay.trim().length > 0,
+    [colorGrade, textOverlay]
+  );
+
   const sanitizeOutputName = (value: string) => {
     const trimmed = value.trim() || 'sfs_output.mp4';
     return trimmed.endsWith('.mp4') ? trimmed : `${trimmed}.mp4`;
@@ -85,13 +95,19 @@ const VideoEngine: React.FC = () => {
 
       const outputPath = sanitizeOutputName(outputName);
       appendTerminal(`Running video-system.py with style=${style}, reactivity=${reactivity.toFixed(2)}`);
+      if (hasPostFx) {
+        appendTerminal(`Studio Mode active: color=${colorGrade}, caption=${textOverlay.trim() ? 'on' : 'off'}`);
+      }
       const result = await bridge.runSfsVideoSystem(
         {
+          mode: 'generate',
           audioPath: savedAudio.audioPath,
           prompt: prompt.trim(),
           style,
           reactivity,
           outputPath,
+          textOverlay: textOverlay.trim() || undefined,
+          colorGrade: colorGrade !== 'none' ? colorGrade : undefined,
         },
         (event) => {
           if (typeof event.percent === 'number') {
@@ -213,12 +229,51 @@ const VideoEngine: React.FC = () => {
         </div>
       </div>
 
+      <div className="rounded-2xl border border-slate-800/50 bg-slate-900/50 p-6 shadow-[4px_4px_12px_#000000,-2px_-2px_6px_#0f1828]">
+        <button
+          onClick={() => setIsPostOpen((prev) => !prev)}
+          className="mb-4 flex w-full items-center justify-between rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-300 hover:border-orange-500/40"
+        >
+          <span>Post-Production Studio</span>
+          <span className="text-orange-400">{isPostOpen ? 'Hide' : 'Show'}</span>
+        </button>
+
+        {isPostOpen && (
+          <div className="space-y-4">
+            <div>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-slate-500">LUT / Color Grade</label>
+              <select
+                value={colorGrade}
+                onChange={(e) => setColorGrade(e.target.value as ColorGradePreset)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 outline-none"
+              >
+                <option value="none">None</option>
+                <option value="teal-orange">Cinematic</option>
+                <option value="bw-contrast">Noir</option>
+                <option value="vibrant">Vibrant</option>
+                <option value="matrix">Matrix</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Caption / Lower Third</label>
+              <input
+                value={textOverlay}
+                onChange={(e) => setTextOverlay(e.target.value)}
+                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 outline-none"
+                placeholder="Track Title - Artist Name"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
       <button
         onClick={handleGenerate}
         disabled={job.status === 'running'}
         className="w-full rounded-2xl bg-gradient-to-r from-orange-500 to-orange-600 py-5 text-sm font-black uppercase tracking-widest text-white shadow-[4px_4px_16px_#000000] transition-all hover:from-orange-600 hover:to-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {job.status === 'running' ? 'Generating Video...' : 'Generate Video'}
+        {job.status === 'running' ? 'Rendering...' : hasPostFx ? 'Render Final' : 'Generate Video'}
       </button>
 
       <div className="rounded-2xl border border-slate-800/50 bg-slate-900/50 p-6 shadow-[4px_4px_12px_#000000,-2px_-2px_6px_#0f1828]">

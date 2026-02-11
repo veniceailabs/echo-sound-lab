@@ -609,11 +609,15 @@ class BridgeServiceImpl {
    */
   async runSfsVideoSystem(
     params: {
-      audioPath: string;
-      prompt: string;
-      style: 'Noir' | 'Glitch' | 'Cinematic' | 'Abstract';
-      reactivity: number;
+      mode?: 'generate' | 'edit';
+      audioPath?: string;
+      inputVideo?: string;
+      prompt?: string;
+      style?: 'Noir' | 'Glitch' | 'Cinematic' | 'Abstract';
+      reactivity?: number;
       outputPath: string;
+      textOverlay?: string;
+      colorGrade?: string;
     },
     onEvent?: (event: { percent?: number; message?: string }) => void
   ): Promise<{ videoPath: string; videoUrl?: string }> {
@@ -658,11 +662,15 @@ class BridgeServiceImpl {
       this.send({
         action: 'RUN_VIDEO_SYSTEM',
         request_id: requestId,
+        mode: params.mode || 'generate',
         audio_path: params.audioPath,
+        input_video: params.inputVideo,
         prompt: params.prompt,
         style: params.style,
         reactivity: params.reactivity,
         output_path: params.outputPath,
+        text_overlay: params.textOverlay,
+        color_grade: params.colorGrade,
       });
 
       setTimeout(() => {

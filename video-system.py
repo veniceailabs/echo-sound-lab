@@ -172,6 +172,116 @@ def _build_style_frame(
     return frame
 
 
+def _resolve_color_grade(color_grade):
+    grade = (color_grade or "").strip().lower()
+    if not grade:
+        return []
+
+    # Aliases from UI labels and legacy spec IDs
+    alias = {
+        "cinematic": "teal-orange",
+        "noir": "bw-contrast",
+        "vibrant": "vibrant",
+        "matrix": "matrix",
+        "teal_orange": "teal-orange",
+        "bw_contrast": "bw-contrast",
+    }.get(grade, grade)
+
+    if alias == "teal-orange":
+        return [
+            ("eq", {"saturation": 1.2, "contrast": 1.08, "brightness": 0.015}),
+            ("colorbalance", {"rs": 0.05, "gs": -0.03, "bs": -0.08, "rm": 0.03, "bm": -0.02}),
+        ]
+    if alias == "bw-contrast":
+        return [
+            ("hue", {"s": 0}),
+            ("eq", {"contrast": 1.35, "brightness": 0.01}),
+        ]
+    if alias == "vintage":
+        return [
+            ("eq", {"saturation": 0.82, "contrast": 0.96, "brightness": 0.03}),
+            ("colorbalance", {"rs": 0.06, "gs": -0.02, "bs": -0.05}),
+        ]
+    if alias == "vibrant":
+        return [
+            ("eq", {"saturation": 1.34, "contrast": 1.05, "brightness": 0.01}),
+        ]
+    if alias == "matrix":
+        return [
+            ("colorchannelmixer", {"rr": 0.15, "rg": 0.45, "rb": 0.05, "gr": 0.1, "gg": 1.2, "gb": 0.08, "br": 0.02, "bg": 0.25, "bb": 0.18}),
+            ("eq", {"contrast": 1.18, "brightness": -0.01}),
+        ]
+    return []
+
+
+def _escape_drawtext_text(text):
+    return (
+        (text or "")
+        .replace("\\", "\\\\")
+        .replace(":", "\\:")
+        .replace("'", "\\'")
+        .replace("%", "\\%")
+    )
+
+
+def _apply_post_processing(input_video, output_video, text_overlay, color_grade):
+    import ffmpeg
+
+    filter_chain = _resolve_color_grade(color_grade)
+    overlay_text = (text_overlay or "").strip()
+    needs_fx = bool(filter_chain or overlay_text)
+
+    if not needs_fx:
+        # No-op post mode requested: just remux/transcode to normalized output.
+        filter_chain = []
+
+    probe = ffmpeg.probe(input_video)
+    has_audio = any(stream.get("codec_type") == "audio" for stream in probe.get("streams", []))
+
+    inp = ffmpeg.input(input_video)
+    video = inp.video
+    for f_name, f_kwargs in filter_chain:
+        video = video.filter(f_name, **f_kwargs)
+
+    if overlay_text:
+        video = video.filter(
+            "drawtext",
+            text=_escape_drawtext_text(overlay_text),
+            x="(w-text_w)/2",
+            y="h-(text_h*2.2)",
+            fontsize=38,
+            fontcolor="white",
+            box=1,
+            boxcolor="black@0.50",
+            boxborderw=22,
+            shadowx=2,
+            shadowy=2,
+        )
+
+    output_kwargs = {
+        "vcodec": "libx264",
+        "pix_fmt": "yuv420p",
+        "r": 30,
+        "crf": 19,
+        "preset": "medium",
+        "movflags": "+faststart",
+    }
+
+    if has_audio:
+        stream = ffmpeg.output(
+            video,
+            inp.audio,
+            output_video,
+            acodec="aac",
+            audio_bitrate="192k",
+            **output_kwargs,
+        )
+    else:
+        stream = ffmpeg.output(video, output_video, **output_kwargs)
+
+    ffmpeg.run(ffmpeg.overwrite_output(stream), capture_stdout=True, capture_stderr=True)
+
+
 def main() -> int:
     missing = []
     try:
@@ -203,19 +313,16 @@ def main() -> int:
     import numpy as np
 
     parser = argparse.ArgumentParser(description="SFS Video Engine Core")
-    parser.add_argument("--audio", required=True, help="Input mastered audio path")
-    parser.add_argument("--prompt", required=True, help="Visual generation prompt")
-    parser.add_argument("--style", required=True, help="Style preset")
-    parser.add_argument("--reactivity", type=float, required=True, help="Audio reactivity 0.0-1.0")
+    parser.add_argument("--audio", help="Input mastered audio path")
+    parser.add_argument("--prompt", default="", help="Visual generation prompt")
+    parser.add_argument("--style", default="Cinematic", help="Style preset")
+    parser.add_argument("--reactivity", type=float, default=0.65, help="Audio reactivity 0.0-1.0")
     parser.add_argument("--output", required=True, help="Output MP4 path")
+    parser.add_argument("--mode", choices=["generate", "edit"], default="generate", help="Run SFS generation or post-production edit mode")
+    parser.add_argument("--input_video", default="", help="Input video for edit mode")
+    parser.add_argument("--text_overlay", default="", help="Lower-third or caption burn-in text")
+    parser.add_argument("--color_grade", default="", help="Color grade preset ID (teal-orange, bw-contrast, vintage, vibrant, matrix)")
     args = parser.parse_args()
-
-    if not os.path.exists(args.audio):
-        emit({
-            "status": "error",
-            "message": f"Audio file not found: {args.audio}"
-        })
-        return 1
 
     if args.reactivity < 0.0 or args.reactivity > 1.0:
         emit({
@@ -226,6 +333,50 @@ def main() -> int:
 
     output_dir = os.path.dirname(args.output) or "."
     os.makedirs(output_dir, exist_ok=True)
+
+    mode = args.mode.strip().lower()
+
+    if mode == "edit":
+        input_video = args.input_video.strip()
+        if not input_video:
+            emit({"status": "error", "message": "Edit mode requires --input_video"})
+            return 1
+        if not os.path.exists(input_video):
+            emit({"status": "error", "message": f"Input video not found: {input_video}"})
+            return 1
+
+        emit({"status": "progress", "percent": 8, "message": "Loading source video..."})
+        emit({"status": "progress", "percent": 26, "message": "Applying Studio color pipeline..."})
+        try:
+            _apply_post_processing(
+                input_video=input_video,
+                output_video=args.output,
+                text_overlay=args.text_overlay,
+                color_grade=args.color_grade,
+            )
+        except ffmpeg.Error as e:
+            emit({
+                "status": "error",
+                "message": f"FFmpeg post-processing failed: {(e.stderr or b'').decode('utf-8', errors='replace')[-500:]}"
+            })
+            return 1
+        except Exception as e:
+            emit({"status": "error", "message": f"Post-processing failed: {str(e)}"})
+            return 1
+
+        emit({"status": "progress", "percent": 96, "message": "Finalizing studio render..."})
+        emit({"status": "complete", "path": args.output})
+        return 0
+
+    if not args.audio:
+        emit({"status": "error", "message": "Generate mode requires --audio"})
+        return 1
+    if not os.path.exists(args.audio):
+        emit({
+            "status": "error",
+            "message": f"Audio file not found: {args.audio}"
+        })
+        return 1
 
     emit({"status": "progress", "percent": 5, "message": "Loading audio track..."})
     y, sr = librosa.load(args.audio, sr=None, mono=False)
@@ -291,6 +442,11 @@ def main() -> int:
     seed = int.from_bytes(hashlib.sha256(seed_input).digest()[:8], "big") % (2**32)
     rng = np.random.default_rng(seed)
 
+    raw_output = args.output
+    needs_post = bool((args.text_overlay or "").strip() or (args.color_grade or "").strip())
+    if needs_post:
+        raw_output = os.path.join(output_dir, f".sfs_raw_{int(time.time())}_{os.getpid()}.mp4")
+
     emit({"status": "progress", "percent": 45, "message": "Initializing FFmpeg pipe..."})
     process = (
         ffmpeg
@@ -302,7 +458,7 @@ def main() -> int:
             framerate=fps,
         )
         .output(
-            args.output,
+            raw_output,
             vcodec="libx264",
             pix_fmt="yuv420p",
             r=fps,
@@ -356,12 +512,37 @@ def main() -> int:
         })
         return 1
 
-    if not os.path.exists(args.output):
+    if not os.path.exists(raw_output):
         emit({
             "status": "error",
             "message": "Output file was not created"
         })
         return 1
+
+    if needs_post:
+        emit({"status": "progress", "percent": 98, "message": "Applying post-production filters..."})
+        try:
+            _apply_post_processing(
+                input_video=raw_output,
+                output_video=args.output,
+                text_overlay=args.text_overlay,
+                color_grade=args.color_grade,
+            )
+        except ffmpeg.Error as e:
+            emit({
+                "status": "error",
+                "message": f"FFmpeg post-processing failed: {(e.stderr or b'').decode('utf-8', errors='replace')[-500:]}"
+            })
+            return 1
+        except Exception as e:
+            emit({"status": "error", "message": f"Post-processing failed: {str(e)}"})
+            return 1
+        finally:
+            try:
+                if os.path.exists(raw_output):
+                    os.remove(raw_output)
+            except Exception:
+                pass
 
     emit({"status": "complete", "path": args.output})
     return 0

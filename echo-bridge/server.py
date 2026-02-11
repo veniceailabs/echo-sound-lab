@@ -1093,18 +1093,49 @@ async def run_video_system(websocket, payload):
     Execute root-level video-system.py with canonical CLI args and stream JSON events.
     """
     request_id = payload.get('request_id')
+    mode = (payload.get('mode') or 'generate').strip().lower()
     audio_path = payload.get('audio_path')
     prompt = payload.get('prompt')
     style = payload.get('style')
     reactivity = payload.get('reactivity')
     output_path = payload.get('output_path')
+    input_video = payload.get('input_video')
+    text_overlay = payload.get('text_overlay')
+    color_grade = payload.get('color_grade')
 
-    if not audio_path or not prompt or not style or reactivity is None or not output_path:
+    if mode not in {'generate', 'edit'}:
         await websocket.send_json({
             "action": "RUN_VIDEO_SYSTEM",
             "request_id": request_id,
             "status": "error",
-            "message": "Missing required args: audio_path, prompt, style, reactivity, output_path"
+            "message": f"Invalid mode: {mode}"
+        })
+        return
+
+    if not output_path:
+        await websocket.send_json({
+            "action": "RUN_VIDEO_SYSTEM",
+            "request_id": request_id,
+            "status": "error",
+            "message": "Missing required arg: output_path"
+        })
+        return
+
+    if mode == 'generate' and (not audio_path or not prompt or not style or reactivity is None):
+        await websocket.send_json({
+            "action": "RUN_VIDEO_SYSTEM",
+            "request_id": request_id,
+            "status": "error",
+            "message": "Generate mode requires: audio_path, prompt, style, reactivity, output_path"
+        })
+        return
+
+    if mode == 'edit' and not input_video:
+        await websocket.send_json({
+            "action": "RUN_VIDEO_SYSTEM",
+            "request_id": request_id,
+            "status": "error",
+            "message": "Edit mode requires: input_video and output_path"
         })
         return
 
@@ -1127,12 +1158,24 @@ async def run_video_system(websocket, payload):
     cmd = [
         sys.executable,
         str(script_path),
-        "--audio", str(audio_path),
-        "--prompt", str(prompt),
-        "--style", str(style),
-        "--reactivity", str(reactivity),
+        "--mode", mode,
         "--output", str(output_target),
     ]
+
+    if mode == 'generate':
+        cmd.extend([
+            "--audio", str(audio_path),
+            "--prompt", str(prompt),
+            "--style", str(style),
+            "--reactivity", str(reactivity),
+        ])
+    else:
+        cmd.extend(["--input_video", str(input_video)])
+
+    if text_overlay:
+        cmd.extend(["--text_overlay", str(text_overlay)])
+    if color_grade:
+        cmd.extend(["--color_grade", str(color_grade)])
 
     logger.info(f"🎬 RUN_VIDEO_SYSTEM request {request_id}: {' '.join(cmd)}")
 
@@ -1141,7 +1184,7 @@ async def run_video_system(websocket, payload):
         "request_id": request_id,
         "status": "processing",
         "progress": 2,
-        "message": "Launching SFS video-system.py..."
+        "message": f"Launching SFS video-system.py ({mode})..."
     })
 
     process = await asyncio.create_subprocess_exec(
