@@ -2928,26 +2928,26 @@ const App: React.FC = () => {
         </section>
 
         <section className="mt-6 rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.08] to-white/[0.03] p-6 md:p-7">
-          <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
-            <div className="max-w-xl">
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+            <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.24em] text-orange-400/90">Why Echo Sound Lab</p>
               <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-100">Intent-Measured Mastering</h2>
               <p className="mt-3 text-sm leading-6 text-slate-400">
                 ESL is engineered to preserve dynamics, expose measurable change, and keep artists in control of every meaningful decision.
               </p>
             </div>
-            <div className="grid flex-1 gap-3 sm:grid-cols-3 md:max-w-[52%]">
-              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Telemetry</p>
-                <p className="mt-2 text-sm font-semibold text-slate-100">Match Score + AI Boost</p>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-100 break-words">Match Score + AI Boost</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+              <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Safety</p>
-                <p className="mt-2 text-sm font-semibold text-slate-100">Punch Protection</p>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-100 break-words">Punch Protection</p>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+              <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Control</p>
-                <p className="mt-2 text-sm font-semibold text-slate-100">Artist-Led Decisions</p>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-100 break-words">Artist-Led Decisions</p>
               </div>
             </div>
           </div>
