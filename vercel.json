@@ -37,8 +37,6 @@
     }
   ],
   "env": {
-    "VITE_GEMINI_API_KEY": "@gemini-api-key",
-    "VITE_SUNO_API_KEY": "@suno-api-key",
     "VITE_SUNO_API_URL": "https://api.aimlapi.com"
   }
 }
