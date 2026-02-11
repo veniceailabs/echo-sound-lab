@@ -1285,6 +1285,9 @@ async def run_music_system(websocket, payload):
     voice_path = payload.get('voice_path')
     style = payload.get('style')
     tempo = payload.get('tempo', 120)
+    lyrics = payload.get('lyrics', '')
+    voice_id = payload.get('voice_id', '')
+    instrumental = bool(payload.get('instrumental', False))
     output_path = payload.get('output_path')
 
     if not voice_path or not style or not output_path:
@@ -1317,8 +1320,12 @@ async def run_music_system(websocket, payload):
         "--voice", str(voice_path),
         "--style", str(style),
         "--tempo", str(tempo),
+        "--lyrics", str(lyrics),
+        "--voice_id", str(voice_id),
         "--output", str(output_target),
     ]
+    if instrumental:
+        cmd.append("--instrumental")
 
     logger.info(f"🎵 RUN_MUSIC_SYSTEM request {request_id}: {' '.join(cmd)}")
 

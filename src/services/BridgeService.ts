@@ -700,6 +700,9 @@ class BridgeServiceImpl {
       voicePath: string;
       style: string;
       tempo?: number;
+      lyrics?: string;
+      voiceId?: string;
+      instrumental?: boolean;
       outputPath: string;
     },
     onEvent?: (event: { percent?: number; message?: string }) => void
@@ -759,6 +762,9 @@ class BridgeServiceImpl {
         voice_path: params.voicePath,
         style: params.style,
         tempo: params.tempo ?? 120,
+        lyrics: params.lyrics ?? '',
+        voice_id: params.voiceId ?? '',
+        instrumental: !!params.instrumental,
         output_path: params.outputPath,
       });
 

@@ -76,6 +76,8 @@ class VoiceEngineService {
       voiceInput?: Blob | File;
       tempo?: number;
       outputName?: string;
+      voiceId?: string;
+      instrumental?: boolean;
     }
   ): Promise<GeneratedSong> {
     const voiceBlob = options?.userVocals || options?.voiceInput;
@@ -97,6 +99,9 @@ class VoiceEngineService {
         voicePath: saved.audioPath,
         style: requestedStyle,
         tempo,
+        lyrics,
+        voiceId: options?.voiceId,
+        instrumental: !!options?.instrumental,
         outputPath: outputName,
       },
       () => {

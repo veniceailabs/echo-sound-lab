@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { VoiceModel, GeneratedSong } from '../types';
 import { voiceEngineService } from '../services/voiceEngineService';
 import { useRecorder } from '../hooks/useRecorder';
-import { glassCard, glowButton, secondaryButton, sectionHeader, gradientDivider, cn } from '../utils/secondLightStyles';
+import { glassCard, glowButton, secondaryButton, sectionHeader, cn } from '../utils/secondLightStyles';
 
 interface SongGenerationWizardProps {
   voiceModels: VoiceModel[];
@@ -10,26 +10,60 @@ interface SongGenerationWizardProps {
   onCancel: () => void;
 }
 
+type StudioPane = 'create' | 'library' | 'personas';
 type LocalStyle = 'Trap' | 'Synthwave' | 'Rock' | 'Ambient';
 
-const STYLES: Array<{ value: LocalStyle; description: string; tempo: number }> = [
-  { value: 'Trap', description: '808-heavy drums and dark bounce', tempo: 140 },
-  { value: 'Synthwave', description: 'Retro drums and neon pads', tempo: 108 },
-  { value: 'Rock', description: 'Aggressive rhythm and energy', tempo: 122 },
-  { value: 'Ambient', description: 'Slow cinematic atmosphere', tempo: 84 },
+interface PersonaPreset {
+  id: string;
+  name: string;
+  style: LocalStyle;
+  voiceId: string;
+  tempo: number;
+  instrumental: boolean;
+}
+
+interface GeneratedEntry {
+  id: string;
+  name: string;
+  style: string;
+  createdAt: number;
+}
+
+const PERSONA_STORAGE_KEY = 'echo.aiStudio.personas.v1';
+
+const STYLE_OPTIONS: Array<{ value: LocalStyle; tags: string[]; defaultTempo: number }> = [
+  { value: 'Trap', tags: ['808', 'dark', 'drill'], defaultTempo: 140 },
+  { value: 'Synthwave', tags: ['retro', 'neon', 'analog'], defaultTempo: 108 },
+  { value: 'Rock', tags: ['guitars', 'arena', 'live-kit'], defaultTempo: 122 },
+  { value: 'Ambient', tags: ['cinematic', 'airy', 'textures'], defaultTempo: 84 },
 ];
 
+const DEFAULT_LYRICS = `[Verse]\nCity lights and static in my chest tonight\nRunning through the noise till the silence hits right\n\n[Chorus]\nWe rise in stereo, we glow in neon rain\nEcho in the skyline, singing through the pain`;
+
 const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels, onComplete, onCancel }) => {
-  const [selectedModelId, setSelectedModelId] = useState<string | null>(voiceModels[0]?.id || null);
+  const [pane, setPane] = useState<StudioPane>('create');
+  const [isCustomMode, setIsCustomMode] = useState(true);
+
+  const [title, setTitle] = useState('Untitled Echo Session');
+  const [lyrics, setLyrics] = useState(DEFAULT_LYRICS);
   const [style, setStyle] = useState<LocalStyle>('Trap');
-  const [tempo, setTempo] = useState<number>(140);
+  const [styleTags, setStyleTags] = useState('808, dark, wide');
+  const [tempo, setTempo] = useState(140);
+  const [instrumental, setInstrumental] = useState(false);
+
+  const [selectedModelId, setSelectedModelId] = useState<string>(voiceModels[0]?.id || '');
+  const [voiceId, setVoiceId] = useState('');
+
   const [voiceFile, setVoiceFile] = useState<File | null>(null);
   const [usingRecordedVoice, setUsingRecordedVoice] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const [personas, setPersonas] = useState<PersonaPreset[]>([]);
+  const [generatedHistory, setGeneratedHistory] = useState<GeneratedEntry[]>([]);
+  const [latestSong, setLatestSong] = useState<GeneratedSong | null>(null);
 
   const [isGenerating, setIsGenerating] = useState(false);
-  const [stageText, setStageText] = useState('Idle');
-  const [previewSong, setPreviewSong] = useState<GeneratedSong | null>(null);
+  const [statusMessage, setStatusMessage] = useState('Idle');
+  const [error, setError] = useState<string | null>(null);
 
   const {
     startRecording,
@@ -42,224 +76,406 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
   } = useRecorder();
 
   useEffect(() => {
-    if (recorderError) {
-      setError(recorderError.message);
-    }
+    if (recorderError) setError(recorderError.message);
   }, [recorderError]);
 
   useEffect(() => {
-    const preset = STYLES.find((s) => s.value === style);
-    if (preset) setTempo(preset.tempo);
-  }, [style]);
+    if (!voiceModels.length) {
+      setSelectedModelId('');
+      return;
+    }
+    if (!voiceModels.find((m) => m.id === selectedModelId)) {
+      setSelectedModelId(voiceModels[0].id);
+    }
+  }, [voiceModels, selectedModelId]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PERSONA_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as PersonaPreset[];
+        if (Array.isArray(parsed)) setPersonas(parsed);
+      }
+    } catch {
+      // ignore corrupted persona state
+    }
+  }, []);
 
   const selectedModel = useMemo(
-    () => voiceModels.find((model) => model.id === selectedModelId) || null,
-    [selectedModelId, voiceModels]
+    () => voiceModels.find((m) => m.id === selectedModelId) || null,
+    [voiceModels, selectedModelId]
   );
 
-  const canGenerate = !!voiceFile || !!audioBlob;
+  const canGenerate = useMemo(
+    () => !!voiceFile || !!audioBlob,
+    [voiceFile, audioBlob]
+  );
 
-  const handleGenerate = async () => {
+  const persistPersonas = (next: PersonaPreset[]) => {
+    setPersonas(next);
+    localStorage.setItem(PERSONA_STORAGE_KEY, JSON.stringify(next));
+  };
+
+  const insertLyricTag = (tag: 'Verse' | 'Chorus') => {
+    setLyrics((prev) => `${prev.trim()}\n\n[${tag}]\n`);
+  };
+
+  const randomizeStyle = () => {
+    const pick = STYLE_OPTIONS[Math.floor(Math.random() * STYLE_OPTIONS.length)];
+    setStyle(pick.value);
+    setStyleTags(pick.tags.join(', '));
+    setTempo(pick.defaultTempo);
+  };
+
+  const applyStylePreset = (next: LocalStyle) => {
+    setStyle(next);
+    const preset = STYLE_OPTIONS.find((s) => s.value === next);
+    if (preset && !isCustomMode) {
+      setTempo(preset.defaultTempo);
+      setStyleTags(preset.tags.join(', '));
+    }
+  };
+
+  const savePersona = () => {
+    const personaName = `${style} Persona ${personas.length + 1}`;
+    const nextPersona: PersonaPreset = {
+      id: `persona-${Date.now()}`,
+      name: personaName,
+      style,
+      voiceId,
+      tempo,
+      instrumental,
+    };
+    persistPersonas([nextPersona, ...personas]);
+    setPane('personas');
+  };
+
+  const loadPersona = (personaId: string) => {
+    const persona = personas.find((p) => p.id === personaId);
+    if (!persona) return;
+    setStyle(persona.style);
+    setVoiceId(persona.voiceId);
+    setTempo(persona.tempo);
+    setInstrumental(persona.instrumental);
+    setPane('create');
+  };
+
+  const deletePersona = (personaId: string) => {
+    persistPersonas(personas.filter((p) => p.id !== personaId));
+  };
+
+  const buildSong = async () => {
     setError(null);
     if (!canGenerate) {
-      setError('Record or upload a vocal first.');
+      setError('Record or upload a vocal idea first.');
       return;
     }
 
     setIsGenerating(true);
-    setStageText('Preparing local engine...');
+    setStatusMessage('Launching local music engine...');
 
     try {
-      const song = await voiceEngineService.generateSong(
+      const outputName = `${title.trim().replace(/[^a-zA-Z0-9_-]+/g, '_') || 'echo_song'}_${Date.now()}.wav`;
+      const result = await voiceEngineService.generateSong(
         selectedModel,
-        'local voice-first generation',
+        lyrics,
         style,
         {
           voiceInput: audioBlob || voiceFile || undefined,
           tempo,
-          outputName: `local_${style.toLowerCase()}_${Date.now()}.wav`,
+          voiceId,
+          instrumental,
+          outputName,
         }
       );
-      setStageText('Song built locally.');
-      setPreviewSong(song);
+
+      setLatestSong(result);
+      setGeneratedHistory((prev) => [
+        {
+          id: result.id,
+          name: result.name,
+          style,
+          createdAt: Date.now(),
+        },
+        ...prev,
+      ]);
+      setStatusMessage('Song built locally.');
+      setPane('library');
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Local generation failed.';
-      setError(message);
-      setStageText('Generation failed.');
+      setError(e instanceof Error ? e.message : 'Local generation failed.');
+      setStatusMessage('Generation failed.');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const handleRouteToWorkspace = () => {
-    if (previewSong) onComplete(previewSong);
-  };
-
   return (
-    <div className={cn(glassCard, 'p-8 max-w-5xl mx-auto')}>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className={cn(sectionHeader, 'text-3xl mb-2')}>Build Song Locally</h2>
-          <p className="text-sm text-slate-400">Voice-first local generation. No external APIs.</p>
-        </div>
-        <button onClick={onCancel} className="text-slate-400 hover:text-white transition-colors text-2xl">✕</button>
-      </div>
-
-      <div className={gradientDivider} />
-
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-6">
-          <div className="bg-slate-900/50 rounded-2xl p-5 border border-slate-700/30">
-            <h3 className="text-sm font-bold text-white mb-3 uppercase tracking-wider">Voice Recorder</h3>
-            <p className="text-xs text-slate-400 mb-4">Record your vocal idea or upload an existing vocal take.</p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-              <label className="cursor-pointer rounded-xl border border-slate-700/40 bg-slate-800/50 p-4 hover:border-orange-500/40 transition-all">
-                <input
-                  type="file"
-                  accept="audio/*,.wav,.mp3,.aiff,.flac"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null;
-                    setVoiceFile(file);
-                    setUsingRecordedVoice(false);
-                    if (file) {
-                      resetRecording();
-                    }
-                  }}
-                />
-                <div className="text-center">
-                  <div className="text-2xl mb-1">FILE</div>
-                  <div className="text-xs text-slate-300 font-semibold uppercase tracking-wider">Upload Vocal</div>
-                </div>
-              </label>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (recordingState === 'recording') {
-                    stopRecording();
-                  } else {
-                    setVoiceFile(null);
-                    setUsingRecordedVoice(true);
-                    startRecording();
-                  }
-                }}
-                className={cn(
-                  'rounded-xl border p-4 transition-all text-center',
-                  recordingState === 'recording'
-                    ? 'border-red-500/50 bg-red-500/10 animate-pulse'
-                    : 'border-orange-500/40 bg-orange-500/10 hover:border-orange-400/60'
-                )}
-              >
-                <div className="text-2xl mb-1">MIC</div>
-                <div className="text-xs text-slate-200 font-semibold uppercase tracking-wider">
-                  {recordingState === 'recording' ? 'Stop Recording' : 'Record Vocal'}
-                </div>
-              </button>
-            </div>
-
-            {voiceFile && (
-              <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-200">
-                Uploaded: {voiceFile.name}
-              </div>
-            )}
-
-            {audioUrl && usingRecordedVoice && (
-              <div className="space-y-2">
-                <div className="rounded-xl border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs text-green-200">
-                  Recorded voice ready
-                </div>
-                <audio src={audioUrl} controls className="w-full" />
-              </div>
-            )}
+    <div className={cn(glassCard, 'p-0 overflow-hidden max-w-6xl mx-auto')}>
+      <div className="flex min-h-[720px]">
+        <aside className="w-[230px] border-r border-slate-800/60 bg-slate-950/70 p-4 space-y-2">
+          <div className="mb-4">
+            <h2 className={cn(sectionHeader, 'text-xl mb-1')}>Echo AI Studio</h2>
+            <p className="text-[11px] text-slate-500 uppercase tracking-wider">Suno-Grade Local</p>
           </div>
 
-          <div className="bg-slate-900/50 rounded-2xl p-5 border border-slate-700/30">
-            <h3 className="text-sm font-bold text-white mb-3 uppercase tracking-wider">Style</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {STYLES.map((item) => (
-                <button
-                  key={item.value}
-                  onClick={() => setStyle(item.value)}
-                  className={cn(
-                    'rounded-xl border p-3 text-left transition-all',
-                    style === item.value
-                      ? 'bg-orange-500/20 border-orange-500/50'
-                      : 'bg-slate-800/50 border-slate-700/40 hover:border-slate-600/70'
-                  )}
-                >
-                  <div className="text-sm font-bold text-white">{item.value}</div>
-                  <div className="text-[11px] text-slate-400 mt-1">{item.description}</div>
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-4">
-              <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-                <span>Tempo</span>
-                <span className="text-orange-300 font-mono">{tempo} BPM</span>
-              </div>
-              <input
-                type="range"
-                min={70}
-                max={170}
-                step={1}
-                value={tempo}
-                onChange={(e) => setTempo(parseInt(e.target.value, 10))}
-                className="w-full accent-orange-400"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <div className="bg-slate-900/50 rounded-2xl p-5 border border-slate-700/30">
-            <h3 className="text-sm font-bold text-white mb-3 uppercase tracking-wider">Voice Model (Optional)</h3>
-            {voiceModels.length === 0 ? (
-              <p className="text-xs text-slate-500">No saved voice models yet. Local engine can still build using recorded/uploaded voice.</p>
-            ) : (
-              <select
-                value={selectedModelId || ''}
-                onChange={(e) => setSelectedModelId(e.target.value || null)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-200 outline-none"
-              >
-                {voiceModels.map((model) => (
-                  <option key={model.id} value={model.id}>{model.name}</option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <div className="bg-slate-900/50 rounded-2xl p-5 border border-slate-700/30 space-y-4">
+          {([
+            ['create', 'Create'],
+            ['library', 'Library'],
+            ['personas', 'Personas'],
+          ] as const).map(([id, label]) => (
             <button
-              onClick={handleGenerate}
-              disabled={!canGenerate || isGenerating}
-              className={cn(glowButton, 'w-full py-4 text-sm uppercase tracking-wider', (!canGenerate || isGenerating) && 'opacity-50 cursor-not-allowed')}
+              key={id}
+              onClick={() => setPane(id)}
+              className={cn(
+                'w-full text-left rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-wider transition-all',
+                pane === id
+                  ? 'bg-orange-500/20 border border-orange-500/40 text-orange-200'
+                  : 'bg-slate-900/70 border border-slate-800/70 text-slate-400 hover:text-slate-200'
+              )}
             >
-              {isGenerating ? 'Building Song Locally...' : 'Build Song Locally'}
+              {label}
             </button>
+          ))}
 
-            <div className="text-xs text-slate-400">Status: {stageText}</div>
+          <button onClick={onCancel} className={cn(secondaryButton, 'w-full mt-6 py-2 text-xs')}>
+            Close Studio
+          </button>
+        </aside>
 
-            {error && (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-                {error}
+        <main className="flex-1 p-6 space-y-6">
+          {pane === 'create' && (
+            <>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-white">Create</h3>
+                <label className="flex items-center gap-2 text-xs text-slate-300 uppercase tracking-wider">
+                  <span>Custom Mode</span>
+                  <input
+                    type="checkbox"
+                    checked={isCustomMode}
+                    onChange={(e) => setIsCustomMode(e.target.checked)}
+                    className="accent-orange-400"
+                  />
+                </label>
               </div>
-            )}
-          </div>
 
-          {previewSong && (
-            <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-5 space-y-3">
-              <h3 className="text-sm font-bold text-green-300 uppercase tracking-wider">Song Ready</h3>
-              <p className="text-xs text-slate-300">{previewSong.name}</p>
-              <div className="flex gap-3">
-                <button onClick={() => setPreviewSong(null)} className={cn(secondaryButton, 'flex-1 py-3')}>Regenerate</button>
-                <button onClick={handleRouteToWorkspace} className={cn(glowButton, 'flex-1 py-3')}>Route to Workspace →</button>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <section className="space-y-4">
+                  <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-3">
+                    <label className="text-[11px] uppercase tracking-wider text-slate-500">Title</label>
+                    <input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none"
+                    />
+
+                    <label className="text-[11px] uppercase tracking-wider text-slate-500">Style Tags</label>
+                    <div className="flex gap-2">
+                      <input
+                        value={styleTags}
+                        onChange={(e) => setStyleTags(e.target.value)}
+                        className="flex-1 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none"
+                      />
+                      <button onClick={randomizeStyle} className={cn(secondaryButton, 'px-3 text-xs')}>Randomize</button>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] uppercase tracking-wider text-slate-500">Lyrics Editor</label>
+                      <div className="flex gap-2">
+                        <button onClick={() => insertLyricTag('Verse')} className={cn(secondaryButton, 'px-2 py-1 text-[10px]')}>+ [Verse]</button>
+                        <button onClick={() => insertLyricTag('Chorus')} className={cn(secondaryButton, 'px-2 py-1 text-[10px]')}>+ [Chorus]</button>
+                      </div>
+                    </div>
+                    <textarea
+                      value={lyrics}
+                      onChange={(e) => setLyrics(e.target.value)}
+                      rows={14}
+                      className="w-full rounded-xl border border-slate-700 bg-slate-950/80 px-3 py-2 text-sm text-slate-100 font-mono outline-none"
+                    />
+                  </div>
+                </section>
+
+                <section className="space-y-4">
+                  <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-4">
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider text-slate-500">Style</label>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        {STYLE_OPTIONS.map((item) => (
+                          <button
+                            key={item.value}
+                            onClick={() => applyStylePreset(item.value)}
+                            className={cn(
+                              'rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-wider',
+                              style === item.value
+                                ? 'border-orange-500/50 bg-orange-500/20 text-orange-200'
+                                : 'border-slate-700 bg-slate-800/70 text-slate-300'
+                            )}
+                          >
+                            {item.value}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider text-slate-500">Tempo: {tempo} BPM</label>
+                      <input
+                        type="range"
+                        min={70}
+                        max={170}
+                        step={1}
+                        value={tempo}
+                        onChange={(e) => setTempo(parseInt(e.target.value, 10))}
+                        className="w-full accent-orange-400 mt-2"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] uppercase tracking-wider text-slate-500">Persona Voice ID</label>
+                        <input
+                          value={voiceId}
+                          onChange={(e) => setVoiceId(e.target.value)}
+                          placeholder="e.g. samantha"
+                          className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none mt-1"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] uppercase tracking-wider text-slate-500">Voice Model</label>
+                        <select
+                          value={selectedModelId}
+                          onChange={(e) => setSelectedModelId(e.target.value)}
+                          className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none mt-1"
+                        >
+                          <option value="">None</option>
+                          {voiceModels.map((m) => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <label className="flex items-center gap-2 text-xs text-slate-300 uppercase tracking-wider">
+                      <input
+                        type="checkbox"
+                        checked={instrumental}
+                        onChange={(e) => setInstrumental(e.target.checked)}
+                        className="accent-orange-400"
+                      />
+                      Instrumental
+                    </label>
+                  </div>
+
+                  <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-3">
+                    <label className="text-[11px] uppercase tracking-wider text-slate-500">Record Vocal</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (recordingState === 'recording') {
+                            stopRecording();
+                          } else {
+                            setVoiceFile(null);
+                            setUsingRecordedVoice(true);
+                            startRecording();
+                          }
+                        }}
+                        className={cn(
+                          'rounded-xl border px-3 py-3 text-xs font-bold uppercase tracking-wider',
+                          recordingState === 'recording'
+                            ? 'border-red-500/60 bg-red-500/20 text-red-200 animate-pulse'
+                            : 'border-orange-500/50 bg-orange-500/20 text-orange-200'
+                        )}
+                      >
+                        {recordingState === 'recording' ? 'Stop Recording' : 'Record Vocal'}
+                      </button>
+
+                      <label className="rounded-xl border border-slate-700 bg-slate-800/70 text-slate-200 text-xs font-bold uppercase tracking-wider px-3 py-3 text-center cursor-pointer">
+                        Upload Vocal
+                        <input
+                          type="file"
+                          accept="audio/*,.wav,.mp3,.aiff,.flac"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0] || null;
+                            setVoiceFile(f);
+                            setUsingRecordedVoice(false);
+                            if (f) resetRecording();
+                          }}
+                        />
+                      </label>
+                    </div>
+
+                    {voiceFile && <p className="text-xs text-green-300">Uploaded: {voiceFile.name}</p>}
+                    {audioUrl && usingRecordedVoice && <audio src={audioUrl} controls className="w-full" />}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={savePersona} className={cn(secondaryButton, 'flex-1 py-3 text-xs')}>Save Persona</button>
+                    <button
+                      onClick={buildSong}
+                      disabled={!canGenerate || isGenerating}
+                      className={cn(glowButton, 'flex-1 py-3 text-xs uppercase tracking-wider', (!canGenerate || isGenerating) && 'opacity-50 cursor-not-allowed')}
+                    >
+                      {isGenerating ? 'Building Locally...' : 'Build Song Locally'}
+                    </button>
+                  </div>
+
+                  <p className="text-xs text-slate-400">Status: {statusMessage}</p>
+                  {error && <p className="text-xs text-red-300">{error}</p>}
+                </section>
               </div>
-            </div>
+            </>
           )}
-        </div>
+
+          {pane === 'library' && (
+            <>
+              <h3 className="text-lg font-bold text-white">Library</h3>
+              {!generatedHistory.length && !latestSong && (
+                <p className="text-sm text-slate-500">No local songs generated yet.</p>
+              )}
+              {latestSong && (
+                <div className="rounded-2xl border border-green-500/30 bg-green-500/10 p-4 mb-4">
+                  <p className="text-sm text-green-200 font-semibold">Latest: {latestSong.name}</p>
+                  <button onClick={() => onComplete(latestSong)} className={cn(glowButton, 'mt-3 px-4 py-2 text-xs')}>
+                    Route Latest To Workspace
+                  </button>
+                </div>
+              )}
+              <div className="space-y-2">
+                {generatedHistory.map((entry) => (
+                  <div key={entry.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+                    <p className="text-sm text-slate-100">{entry.name}</p>
+                    <p className="text-xs text-slate-500">{entry.style} · {new Date(entry.createdAt).toLocaleString()}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {pane === 'personas' && (
+            <>
+              <h3 className="text-lg font-bold text-white">Personas</h3>
+              {!personas.length && <p className="text-sm text-slate-500">No personas saved yet. Save from Create view.</p>}
+              <div className="space-y-2">
+                {personas.map((p) => (
+                  <div key={p.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-slate-100">{p.name}</p>
+                      <p className="text-xs text-slate-500">{p.style} · {p.tempo} BPM · voice: {p.voiceId || 'default'}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => loadPersona(p.id)} className={cn(secondaryButton, 'px-3 py-2 text-[10px]')}>Use Persona</button>
+                      <button onClick={() => deletePersona(p.id)} className={cn(secondaryButton, 'px-3 py-2 text-[10px]')}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </main>
       </div>
     </div>
   );
