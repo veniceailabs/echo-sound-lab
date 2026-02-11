@@ -1278,9 +1278,10 @@ const App: React.FC = () => {
         const newMetrics = result.metrics;
 
         if (result.preservation.blocked) {
-          syncEngineVerdict('block', result.preservation.reason, verdictRunId);
-          setApplySuggestionsError(result.preservation.reason || 'Processing blocked by Dynamic Preservation hard ceiling.');
-          showNotification('Processing blocked by Dynamic Preservation hard ceiling.', 'warning', 5000);
+          const humanMsg = 'Hold on a second... We adjusted the volume slightly to keep your drums punchy.';
+          syncEngineVerdict('block', humanMsg, verdictRunId);
+          setApplySuggestionsError(humanMsg);
+          showNotification(humanMsg, 'warning', 5000);
           return;
         }
 
@@ -1348,7 +1349,7 @@ const App: React.FC = () => {
         console.log('[APPLY SUGGESTIONS] Processing complete. Metrics:', newMetrics);
 
         if (result.preservation.blocked) {
-          const warningMsg = result.preservation.reason || 'Processing blocked by Dynamic Preservation hard ceiling.';
+          const warningMsg = 'Hold on a second... Punch Protection stepped in so the mix does not get squashed.';
           setApplySuggestionsError(warningMsg);
           showNotification(warningMsg, 'warning', 5000);
           syncEngineVerdict('block', warningMsg, verdictRunId);
@@ -1367,7 +1368,7 @@ const App: React.FC = () => {
           console.log('='.repeat(80) + '\n');
 
           if (qualityVerdict.shouldBlock) {
-            const warningMsg = `Processing blocked: ${qualityVerdict.issues.join(', ')}`;
+            const warningMsg = 'Hold on a second... We noticed a small issue (like clipping), so we paused that move.';
             setApplySuggestionsError(warningMsg);
             showNotification(warningMsg, 'warning', 5000);
             console.warn('[QUALITY] Processing blocked - quality verdict:', qualityVerdict);
@@ -1377,7 +1378,7 @@ const App: React.FC = () => {
           }
 
           if (qualityVerdict.uiVerdict === 'warn') {
-            const warningMsg = qualityVerdict.issues[0] || 'Processing completed with warnings.';
+            const warningMsg = 'We adjusted the volume slightly to keep your drums punchy.';
             syncEngineVerdict('warn', warningMsg, verdictRunId);
             showNotification(`Applied with warning: ${warningMsg}`, 'warning', 3500);
             qualityWarned = true;
@@ -1535,7 +1536,7 @@ const App: React.FC = () => {
         await audioProcessingPipeline.loadAudio(originalBuffer);
         const result = await audioProcessingPipeline.processAudio(accumulatedActions, { preservationMode });
         if (result.preservation.blocked) {
-          const warningMsg = result.preservation.reason || 'Auto Mix blocked by Dynamic Preservation hard ceiling.';
+          const warningMsg = 'Punch Protection stepped in during Smart Polish to keep the groove alive.';
           showNotification(warningMsg, 'warning', 5000);
           syncEngineVerdict('block', warningMsg, verdictRunId);
           accumulatedActions.splice(-newActions.length);
@@ -1543,7 +1544,7 @@ const App: React.FC = () => {
         }
         const qualityVerdict = qualityAssurance.assessProcessingQuality(workingMetrics, result.metrics);
         if (qualityVerdict.shouldBlock) {
-          const warningMsg = `Auto Mix halted: ${qualityVerdict.issues.join(', ')}`;
+          const warningMsg = 'Hold on a second... We skipped one move to keep your mix solid in mono.';
           showNotification(warningMsg, 'warning', 5000);
           console.warn('[AutoMix] Processing blocked - quality verdict:', qualityVerdict);
           syncEngineVerdict('block', warningMsg, verdictRunId);
@@ -1551,7 +1552,7 @@ const App: React.FC = () => {
           break;
         }
         if (qualityVerdict.uiVerdict === 'warn') {
-          syncEngineVerdict('warn', qualityVerdict.issues[0] || 'Auto Mix completed with warnings.', verdictRunId);
+          syncEngineVerdict('warn', 'We skipped the widening to keep your mix sounding solid in mono.', verdictRunId);
         } else {
           syncEngineVerdict('accept', undefined, verdictRunId);
         }
@@ -2671,8 +2672,8 @@ const App: React.FC = () => {
           </article>
           <article className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5">
             <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Step 02</p>
-            <h3 className="mt-2 text-lg font-semibold text-slate-100">See the Delta</h3>
-            <p className="mt-2 text-sm text-slate-400">IntentCore™ compares classical and quantum shadow scoring with confidence-gated telemetry.</p>
+            <h3 className="mt-2 text-lg font-semibold text-slate-100">Feel the AI Boost</h3>
+            <p className="mt-2 text-sm text-slate-400">See your Match Score and the extra magic the engine can safely add.</p>
           </article>
           <article className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5">
             <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Step 03</p>
@@ -2693,11 +2694,11 @@ const App: React.FC = () => {
             <div className="grid flex-1 gap-3 sm:grid-cols-3 md:max-w-[52%]">
               <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Telemetry</p>
-                <p className="mt-2 text-sm font-semibold text-slate-100">HII + Shadow Delta</p>
+                <p className="mt-2 text-sm font-semibold text-slate-100">Match Score + AI Boost</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Safety</p>
-                <p className="mt-2 text-sm font-semibold text-slate-100">Dynamic Preservation</p>
+                <p className="mt-2 text-sm font-semibold text-slate-100">Punch Protection</p>
               </div>
               <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Control</p>

@@ -230,13 +230,13 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               </svg>
             </div>
             <div>
-              <h3 className="text-lg font-black text-white tracking-tight">AI Recommendations</h3>
-              <p className="text-xs text-slate-400">Powered by Gemini</p>
+              <h3 className="text-lg font-black text-white tracking-tight">Make it Better</h3>
+              <p className="text-xs text-slate-400">Uses AI to fix balance and clarity.</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             {typeof humanIntentIndex === 'number' && (
-              <span className="text-xs text-slate-500">HII: {Math.round(humanIntentIndex)}</span>
+              <span className="text-xs text-slate-500">Match Score: {Math.round(humanIntentIndex)}</span>
             )}
             <ShadowDeltaBadge
               delta={shadowDelta}
@@ -259,19 +259,19 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
                     : 'bg-slate-900/70 text-slate-200 border border-slate-700/50 hover:bg-slate-800/80 hover:border-orange-400/40'
                 }`}
-                title="Run Auto Mix loop"
+                title="One-pass smart polish"
               >
                 {isAutoMixing ? (
                   <>
                     <div className="w-3 h-3 border-2 border-orange-300/40 border-t-orange-300 rounded-full animate-spin" />
-                    Auto Mix
+                    Improving...
                   </>
                 ) : (
                   <>
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7h18M3 12h12M3 17h18" />
                     </svg>
-                    {isFriendly ? 'Auto Mix' : 'Auto Mix Loop'}
+                    {isFriendly ? 'Quick Polish' : 'Smart Polish Loop'}
                   </>
                 )}
               </button>
@@ -285,28 +285,33 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
                     : 'bg-slate-900/70 text-slate-200 border border-slate-700/50 hover:bg-slate-800/80 hover:border-orange-400/40'
                 }`}
-                title="Run Full Studio Auto Mix"
+                title="Deep Spacing + advanced studio polish"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h10M4 18h16" />
                 </svg>
-                Full Studio Auto Mix
+                Deep Spacing Pass
               </button>
             )}
             {onPreservationModeChange && (
               <div className="flex items-center rounded-lg border border-slate-700/60 bg-slate-900/70 p-1">
-                {(['preserve', 'balanced', 'competitive'] as PreservationMode[]).map((mode) => (
+                {([
+                  { mode: 'preserve' as PreservationMode, label: 'Natural & Punchy', tip: 'Keeps the original life and dynamics.' },
+                  { mode: 'balanced' as PreservationMode, label: 'Polished & Clear', tip: 'The sweet spot for most songs.' },
+                  { mode: 'competitive' as PreservationMode, label: 'Radio Ready', tip: 'Maximum loudness while Punch Protection stays active.' },
+                ]).map(({ mode, label, tip }) => (
                   <button
                     key={mode}
                     type="button"
                     onClick={() => onPreservationModeChange(mode)}
+                    title={tip}
                     className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-colors ${
                       preservationMode === mode
                         ? 'bg-orange-500/20 text-orange-300 border border-orange-400/40'
                         : 'text-slate-400 hover:text-slate-200'
                     }`}
                   >
-                    {mode}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -331,7 +336,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                       ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30'
                       : 'bg-orange-500/20 text-orange-400 border border-orange-500/30 hover:bg-orange-500/30 hover:border-orange-400'
                 }`}
-                title={analysisResult.suggestions.every((s: Suggestion) => appliedSuggestionIds.includes(s.id)) ? 'All fixes applied' : 'Apply all recommendations at once'}
+                title={analysisResult.suggestions.every((s: Suggestion) => appliedSuggestionIds.includes(s.id)) ? 'Everything is already polished' : 'Apply all smart improvements'}
               >
                 {analysisResult.suggestions.every((s: Suggestion) => appliedSuggestionIds.includes(s.id)) ? (
                   <>
@@ -345,7 +350,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    {isFriendly ? 'Apply Recommendations' : 'Apply All'}
+                    {isFriendly ? 'Make it Better' : 'Improve My Mix'}
                   </>
                 )}
               </button>
@@ -362,8 +367,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                   : 'border-emerald-500/40 bg-emerald-950/20 text-emerald-300'
             }`}
           >
-            Engine Verdict: {engineVerdict.toUpperCase()}
-            {engineVerdictReason ? ` - ${engineVerdictReason}` : ''}
+            {engineVerdict === 'block' ? 'Hold on a second...' : engineVerdict === 'warn' ? 'Quick heads-up:' : 'Nice. Your mix is in a healthy zone.'}
+            {engineVerdictReason ? ` ${engineVerdictReason}` : ''}
           </div>
         )}
         {debugTelemetry &&
@@ -372,7 +377,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           Number.isFinite(shadowDelta) &&
           Number.isFinite(quantumConfidence) && (
             <div className="mb-4 rounded-lg border border-slate-700/60 bg-slate-900/30 px-3 py-2 text-[11px] font-mono text-slate-400">
-              HII:{Number.isFinite(humanIntentIndex) ? Math.round(humanIntentIndex as number) : '--'} | C:{Math.round(classicalScore as number)} | Q:{Math.round(quantumScore as number)} | Δ:{(shadowDelta as number) >= 0 ? '+' : ''}{Math.round(shadowDelta as number)} | conf:{(quantumConfidence as number).toFixed(2)}
+              Match:{Number.isFinite(humanIntentIndex) ? Math.round(humanIntentIndex as number) : '--'} | Classic:{Math.round(classicalScore as number)} | AI:{Math.round(quantumScore as number)} | Boost:{(shadowDelta as number) >= 0 ? '+' : ''}{Math.round(shadowDelta as number)} | confidence:{(quantumConfidence as number).toFixed(2)}
             </div>
           )}
 
@@ -395,7 +400,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             </div>
             {autoMixProgress?.score !== undefined && (
               <div className="mt-1 text-slate-400">
-                Score: <span className="text-orange-300 font-semibold">{autoMixProgress.score}</span>
+                Match Score: <span className="text-orange-300 font-semibold">{autoMixProgress.score}</span>
               </div>
             )}
             {autoMixError && (
@@ -411,13 +416,13 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
-            <p className="text-slate-300 text-base font-semibold mb-2">Ready for AI Analysis</p>
-            <p className="text-slate-500 text-sm mb-6 max-w-sm mx-auto">Let AI analyze your track and suggest professional improvements</p>
+            <p className="text-slate-300 text-base font-semibold mb-2">Ready to Improve</p>
+            <p className="text-slate-500 text-sm mb-6 max-w-sm mx-auto">IntentCore will analyze your track and suggest easy upgrades.</p>
             <button
               onClick={onRequestAIAnalysis}
               className="relative overflow-hidden bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 px-8 rounded-xl shadow-[0_4px_20px_rgba(251,146,60,0.3)] hover:shadow-[0_8px_40px_rgba(251,146,60,0.5)] hover:from-orange-600 hover:to-orange-700 active:scale-[0.98] transition-all duration-300 ease-out uppercase tracking-wider text-sm backdrop-blur-xl border border-orange-400/20 before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:-translate-x-full hover:before:translate-x-full before:transition-transform before:duration-700 before:ease-out before:pointer-events-none"
             >
-              <span className="relative z-10">Analyze with AI</span>
+              <span className="relative z-10">Improve My Mix</span>
             </button>
           </div>
         ) : analysisResult.genrePrediction === 'Analyzing...' && analysisResult.suggestions.length === 0 ? (
@@ -426,7 +431,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-blue-500 opacity-20 animate-pulse" />
               <div className="absolute inset-2 rounded-full border-4 border-transparent border-t-orange-500 border-r-blue-500 animate-spin" />
             </div>
-            <p className="text-slate-200 font-semibold mb-1">Analyzing your track...</p>
+            <p className="text-slate-200 font-semibold mb-1">IntentCore is analyzing your sound...</p>
             <p className="text-slate-500 text-sm">This may take a few moments</p>
           </div>
         ) : (
@@ -530,15 +535,17 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                     {isProcessing ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Applying Changes...
+                        Making it better...
                       </>
                     ) : isAnalyzerCalculating ? (
                       <>
                         <div className="w-4 h-4 border-2 border-slate-500/40 border-t-slate-400 rounded-full animate-spin" />
-                        Calculating...
+                        Calculating improvements...
                       </>
                     ) : (
-                      `Apply ${selectedSuggestionCount > 0 ? `${selectedSuggestionCount} Selected Fix${selectedSuggestionCount > 1 ? 'es' : ''}` : 'Selected Fixes'}`
+                      selectedSuggestionCount > 0
+                        ? `✨ Improve My Mix (${selectedSuggestionCount})`
+                        : '✨ Improve My Mix'
                     )}
                   </span>
                 </button>

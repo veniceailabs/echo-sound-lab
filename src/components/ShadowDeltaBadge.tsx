@@ -29,25 +29,25 @@ const ShadowDeltaBadge: React.FC<ShadowDeltaBadgeProps> = ({
     return (
       <div
         className="bg-slate-800 text-slate-400 px-2 py-1 rounded text-[10px] border border-slate-700 font-bold uppercase tracking-wide cursor-help"
-        title="Quantum Simulation: Uplift detected but confidence below 0.805 threshold. HII remains on the classical baseline."
+        title="AI Boost detected, but confidence is still warming up. Match Score stays on the classical baseline."
       >
-        Q (Inert) +{rounded.toFixed(1)}
+        AI Boost (Inert) +{rounded.toFixed(1)}
       </div>
     );
   }
 
   const styles = isActive
     ? rounded >= 3
-      ? { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: `IntentCore Active • Δ +${rounded}` }
+      ? { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: `Magic Added +${rounded}` }
       : rounded <= -1
-        ? { bg: 'bg-amber-500/20', text: 'text-amber-400', label: `IntentCore Active • Δ ${rounded}` }
-        : { bg: 'bg-slate-500/20', text: 'text-slate-300', label: `IntentCore Active • Δ ±${Math.abs(rounded)}` }
-    : { bg: 'bg-slate-700/40', text: 'text-slate-300', label: 'IntentCore Inactive (confidence gate)' };
+        ? { bg: 'bg-amber-500/20', text: 'text-amber-400', label: `Magic Added ${rounded}` }
+        : { bg: 'bg-slate-500/20', text: 'text-slate-300', label: `Magic Added ±${Math.abs(rounded)}` }
+    : { bg: 'bg-slate-700/40', text: 'text-slate-300', label: 'AI Boost Paused' };
 
   return (
     <div
       className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${styles.bg} ${styles.text} border border-current/20 cursor-help`}
-      title={`IntentCore telemetry. HII=${Number.isFinite(humanIntentIndex) ? Math.round(humanIntentIndex as number) : 'N/A'}. Shadow Delta (Q-C)=${rounded >= 0 ? '+' : ''}${rounded}. Confidence=${normalizedConfidence.toFixed(2)}.`}
+      title={`AI Boost telemetry. Match Score=${Number.isFinite(humanIntentIndex) ? Math.round(humanIntentIndex as number) : 'N/A'}. AI Boost (Q-C)=${rounded >= 0 ? '+' : ''}${rounded}. AI Confidence=${normalizedConfidence.toFixed(2)}.`}
     >
       {styles.label}
     </div>
