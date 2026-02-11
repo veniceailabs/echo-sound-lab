@@ -232,6 +232,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif action == "GENERATE_INTRO":
                     await run_intro_generation(websocket, payload)
 
+                elif action == "RUN_VIDEO_SYSTEM":
+                    await run_video_system(websocket, payload)
+
                 elif action == "ASSEMBLE_DEMO":
                     await run_demo_assembly(websocket, payload)
 
@@ -1083,6 +1086,140 @@ async def run_intro_generation(websocket, payload):
             'status': 'error',
             'message': f'Intro generation failed: {str(e)}'
         }))
+
+
+async def run_video_system(websocket, payload):
+    """
+    Execute root-level video-system.py with canonical CLI args and stream JSON events.
+    """
+    request_id = payload.get('request_id')
+    audio_path = payload.get('audio_path')
+    prompt = payload.get('prompt')
+    style = payload.get('style')
+    reactivity = payload.get('reactivity')
+    output_path = payload.get('output_path')
+
+    if not audio_path or not prompt or not style or reactivity is None or not output_path:
+        await websocket.send_json({
+            "action": "RUN_VIDEO_SYSTEM",
+            "request_id": request_id,
+            "status": "error",
+            "message": "Missing required args: audio_path, prompt, style, reactivity, output_path"
+        })
+        return
+
+    script_path = Path(__file__).resolve().parent.parent / "video-system.py"
+    if not script_path.exists():
+        await websocket.send_json({
+            "action": "RUN_VIDEO_SYSTEM",
+            "request_id": request_id,
+            "status": "error",
+            "message": f"video-system.py not found at {script_path}"
+        })
+        return
+
+    # Keep output inside bridge output dir unless absolute path is explicitly provided
+    output_target = Path(output_path)
+    if not output_target.is_absolute():
+        output_target = OUTPUT_DIR / output_target.name
+    output_target.parent.mkdir(parents=True, exist_ok=True)
+
+    cmd = [
+        sys.executable,
+        str(script_path),
+        "--audio", str(audio_path),
+        "--prompt", str(prompt),
+        "--style", str(style),
+        "--reactivity", str(reactivity),
+        "--output", str(output_target),
+    ]
+
+    logger.info(f"🎬 RUN_VIDEO_SYSTEM request {request_id}: {' '.join(cmd)}")
+
+    await websocket.send_json({
+        "action": "RUN_VIDEO_SYSTEM",
+        "request_id": request_id,
+        "status": "processing",
+        "progress": 2,
+        "message": "Launching SFS video-system.py..."
+    })
+
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT
+    )
+
+    final_path = str(output_target)
+    try:
+        while True:
+            line = await process.stdout.readline()
+            if not line:
+                break
+
+            raw = line.decode("utf-8", errors="replace").strip()
+            if not raw:
+                continue
+
+            try:
+                event = json.loads(raw)
+            except json.JSONDecodeError:
+                await websocket.send_json({
+                    "action": "RUN_VIDEO_SYSTEM",
+                    "request_id": request_id,
+                    "status": "processing",
+                    "message": raw
+                })
+                continue
+
+            status = event.get("status")
+            if status == "progress":
+                await websocket.send_json({
+                    "action": "RUN_VIDEO_SYSTEM",
+                    "request_id": request_id,
+                    "status": "processing",
+                    "progress": event.get("percent", 0),
+                    "message": event.get("message", "")
+                })
+            elif status == "complete":
+                final_path = event.get("path", str(output_target))
+            elif status == "error":
+                await websocket.send_json({
+                    "action": "RUN_VIDEO_SYSTEM",
+                    "request_id": request_id,
+                    "status": "error",
+                    "message": event.get("message", "video-system.py reported an error")
+                })
+                return
+
+        return_code = await process.wait()
+        if return_code != 0:
+            await websocket.send_json({
+                "action": "RUN_VIDEO_SYSTEM",
+                "request_id": request_id,
+                "status": "error",
+                "message": f"video-system.py exited with code {return_code}"
+            })
+            return
+
+        final_name = Path(final_path).name
+        await websocket.send_json({
+            "action": "RUN_VIDEO_SYSTEM",
+            "request_id": request_id,
+            "status": "complete",
+            "result": {
+                "video_path": final_path,
+                "video_url": f"http://{HOST}:{PORT}/stems/{final_name}"
+            }
+        })
+    except Exception as e:
+        logger.error(f"RUN_VIDEO_SYSTEM failed: {e}")
+        await websocket.send_json({
+            "action": "RUN_VIDEO_SYSTEM",
+            "request_id": request_id,
+            "status": "error",
+            "message": f"RUN_VIDEO_SYSTEM failed: {str(e)}"
+        })
 
 
 async def _create_mock_intro_video(output_path, duration):

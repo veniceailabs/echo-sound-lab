@@ -603,6 +603,76 @@ class BridgeServiceImpl {
   }
 
   /**
+   * Run root-level video-system.py through bridge backend.
+   * Maps UI values to canonical CLI args:
+   * --audio --prompt --style --reactivity --output
+   */
+  async runSfsVideoSystem(
+    params: {
+      audioPath: string;
+      prompt: string;
+      style: 'Noir' | 'Glitch' | 'Cinematic' | 'Abstract';
+      reactivity: number;
+      outputPath: string;
+    },
+    onEvent?: (event: { percent?: number; message?: string }) => void
+  ): Promise<{ videoPath: string; videoUrl?: string }> {
+    const requestId = `sfs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    if (!this.getIsConnected()) {
+      this.connect();
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    return new Promise((resolve, reject) => {
+      const unsubscribe = this.subscribe((response: BridgeMessage & { action?: string; request_id?: string }) => {
+        if (response.action !== 'RUN_VIDEO_SYSTEM' || response.request_id !== requestId) {
+          return;
+        }
+
+        if (response.status === 'processing' || response.status === 'rendering' || response.status === 'loading') {
+          if (onEvent) {
+            onEvent({
+              percent: response.progress,
+              message: response.message || response.stage,
+            });
+          }
+          return;
+        }
+
+        if (response.status === 'complete' && response.result?.video_path) {
+          unsubscribe();
+          resolve({
+            videoPath: response.result.video_path,
+            videoUrl: response.result.video_url,
+          });
+          return;
+        }
+
+        if (response.status === 'error') {
+          unsubscribe();
+          reject(new Error(response.error || response.message || 'RUN_VIDEO_SYSTEM failed'));
+        }
+      });
+
+      this.send({
+        action: 'RUN_VIDEO_SYSTEM',
+        request_id: requestId,
+        audio_path: params.audioPath,
+        prompt: params.prompt,
+        style: params.style,
+        reactivity: params.reactivity,
+        output_path: params.outputPath,
+      });
+
+      setTimeout(() => {
+        unsubscribe();
+        reject(new Error('RUN_VIDEO_SYSTEM timeout'));
+      }, 240000);
+    });
+  }
+
+  /**
    * Save video via chunked stream then finalize to MP4.
    * Uses SAVE_SCREEN_RECORDING_CHUNK + FINALIZE_RECORDING actions.
    */
