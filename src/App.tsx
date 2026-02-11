@@ -85,7 +85,6 @@ import { MerkleAuditLog } from './action-authority/audit/MerkleAuditLog';
 
 // ===== PHASE 3: HYBRID BRIDGE =====
 import { BridgeTest } from './components/BridgeTest';
-import { DemoFactory } from './modules/demo-factory/DemoFactory';
 
 declare var process: { env: Record<string, string | undefined> };
 declare global {
@@ -3575,8 +3574,6 @@ const App: React.FC = () => {
         notifications={notifications}
         onDismiss={dismissNotification}
       />
-
-      {showLabDebugPanels && <DemoFactory />}
 
       {/* Phase 2: APL ProposalPanel - Intelligence Feed Sidebar */}
       {appState === AppState.READY && aplProposals.length > 0 && (
