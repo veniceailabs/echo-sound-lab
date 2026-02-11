@@ -39,10 +39,11 @@ export class MerkleAuditLog {
   // Deterministic hash helper for browser + Node fallback.
   // This is not a cryptographic primitive in browser mode, but preserves tamper-evident chaining semantics.
   private computeDigest(input: string): string {
+    const bytes = new TextEncoder().encode(input);
     let h1 = 0x811c9dc5;
     let h2 = 0x01000193;
-    for (let i = 0; i < input.length; i++) {
-      const c = input.charCodeAt(i);
+    for (let i = 0; i < bytes.length; i++) {
+      const c = bytes[i] ?? 0;
       h1 ^= c;
       h1 = Math.imul(h1, 0x01000193);
       h2 ^= c;

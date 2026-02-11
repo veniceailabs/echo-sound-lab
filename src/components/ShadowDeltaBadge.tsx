@@ -23,9 +23,19 @@ const ShadowDeltaBadge: React.FC<ShadowDeltaBadgeProps> = ({
 }) => {
   if (!Number.isFinite(delta) || !Number.isFinite(confidence) || !Number.isFinite(quantumScore)) return null;
   const normalizedConfidence = normalizeConfidence(confidence);
+  const rounded = Math.round(delta * 10) / 10;
+  const isActive = intentCoreActive ?? normalizedConfidence > 0.805;
+  if (!isActive && rounded > 0) {
+    return (
+      <div
+        className="bg-slate-800 text-slate-400 px-2 py-1 rounded text-[10px] border border-slate-700 font-bold uppercase tracking-wide cursor-help"
+        title="Quantum Simulation: Uplift detected but confidence below 0.805 threshold. HII remains on the classical baseline."
+      >
+        Q (Inert) +{rounded.toFixed(1)}
+      </div>
+    );
+  }
 
-  const rounded = Math.round(delta);
-  const isActive = intentCoreActive ?? normalizedConfidence >= 0.8;
   const styles = isActive
     ? rounded >= 3
       ? { bg: 'bg-emerald-500/20', text: 'text-emerald-400', label: `IntentCore Active • Δ +${rounded}` }

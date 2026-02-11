@@ -15,6 +15,7 @@ import { ProcessingAction, ProcessingConfig, AudioMetrics, PreservationMode } fr
 import { actionsToConfig } from './processingActionUtils';
 import { audioEngine } from './audioEngine';
 import { mixAnalysisService } from './mixAnalysis';
+import { calculateLoudnessRange } from './dsp/analysisUtils';
 
 export interface ProcessingResult {
   processedBuffer: AudioBuffer;
@@ -39,11 +40,11 @@ export class AudioProcessingPipeline {
   private readonly safetyPeakTargetDb = -1.0;
   private readonly safetyPeakThresholdDb = -0.3;
   private readonly makeupPeakTargetDb = -0.65;
-  private readonly globalHardCapDb = 3.0;
+  private readonly globalHardCapDb = 2.0;
   private readonly preservationBudgets: Record<PreservationMode, number> = {
     preserve: 1.2,
-    balanced: 2.0,
-    competitive: 2.7,
+    balanced: 1.6,
+    competitive: 2.0,
   };
   private originalMetrics: AudioMetrics | null = null;
 
@@ -79,16 +80,22 @@ export class AudioProcessingPipeline {
     if (!this.originalBuffer) throw new Error('No audio loaded');
     const preservationMode = options.preservationMode ?? 'balanced';
     const originalMetrics = this.originalMetrics || mixAnalysisService.analyzeStaticMetrics(this.originalBuffer);
-    const originalDynamicRange = originalMetrics.peak - originalMetrics.rms;
-    const allowedReductionDb = Math.min(this.globalHardCapDb, this.preservationBudgets[preservationMode]);
+    const originalDynamicRange = calculateLoudnessRange(this.originalBuffer);
+    const allowedReductionDb = Math.min(this.preservationBudgets[preservationMode], this.globalHardCapDb);
     const minAllowedDynamicRange = originalDynamicRange - allowedReductionDb;
 
     // Convert ProcessingAction[] to ProcessingConfig
     const config = actionsToConfig(selectedActions);
     const boundedConfig = this.applyPreservationBounds(config, originalDynamicRange, preservationMode);
 
-    // Render processed audio
-    const processedBuffer = await audioEngine.renderProcessedAudio(boundedConfig);
+    // Render processed audio and re-check DR after all dynamics/limiter stages.
+    const enforcement = await this.renderWithHardCeiling(
+      this.originalBuffer,
+      boundedConfig,
+      originalDynamicRange,
+      minAllowedDynamicRange
+    );
+    const processedBuffer = enforcement.buffer;
 
     // Analyze new metrics
     let metrics = mixAnalysisService.analyzeStaticMetrics(processedBuffer);
@@ -125,8 +132,8 @@ export class AudioProcessingPipeline {
       truePeak: metrics.peak,
     };
 
-    const processedDynamicRange = metrics.peak - metrics.rms;
-    const violatesHardCeiling = processedDynamicRange < minAllowedDynamicRange;
+    const processedDynamicRange = calculateLoudnessRange(processedBuffer);
+    const violatesHardCeiling = processedDynamicRange < minAllowedDynamicRange || enforcement.hadViolation;
     if (violatesHardCeiling && this.originalBuffer) {
       // Non-bypassable hard ceiling: reject processing if DR floor is breached.
       this.processedBuffer = this.originalBuffer;
@@ -153,7 +160,9 @@ export class AudioProcessingPipeline {
           hardCapDb: this.globalHardCapDb,
           wasAdjusted: boundedConfig !== config,
           blocked: true,
-          reason: `Dynamic range floor breached (${processedDynamicRange.toFixed(2)}dB < ${minAllowedDynamicRange.toFixed(2)}dB)`,
+          reason: enforcement.hadViolation
+            ? `Dynamic range floor breached after final render (${processedDynamicRange.toFixed(2)}dB < ${minAllowedDynamicRange.toFixed(2)}dB).`
+            : `Dynamic range floor breached (${processedDynamicRange.toFixed(2)}dB < ${minAllowedDynamicRange.toFixed(2)}dB).`,
         },
       };
     }
@@ -172,8 +181,9 @@ export class AudioProcessingPipeline {
         processedDynamicRange,
         minAllowedDynamicRange,
         hardCapDb: this.globalHardCapDb,
-        wasAdjusted: boundedConfig !== config,
+        wasAdjusted: boundedConfig !== config || enforcement.usedRelaxation,
         blocked: false,
+        reason: enforcement.warning,
       },
     };
   }
@@ -233,6 +243,61 @@ export class AudioProcessingPipeline {
     }
 
     return mutated ? next : config;
+  }
+
+  private async renderWithHardCeiling(
+    originalBuffer: AudioBuffer,
+    initialConfig: ProcessingConfig,
+    originalDynamicRange: number,
+    minAllowedDynamicRange: number
+  ): Promise<{ buffer: AudioBuffer; usedRelaxation: boolean; hadViolation: boolean; warning?: string }> {
+    let attemptConfig = initialConfig;
+    let usedRelaxation = false;
+    let warning: string | undefined;
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const rendered = await audioEngine.renderProcessedAudio(attemptConfig);
+      const currentDR = calculateLoudnessRange(rendered);
+      const reduction = originalDynamicRange - currentDR;
+      if (currentDR >= minAllowedDynamicRange && reduction <= this.globalHardCapDb) {
+        return { buffer: rendered, usedRelaxation, hadViolation: false, warning };
+      }
+
+      usedRelaxation = true;
+      warning = `[Preservation] DR violation (${reduction.toFixed(2)}dB). Relaxing dynamics before retry ${attempt + 2}.`;
+      attemptConfig = this.relaxDynamicPressure(attemptConfig, attempt + 1);
+    }
+
+    const finalRendered = await audioEngine.renderProcessedAudio(attemptConfig);
+    return {
+      buffer: finalRendered,
+      usedRelaxation,
+      hadViolation: true,
+      warning,
+    };
+  }
+
+  private relaxDynamicPressure(config: ProcessingConfig, level: number): ProcessingConfig {
+    const softened: ProcessingConfig = { ...config };
+    const compressionRatioCap = Math.max(1.1, 2.2 - level * 0.35);
+    const limiterThresholdFloor = -0.9 + level * 0.2;
+
+    if (softened.compression) {
+      softened.compression = {
+        ...softened.compression,
+        ratio: Math.min(softened.compression.ratio ?? compressionRatioCap, compressionRatioCap),
+        threshold: Math.max(softened.compression.threshold ?? -10, -8 + level),
+      };
+    }
+
+    if (softened.limiter) {
+      softened.limiter = {
+        ...softened.limiter,
+        threshold: Math.max(softened.limiter.threshold ?? -1.0, limiterThresholdFloor),
+      };
+    }
+
+    return softened;
   }
 
   /**

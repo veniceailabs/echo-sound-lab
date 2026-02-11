@@ -167,7 +167,9 @@ const App: React.FC = () => {
   const [preservationMode, setPreservationMode] = useState<PreservationMode>('balanced');
   const [latestEngineVerdict, setLatestEngineVerdict] = useState<'accept' | 'warn' | 'block' | null>(null);
   const [latestEngineVerdictReason, setLatestEngineVerdictReason] = useState<string | null>(null);
+  const [latestEngineVerdictRunId, setLatestEngineVerdictRunId] = useState<number | null>(null);
   const analysisRunIdRef = useRef(0);
+  const activeVerdictRunIdRef = useRef(0);
   const debugTelemetry = typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('debugTelemetry') === '1';
   const [echoActionStatus, setEchoActionStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -334,9 +336,23 @@ const App: React.FC = () => {
     setNotifications(prev => [...prev, { id, message, type, duration }]);
   }, []);
 
-  const syncEngineVerdict = useCallback((verdict: 'accept' | 'warn' | 'block', reason?: string) => {
+  const beginVerdictRun = useCallback(() => {
+    activeVerdictRunIdRef.current += 1;
+    const runId = activeVerdictRunIdRef.current;
+    setLatestEngineVerdictRunId(runId);
+    setLatestEngineVerdict(null);
+    setLatestEngineVerdictReason(null);
+    return runId;
+  }, []);
+
+  const syncEngineVerdict = useCallback((verdict: 'accept' | 'warn' | 'block', reason?: string, runId?: number) => {
+    const effectiveRunId = runId ?? activeVerdictRunIdRef.current;
+    if (effectiveRunId !== activeVerdictRunIdRef.current) {
+      return;
+    }
     setLatestEngineVerdict(verdict);
     setLatestEngineVerdictReason(reason ?? null);
+    setLatestEngineVerdictRunId(effectiveRunId);
     if (verdict === 'block') {
       setEchoReportStatus('error');
     }
@@ -1131,6 +1147,7 @@ const App: React.FC = () => {
   // Remove a single applied suggestion and re-render
   const handleRemoveAppliedSuggestion = async (suggestionId: string): Promise<void> => {
     if (!analysisResult || !originalMetrics || !originalBuffer) return;
+    const verdictRunId = beginVerdictRun();
 
     await runWithSteps([
       'Removing Processor',
@@ -1166,7 +1183,7 @@ const App: React.FC = () => {
         const newMetrics = result.metrics;
 
         if (result.preservation.blocked) {
-          syncEngineVerdict('block', result.preservation.reason);
+          syncEngineVerdict('block', result.preservation.reason, verdictRunId);
           setApplySuggestionsError(result.preservation.reason || 'Processing blocked by Dynamic Preservation hard ceiling.');
           showNotification('Processing blocked by Dynamic Preservation hard ceiling.', 'warning', 5000);
           return;
@@ -1183,7 +1200,7 @@ const App: React.FC = () => {
         // Regenerate Echo Report with updated audio
         handleGenerateEchoReport(newMetrics);
 
-        syncEngineVerdict('accept');
+        syncEngineVerdict('accept', undefined, verdictRunId);
         showNotification(`Removed processor. Re-rendered audio.`, 'success', 2000);
 
       } catch (error) {
@@ -1208,6 +1225,7 @@ const App: React.FC = () => {
     }
 
     setApplySuggestionsError(null);
+    const verdictRunId = beginVerdictRun();
 
     let applySucceeded = false;
     let qualityBlocked = false;
@@ -1238,7 +1256,7 @@ const App: React.FC = () => {
           const warningMsg = result.preservation.reason || 'Processing blocked by Dynamic Preservation hard ceiling.';
           setApplySuggestionsError(warningMsg);
           showNotification(warningMsg, 'warning', 5000);
-          syncEngineVerdict('block', warningMsg);
+          syncEngineVerdict('block', warningMsg, verdictRunId);
           qualityBlocked = true;
           return;
         }
@@ -1258,18 +1276,18 @@ const App: React.FC = () => {
             setApplySuggestionsError(warningMsg);
             showNotification(warningMsg, 'warning', 5000);
             console.warn('[QUALITY] Processing blocked - quality verdict:', qualityVerdict);
-            syncEngineVerdict('block', warningMsg);
+            syncEngineVerdict('block', warningMsg, verdictRunId);
             qualityBlocked = true;
             return;
           }
 
           if (qualityVerdict.uiVerdict === 'warn') {
             const warningMsg = qualityVerdict.issues[0] || 'Processing completed with warnings.';
-            syncEngineVerdict('warn', warningMsg);
+            syncEngineVerdict('warn', warningMsg, verdictRunId);
             showNotification(`Applied with warning: ${warningMsg}`, 'warning', 3500);
             qualityWarned = true;
           } else {
-            syncEngineVerdict('accept');
+            syncEngineVerdict('accept', undefined, verdictRunId);
           }
         }
 
@@ -1301,7 +1319,7 @@ const App: React.FC = () => {
         console.error('Failed to apply suggestions:', error);
         const errorMsg = 'Failed to apply suggestions: ' + (error as Error).message;
         setApplySuggestionsError(errorMsg);
-        syncEngineVerdict('block', errorMsg);
+        syncEngineVerdict('block', errorMsg, verdictRunId);
         showNotification(errorMsg, 'error', 3000);
       }
     });
@@ -1321,6 +1339,7 @@ const App: React.FC = () => {
     if (!originalBuffer || !originalMetrics || isAutoMixing) return;
 
     setIsAutoMixing(true);
+    const verdictRunId = beginVerdictRun();
     setAutoMixMode(mode);
     setAutoMixError(null);
     autoMixAbortRef.current = false;
@@ -1423,7 +1442,7 @@ const App: React.FC = () => {
         if (result.preservation.blocked) {
           const warningMsg = result.preservation.reason || 'Auto Mix blocked by Dynamic Preservation hard ceiling.';
           showNotification(warningMsg, 'warning', 5000);
-          syncEngineVerdict('block', warningMsg);
+          syncEngineVerdict('block', warningMsg, verdictRunId);
           accumulatedActions.splice(-newActions.length);
           break;
         }
@@ -1432,14 +1451,14 @@ const App: React.FC = () => {
           const warningMsg = `Auto Mix halted: ${qualityVerdict.issues.join(', ')}`;
           showNotification(warningMsg, 'warning', 5000);
           console.warn('[AutoMix] Processing blocked - quality verdict:', qualityVerdict);
-          syncEngineVerdict('block', warningMsg);
+          syncEngineVerdict('block', warningMsg, verdictRunId);
           accumulatedActions.splice(-newActions.length);
           break;
         }
         if (qualityVerdict.uiVerdict === 'warn') {
-          syncEngineVerdict('warn', qualityVerdict.issues[0] || 'Auto Mix completed with warnings.');
+          syncEngineVerdict('warn', qualityVerdict.issues[0] || 'Auto Mix completed with warnings.', verdictRunId);
         } else {
-          syncEngineVerdict('accept');
+          syncEngineVerdict('accept', undefined, verdictRunId);
         }
 
         workingBuffer = result.processedBuffer;
@@ -1488,7 +1507,7 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('[AutoMix] Failed:', error);
       setAutoMixError((error as Error).message);
-      syncEngineVerdict('block', (error as Error).message);
+      syncEngineVerdict('block', (error as Error).message, verdictRunId);
       showNotification('Auto Mix failed: ' + (error as Error).message, 'error', 3000);
     } finally {
       setIsAutoMixing(false);
@@ -1571,6 +1590,7 @@ const App: React.FC = () => {
     }
     setEchoActionStatus('idle');
     setEchoActionError(null);
+    const verdictRunId = beginVerdictRun();
     let success = false;
 
     await runWithSteps([
@@ -1681,7 +1701,7 @@ const App: React.FC = () => {
         // Pass newMetrics directly to avoid React state timing issues
         handleGenerateEchoReport(newMetrics);
 
-        syncEngineVerdict('accept');
+        syncEngineVerdict('accept', undefined, verdictRunId);
         showNotification('Applied Successfully - Score Updated!', 'success', 2000);
         setEchoActionStatus('idle'); // Reset status immediately
         success = true;
@@ -1703,6 +1723,7 @@ const App: React.FC = () => {
       handleClearSnapshotAB();
     }
     setIsCommitting(true);
+    const verdictRunId = beginVerdictRun();
     let resultMetrics: AudioMetrics | null = null;
 
     await runWithSteps([
@@ -1729,7 +1750,7 @@ const App: React.FC = () => {
 
             setProcessedMetrics(newMetrics);
             setHasAppliedChanges(true); // Mark changes applied on commit
-            syncEngineVerdict('accept');
+            syncEngineVerdict('accept', undefined, verdictRunId);
 
             // Persist EQ settings to localStorage
             saveEQSettings(eqSettings);

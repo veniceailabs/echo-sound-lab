@@ -586,6 +586,7 @@ export interface EchoReport {
     // IntentCore authoritative score (HII) according to confidence gate.
     humanIntentIndex?: number;
     intentCoreActive?: boolean;
+    analysisId?: string;
     score?: {
         total: number;
         recordingQuality: number;

@@ -216,6 +216,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   const isFriendly = engineMode === 'FRIENDLY';
   const showFullStudio = !isFriendly && !!onFullStudioAutoMix;
   const autoMixLabel = autoMixMode === 'FULL_STUDIO' ? 'Full Studio Auto Mix' : 'Auto Mix';
+  const isAnalyzerCalculating = analysisResult.genrePrediction === 'Analyzing...' && analysisResult.suggestions.length === 0;
 
   return (
     <div className="bg-gradient-to-br from-slate-900/90 to-slate-800/90 backdrop-blur-xl rounded-3xl p-8 shadow-[6px_6px_20px_rgba(0,0,0,0.4),-2px_-2px_10px_rgba(255,255,255,0.02)] border border-slate-700/30 mb-6">
@@ -516,11 +517,11 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               <div className="mt-6">
                 <button
                   onClick={onApplySuggestions}
-                  disabled={isProcessing || isAutoMixing || selectedSuggestionCount === 0}
+                  disabled={isProcessing || isAutoMixing || isAnalyzerCalculating || selectedSuggestionCount === 0}
                   className={`relative overflow-hidden w-full font-bold py-4 rounded-xl transition-all duration-300 ease-out flex items-center justify-center gap-2 text-sm uppercase tracking-wider shadow-lg ${
                     isProcessing
                       ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-[0_4px_20px_rgba(251,146,60,0.3)]'
-                      : isAutoMixing || selectedSuggestionCount === 0
+                      : isAutoMixing || isAnalyzerCalculating || selectedSuggestionCount === 0
                         ? 'bg-slate-700/50 text-slate-500 cursor-not-allowed'
                         : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 hover:shadow-[0_8px_40px_rgba(251,146,60,0.5)] active:scale-[0.98] backdrop-blur-xl border border-orange-400/20 before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:-translate-x-full hover:before:translate-x-full before:transition-transform before:duration-700 before:ease-out'
                     }`}
@@ -530,6 +531,11 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                       <>
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         Applying Changes...
+                      </>
+                    ) : isAnalyzerCalculating ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-slate-500/40 border-t-slate-400 rounded-full animate-spin" />
+                        Calculating...
                       </>
                     ) : (
                       `Apply ${selectedSuggestionCount > 0 ? `${selectedSuggestionCount} Selected Fix${selectedSuggestionCount > 1 ? 'es' : ''}` : 'Selected Fixes'}`

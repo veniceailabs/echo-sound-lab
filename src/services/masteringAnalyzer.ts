@@ -19,7 +19,7 @@ import { QuantumKernel } from './dsp/QuantumKernel';
 import { getQCLSimulator } from '../echo-sound-lab/apl/qcl-simulator-adapter';
 
 const QUANTUM_SHADOW_MODE_ENABLED = true;
-const INTENTCORE_CONFIDENCE_THRESHOLD = 0.8;
+const INTENTCORE_CONFIDENCE_THRESHOLD = 0.805;
 const normalizeConfidence = (value: number) => {
   if (!Number.isFinite(value)) return 0;
   if (value > 1) return Math.max(0, Math.min(1, value / 100));
@@ -71,19 +71,26 @@ export function analyzeAudioBuffer(buffer: AudioBuffer, metrics: AudioMetrics): 
 
   // Run standard analysis (which now has access to advanced metrics)
   const report = analyzeMastering(metrics);
+  report.analysisId = `analysis-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
   if (QUANTUM_SHADOW_MODE_ENABLED) {
     const shadow = evaluateQuantumShadowScore(buffer, metrics, report.score?.total ?? 0);
-    report.quantumScore = shadow.quantumScore;
+    const classicalScore = Math.round(report.score?.total ?? 0);
+    const safeQuantum = Number.isFinite(shadow.quantumScore) ? shadow.quantumScore : classicalScore;
+    const normalizedConfidence = Math.round(normalizeConfidence(shadow.quantumConfidence) * 1000) / 1000;
+    report.quantumScore = safeQuantum;
     // Contract lock: Δ = Quantum − Classical
-    report.shadowDelta = shadow.quantumScore - Math.round(report.score?.total ?? 0);
-    report.quantumConfidence = normalizeConfidence(shadow.quantumConfidence);
-    report.intentCoreActive = report.quantumConfidence >= INTENTCORE_CONFIDENCE_THRESHOLD;
+    report.shadowDelta = safeQuantum - classicalScore;
+    report.quantumConfidence = normalizedConfidence;
+    report.intentCoreActive = (
+      normalizedConfidence > INTENTCORE_CONFIDENCE_THRESHOLD
+      && Math.abs((report.shadowDelta ?? 0)) > 0.1
+    );
     report.humanIntentIndex = report.intentCoreActive
-      ? report.quantumScore
-      : Math.round(report.score?.total ?? 0);
+      ? safeQuantum
+      : classicalScore;
     console.log(
-      `[Quantum Shadow] Classical Score: ${Math.round(report.score?.total ?? 0)} | Quantum Entanglement Score: ${shadow.quantumScore} | meanCoherence=${shadow.meanCoherence.toFixed(3)} | stereoEntanglement=${shadow.stereoEntanglement.toFixed(3)} | QCL=${shadow.qclEnabled ? 'ON' : 'OFF'}`
+      `[Quantum Shadow] Classical Score: ${classicalScore} | Quantum Entanglement Score: ${safeQuantum} | meanCoherence=${shadow.meanCoherence.toFixed(3)} | stereoEntanglement=${shadow.stereoEntanglement.toFixed(3)} | QCL=${shadow.qclEnabled ? 'ON' : 'OFF'}`
     );
   } else {
     report.intentCoreActive = false;
