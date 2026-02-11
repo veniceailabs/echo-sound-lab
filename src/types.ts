@@ -719,6 +719,34 @@ export interface BatchProcessingJob {
   }>;
 }
 
+export interface CohesionTrackReport {
+  id: string;
+  trackName: string;
+  lufs: number;
+  tonalCentroid: [number, number, number];
+  harmonicWeight: number;
+  stereoWidth: number;
+  transientDensity: number;
+  humanIntentIndex?: number;
+}
+
+export interface AlbumCohesionProfile {
+  id: string;
+  name: string;
+  targetLoudness: number;      // Average LUFS across selected tracks
+  tonalCentroid: [number, number, number]; // Low, Mid, High
+  harmonicWeight: number;      // Target saturation baseline
+  stereoAnchor: number;        // Width anchor
+  transientTarget: number;     // Punch anchor
+  tracks: string[];            // Track IDs in this batch
+}
+
+export interface BatchState {
+  isBatching: boolean;
+  profile: AlbumCohesionProfile | null;
+  progress: Record<string, 'queued' | 'analyzing' | 'applying' | 'done' | 'failed'>;
+}
+
 export interface GenerateEchoReportCardOptions {
   trackName: string;
   report?: EchoReport;

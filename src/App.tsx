@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { AppState, AudioMetrics, ProcessingConfig, Suggestion, EchoReport, RevisionEntry, ReferenceTrack, MixSignature, GeneratedSong, Stem, EQSettings, DynamicEQConfig, EngineMode, ProcessingAction, SSCScan, PreservationMode } from './types';
+import { AppState, AudioMetrics, ProcessingConfig, Suggestion, EchoReport, RevisionEntry, ReferenceTrack, MixSignature, GeneratedSong, Stem, EQSettings, DynamicEQConfig, EngineMode, ProcessingAction, SSCScan, PreservationMode, CohesionTrackReport, BatchState } from './types';
 import { audioEngine } from './services/audioEngine';
 import { audioPerceptionLayer } from './services/audioPerceptionLayer';
 import { mixAnalysisService } from './services/mixAnalysis';
@@ -7,6 +7,8 @@ import { listeningPassService } from './services/listeningPassService';
 import { reasonAboutListeningPass } from './services/geminiService';
 import { calculateLoudnessRange } from './services/dsp/analysisUtils';
 import { generateStressStem } from './services/debug/stressTestEngine';
+import { CohesionEngine, deriveCohesionTrackReportFromMetrics } from './services/cohesionEngine';
+import { batchMasterService } from './services/batchMasterService';
 
 // NEW: Refactored pipeline
 import { AudioSessionProvider, useAudioSession } from './context/AudioSessionContext';
@@ -172,6 +174,9 @@ const App: React.FC = () => {
     intentCoreActive?: boolean;
   } | null>(null);
   const [preservationMode, setPreservationMode] = useState<PreservationMode>('balanced');
+  const [addNextUploadToAlbum, setAddNextUploadToAlbum] = useState(false);
+  const [cohesionTracks, setCohesionTracks] = useState<CohesionTrackReport[]>([]);
+  const [batchState, setBatchState] = useState<BatchState>(() => batchMasterService.createInitialState(null));
   const [latestEngineVerdict, setLatestEngineVerdict] = useState<'accept' | 'warn' | 'block' | null>(null);
   const [latestEngineVerdictReason, setLatestEngineVerdictReason] = useState<string | null>(null);
   const [latestEngineVerdictRunId, setLatestEngineVerdictRunId] = useState<number | null>(null);
@@ -919,6 +924,55 @@ const App: React.FC = () => {
   // NOTE: APL proposals are now loaded in handleFileUpload using real spectral analysis
   // Mock proposal fallback is still used if analysis fails
 
+  const updateAlbumCohesion = useCallback((tracks: CohesionTrackReport[]) => {
+    if (tracks.length < 2) {
+      setBatchState(prev => ({
+        ...prev,
+        profile: null,
+        isBatching: false,
+      }));
+      return;
+    }
+
+    try {
+      const profile = CohesionEngine.generateProfile(tracks, { name: 'Current Album DNA' });
+      setBatchState(prev => ({
+        ...prev,
+        profile,
+      }));
+    } catch (error) {
+      console.warn('[Cohesion] Failed to generate profile:', error);
+    }
+  }, []);
+
+  const registerTrackForAlbum = useCallback((nextTrack: CohesionTrackReport) => {
+    setCohesionTracks(prev => {
+      const withoutDuplicate = prev.filter(track => track.trackName !== nextTrack.trackName);
+      const next = [...withoutDuplicate, nextTrack];
+      updateAlbumCohesion(next);
+      return next;
+    });
+  }, [updateAlbumCohesion]);
+
+  const handleHarmonizeAlbum = useCallback(() => {
+    if (!batchState.profile || cohesionTracks.length < 2) {
+      showNotification('Add at least 2 tracks to build an Album DNA profile.', 'info', 2500);
+      return;
+    }
+
+    const plan = batchMasterService.buildHarmonizePlan(cohesionTracks, batchState.profile, preservationMode);
+    setBatchState(prev => ({
+      ...prev,
+      isBatching: false,
+      progress: plan.directives.reduce<Record<string, 'queued' | 'analyzing' | 'applying' | 'done' | 'failed'>>((acc, directive) => {
+        acc[directive.trackId] = 'queued';
+        return acc;
+      }, {}),
+    }));
+    showNotification(`Harmonize plan ready for ${plan.directives.length} track(s).`, 'success', 2800);
+    console.log('[Cohesion] Harmonize plan generated:', plan);
+  }, [batchState.profile, cohesionTracks, preservationMode, showNotification]);
+
   // File upload handler
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1047,6 +1101,16 @@ const App: React.FC = () => {
       setEqSettings(defaultEqSettings);
       setDynamicEq(defaultDynamicEq);
 
+      if (addNextUploadToAlbum) {
+        const trackReport = deriveCohesionTrackReportFromMetrics(
+          `track-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          file.name.replace(/\.[^/.]+$/, ''),
+          metrics,
+          shadowTelemetry?.humanIntentIndex
+        );
+        registerTrackForAlbum(trackReport);
+      }
+
       // Reset analysis state on new file upload
       setListeningPassData(null);
       setLLMGuidance(null);
@@ -1093,6 +1157,7 @@ const App: React.FC = () => {
 
       // DON'T auto-load AI recommendations - let user request them manually
       // This prevents timeout in Google AI Studio environment
+      setAddNextUploadToAlbum(false);
     });
   };
 
@@ -2383,6 +2448,45 @@ const App: React.FC = () => {
           intentCoreActive: echoReport.intentCoreActive
         }
       : null);
+  const normalizedCurrentTrackName = currentFileName ? currentFileName.replace(/\.[^/.]+$/, '') : '';
+  const currentTrackMatchScore = (
+    batchState.profile && originalMetrics
+      ? CohesionEngine.calculateTrackVibeMatch(
+          deriveCohesionTrackReportFromMetrics(
+            normalizedCurrentTrackName || `current-${Date.now()}`,
+            normalizedCurrentTrackName || 'Current Track',
+            originalMetrics,
+            displayTelemetry?.humanIntentIndex
+          ),
+          batchState.profile
+        )
+      : null
+  );
+  const albumAverageMatch = (
+    batchState.profile && cohesionTracks.length > 0
+      ? Math.round(
+          cohesionTracks.reduce((sum, track) => (
+            sum + CohesionEngine.calculateTrackVibeMatch(track, batchState.profile!)
+          ), 0) / cohesionTracks.length
+        )
+      : null
+  );
+
+  useEffect(() => {
+    if (!normalizedCurrentTrackName || typeof displayTelemetry?.humanIntentIndex !== 'number') return;
+    setCohesionTracks(prev => {
+      let changed = false;
+      const next = prev.map(track => {
+        if (track.trackName !== normalizedCurrentTrackName) return track;
+        if (track.humanIntentIndex === displayTelemetry.humanIntentIndex) return track;
+        changed = true;
+        return { ...track, humanIntentIndex: displayTelemetry.humanIntentIndex };
+      });
+      if (!changed) return prev;
+      updateAlbumCohesion(next);
+      return next;
+    });
+  }, [displayTelemetry?.humanIntentIndex, normalizedCurrentTrackName, updateAlbumCohesion]);
 
   return (
     <CapabilityProvider
@@ -2704,6 +2808,21 @@ const App: React.FC = () => {
           <input type="file" onChange={handleFileUpload} className="hidden" accept="audio/*" />
         </label>
 
+        <div className="mt-5 flex items-center justify-center">
+          <button
+            type="button"
+            onClick={() => setAddNextUploadToAlbum((prev) => !prev)}
+            className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.14em] transition-colors ${
+              addNextUploadToAlbum
+                ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-300'
+                : 'border-white/15 bg-white/5 text-slate-400 hover:border-orange-400/40 hover:text-orange-300'
+            }`}
+          >
+            <span className={`h-2.5 w-2.5 rounded-full ${addNextUploadToAlbum ? 'bg-emerald-300' : 'bg-slate-500'}`} />
+            Add This Upload To Album
+          </button>
+        </div>
+
         <div className="mt-8 flex justify-center">
           <p className="text-xs text-slate-500 tracking-wide">
             Powered by IntentCore™
@@ -2866,6 +2985,64 @@ const App: React.FC = () => {
                 <div className="text-xs text-slate-500 uppercase font-bold mb-1">Spectral Balance</div>
                 <div className="text-lg font-mono font-bold text-slate-200">Balanced</div>
               </div>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden p-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-orange-300">Album Dashboard</p>
+                <h3 className="mt-1 text-lg font-semibold text-slate-100">Intent-Measured Cohesion</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  Build Album DNA by toggling "Add This Upload To Album" before each upload.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleHarmonizeAlbum}
+                disabled={!batchState.profile || cohesionTracks.length < 2}
+                className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:border-white/15 disabled:bg-white/5 disabled:text-slate-500"
+              >
+                Harmonize
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Tracks In Album</p>
+                <p className="mt-2 text-2xl font-bold text-slate-100">{cohesionTracks.length}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Vibe Match (Current)</p>
+                <p className="mt-2 text-2xl font-bold text-emerald-300">{currentTrackMatchScore ?? '--'}{typeof currentTrackMatchScore === 'number' ? '%' : ''}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Vibe Match (Album)</p>
+                <p className="mt-2 text-2xl font-bold text-orange-300">{albumAverageMatch ?? '--'}{typeof albumAverageMatch === 'number' ? '%' : ''}</p>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <div className="mb-2 flex items-center justify-between text-xs uppercase tracking-[0.14em] text-slate-500">
+                <span>Weight</span>
+                <span>{batchState.profile ? Math.round(batchState.profile.harmonicWeight * 100) : 65}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={batchState.profile ? Math.round(batchState.profile.harmonicWeight * 100) : 65}
+                onChange={(event) => {
+                  const value = Number(event.target.value);
+                  setBatchState(prev => ({
+                    ...prev,
+                    profile: prev.profile
+                      ? { ...prev.profile, harmonicWeight: Math.max(0, Math.min(1, value / 100)) }
+                      : prev.profile,
+                  }));
+                }}
+                className="w-full accent-orange-400"
+              />
             </div>
           </div>
 
