@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AnalysisResult, AudioMetrics, Suggestion, MixReadiness, ReferenceTrack, PreservationMode } from '../types';
 import ShadowDeltaBadge from './ShadowDeltaBadge';
 
@@ -117,6 +117,7 @@ interface AnalysisPanelProps {
   onClearReference?: () => void;
   isLoadingReference?: boolean;
   onApplySuggestions: () => Promise<boolean>;
+  onImproveMyMix?: () => Promise<void>;
   onToggleSuggestion: (id: string) => void;
   appliedSuggestionIds: string[];
   isProcessing: boolean;
@@ -184,6 +185,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   onClearReference,
   isLoadingReference,
   onApplySuggestions,
+  onImproveMyMix,
   onToggleSuggestion,
   appliedSuggestionIds,
   isProcessing,
@@ -213,13 +215,49 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   debugTelemetry
 }) => {
   if (!analysisResult) return null;
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [isImprovingMix, setIsImprovingMix] = useState(false);
   const isFriendly = engineMode === 'FRIENDLY';
   const showFullStudio = !isFriendly && !!onFullStudioAutoMix;
   const autoMixLabel = autoMixMode === 'FULL_STUDIO' ? 'Full Studio Auto Mix' : 'Auto Mix';
   const isAnalyzerCalculating = analysisResult.genrePrediction === 'Analyzing...' && analysisResult.suggestions.length === 0;
+  const handleImproveMyMixClick = async () => {
+    if (!onImproveMyMix || isImprovingMix || isProcessing) return;
+    setIsImprovingMix(true);
+    try {
+      await onImproveMyMix();
+    } finally {
+      setIsImprovingMix(false);
+    }
+  };
 
   return (
     <div className="bg-gradient-to-br from-slate-900/90 to-slate-800/90 backdrop-blur-xl rounded-3xl p-8 shadow-[6px_6px_20px_rgba(0,0,0,0.4),-2px_-2px_10px_rgba(255,255,255,0.02)] border border-slate-700/30 mb-6">
+      <div className="mb-6 rounded-2xl border border-slate-700/60 bg-gradient-to-b from-slate-800 to-slate-900 p-8 text-center shadow-xl">
+        <h2 className="text-2xl font-bold text-white">Ready to finish your track?</h2>
+        <p className="mt-2 text-slate-400">Our AI will polish your sound while keeping your drums punchy.</p>
+        <button
+          onClick={handleImproveMyMixClick}
+          disabled={!onImproveMyMix || isImprovingMix || isProcessing}
+          className="mt-6 rounded-full bg-emerald-500 px-10 py-4 font-bold text-black transition-all hover:scale-105 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+        >
+          {isImprovingMix || isProcessing ? '✨ Working Magic...' : '✨ Improve My Mix'}
+        </button>
+      </div>
+
+      <div className="mb-5 border-t border-slate-700/60 pt-4">
+        <button
+          type="button"
+          onClick={() => setIsAdvancedOpen((prev) => !prev)}
+          className="flex items-center text-xs font-medium uppercase tracking-widest text-slate-500 transition-colors hover:text-slate-300"
+        >
+          <span className={`mr-1 inline-block transition-transform ${isAdvancedOpen ? 'rotate-90' : ''}`}>▶</span>
+          Advanced Mastering Controls
+        </button>
+      </div>
+
+      {isAdvancedOpen && (
+      <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
       {/* AI Recommendations - Always visible for management and removal */}
       <div className="mb-8 border-b border-slate-700/50 pb-8">
         <div className="flex items-center gap-3 mb-6 justify-between">
@@ -655,6 +693,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             </div>
           </div>
         )}
+      </div>
+      )}
       </div>
       )}
     </div>

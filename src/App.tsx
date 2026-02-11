@@ -1097,8 +1097,10 @@ const App: React.FC = () => {
   };
 
   // Request AI Analysis manually
-  const handleRequestAIAnalysis = async () => {
-    if (!analysisResult || !originalMetrics || !currentFileName) return;
+  const handleRequestAIAnalysis = async (
+    options: { autoSelectAll?: boolean } = {}
+  ): Promise<ProcessingAction[]> => {
+    if (!analysisResult || !originalMetrics || !currentFileName) return [];
 
     const analysisRunId = ++analysisRunIdRef.current;
     setShadowTelemetry(null);
@@ -1124,7 +1126,7 @@ const App: React.FC = () => {
         try {
           const advancedReport = analyzeAudioBuffer(originalBuffer, originalMetrics);
           if (analysisRunId !== analysisRunIdRef.current) {
-            return;
+            return [];
           }
           console.log('[ANALYSIS] Advanced report generated:', {
             actionCount: advancedReport.recommended_actions.length,
@@ -1146,7 +1148,10 @@ const App: React.FC = () => {
       }
 
       // Generate actions from enriched metrics
-      const actions = generateProcessingActions(originalMetrics);
+      const generatedActions = generateProcessingActions(originalMetrics);
+      const actions = options.autoSelectAll
+        ? generatedActions.map(action => ({ ...action, isSelected: true }))
+        : generatedActions;
 
       // Genre info from analysis
       const genre = 'Professional';
@@ -1160,6 +1165,7 @@ const App: React.FC = () => {
         actions, // NEW: Store actions for pipeline use
         genrePrediction: genre
       }));
+      return actions;
     } catch (error) {
       console.error('AI recommendations failed:', error);
       setAnalysisResult((prev: any) => ({
@@ -1168,6 +1174,7 @@ const App: React.FC = () => {
         suggestions: [],
         actions: []
       }));
+      return [];
     }
   };
 
@@ -1307,13 +1314,15 @@ const App: React.FC = () => {
   };
 
   // Apply selected AI recommendations
-  const handleApplySuggestions = async (): Promise<boolean> => {
-    if (!analysisResult || !originalMetrics) return false;
+  const handleApplySuggestions = async (selectedActionsOverride?: ProcessingAction[]): Promise<boolean> => {
+    if (!originalMetrics) return false;
 
     // NEW: Get selected actions from the actions array (prioritize, fallback to suggestions)
-    const selectedActions = Array.isArray(analysisResult.actions)
-      ? analysisResult.actions.filter((a: ProcessingAction) => a?.isSelected)
-      : [];
+    const selectedActions = Array.isArray(selectedActionsOverride)
+      ? selectedActionsOverride
+      : (Array.isArray(analysisResult?.actions)
+        ? analysisResult.actions.filter((a: ProcessingAction) => a?.isSelected)
+        : []);
 
     if (selectedActions.length === 0) {
       setApplySuggestionsError('Please select at least one suggestion');
@@ -1429,6 +1438,43 @@ const App: React.FC = () => {
   const handleCancelAutoMix = () => {
     autoMixAbortRef.current = true;
     setAutoMixProgress(prev => prev ? { ...prev, stage: 'Stopping' } : prev);
+  };
+
+  const handleImproveMyMix = async (): Promise<void> => {
+    if (!originalBuffer || !originalMetrics) return;
+
+    let selectedActions: ProcessingAction[] = [];
+    const existingActions = Array.isArray(analysisResult?.actions)
+      ? analysisResult.actions
+      : [];
+
+    if (existingActions.length === 0 || analysisResult?.genrePrediction === 'Ready for Analysis') {
+      selectedActions = await handleRequestAIAnalysis({ autoSelectAll: true });
+    } else {
+      selectedActions = existingActions
+        .filter((action: ProcessingAction) => action?.isEnabled !== false && !appliedSuggestionIds.includes(action.id))
+        .map((action: ProcessingAction) => ({ ...action, isSelected: true }));
+
+      setAnalysisResult((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          suggestions: (prev.suggestions || []).map((s: Suggestion) =>
+            selectedActions.some(action => action.id === s.id) ? { ...s, isSelected: true } : s
+          ),
+          actions: (prev.actions || []).map((a: ProcessingAction) =>
+            selectedActions.some(action => action.id === a.id) ? { ...a, isSelected: true } : a
+          ),
+        };
+      });
+    }
+
+    if (selectedActions.length === 0) {
+      showNotification('No major issues found. Your mix already sounds strong.', 'info', 2500);
+      return;
+    }
+
+    await handleApplySuggestions(selectedActions);
   };
 
   const runAutoMix = async (mode: 'STANDARD' | 'FULL_STUDIO') => {
@@ -2840,6 +2886,7 @@ const App: React.FC = () => {
               onClearReference={handleClearReference}
               isLoadingReference={isLoadingReference}
               onApplySuggestions={handleApplySuggestions}
+              onImproveMyMix={handleImproveMyMix}
               onToggleSuggestion={handleToggleSuggestion}
               appliedSuggestionIds={appliedSuggestionIds}
               isProcessing={showProcessingOverlay}
