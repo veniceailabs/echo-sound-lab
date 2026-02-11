@@ -184,6 +184,13 @@ const App: React.FC = () => {
   const activeVerdictRunIdRef = useRef(0);
   const debugTelemetry = typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('debugTelemetry') === '1';
+  const showLabDebugPanels = (
+    typeof window !== 'undefined'
+      && (
+        new URLSearchParams(window.location.search).get('debugPanels') === '1'
+        || new URLSearchParams(window.location.search).get('demoFactory') === '1'
+      )
+  );
   const [echoActionStatus, setEchoActionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [echoActionError, setEchoActionError] = useState<string | null>(null);
 
@@ -2630,10 +2637,12 @@ const App: React.FC = () => {
       {/* Virtual Cursor (Ghost System) - Always rendered, z-9999 */}
       <VirtualCursor />
 
-      {/* ===== PHASE 3: HYBRID BRIDGE TEST ===== */}
-      <div className="fixed bottom-4 right-4 z-40 max-w-sm">
-        <BridgeTest />
-      </div>
+      {/* ===== PHASE 3: HYBRID BRIDGE TEST (debug only) ===== */}
+      {showLabDebugPanels && (
+        <div className="fixed bottom-4 right-4 z-40 max-w-sm">
+          <BridgeTest />
+        </div>
+      )}
 
       {/* Second Light OS Background */}
       <div className="fixed inset-0 pointer-events-none">
@@ -3562,7 +3571,7 @@ const App: React.FC = () => {
         onDismiss={dismissNotification}
       />
 
-      <DemoFactory />
+      {showLabDebugPanels && <DemoFactory />}
 
       {/* Phase 2: APL ProposalPanel - Intelligence Feed Sidebar */}
       {appState === AppState.READY && aplProposals.length > 0 && (
