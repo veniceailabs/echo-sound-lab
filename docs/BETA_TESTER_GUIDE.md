@@ -1,46 +1,45 @@
-# Echo Sound Lab Beta Tester Guide (Simple)
+# Echo Sound Lab Beta Tester Guide
 
 Thank you for testing Echo Sound Lab.
 
-Beta opens on **Sunday, February 15, 2026**.
+## App Link
+https://echo-sound-lab.vercel.app
 
-## 1) Open The App
-- URL: `https://echo-sound-lab.vercel.app`
-- Best on: Chrome (desktop), Safari (iPhone), Chrome (Android)
+## Time Needed
+10-15 minutes
 
-## 2) Run One Full Test (5-10 minutes)
+## What To Test
+Please test **all tabs**, with most attention on:
+- **Single Track** (Mixing + Mastering)
+- **Stems** (Mixing + Mastering)
+
+Also test:
+- AI Studio
+- SFS Video Engine
+
+## One Full Loop
 1. Go to **AI Studio**.
-2. Record a short idea (3-10 seconds).
-3. Add lyrics with tags like:
-   - `[Intro]`
-   - `[Verse]`
-   - `[Chorus]`
-4. Pick a style (Trap, Synthwave, Rock, or Ambient).
-5. Click **Build Song Locally**.
-6. In Library, confirm cover art appears.
-7. Click **Open in Single Track**.
-8. In Single Track, click **Improve My Mix**.
-9. Go to **SFS Video Engine**.
-10. Render a short video.
+2. Record a short idea and build a song.
+3. Confirm cover art appears in Library.
+4. Click **Open in Single Track**.
+5. Run **Improve My Mix**.
+6. Go to **Stems** and test balancing/mix workflow.
+7. Go to **SFS Video Engine** and render a short visual.
 
-## 3) What To Report
-Please report only what matters most:
-- Did anything break?
-- Did audio quality get worse anywhere?
-- Was anything confusing?
-- What should change first before public launch?
+## Feedback
+Use the in-app **Feedback** button (bottom-right).
 
-## 4) Send Feedback (Fast)
-- Click the **Feedback** button in the app (bottom-right).
-- Your email app opens with a pre-filled template.
-- Send to: `beta@echosoundlab.com`
+It opens a pre-filled email to:
+**liveconsciouslyllc@gmail.com**
 
-## 5) If Something Fails
-Include these 4 items:
-- What you clicked
+Please include:
 - What happened
 - What you expected
-- Screenshot or short screen recording (if possible)
+- Steps to reproduce
+- Browser/device
 
-## Done
-That is enough for this beta round. Thank you.
+## Priority Feedback
+- Bugs or crashes
+- Audio quality issues
+- Confusing UX moments
+- Top 1-2 changes before launch

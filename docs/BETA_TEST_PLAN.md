@@ -1,39 +1,30 @@
-# Echo Sound Lab Beta Test Plan (Sunday Launch)
+# Echo Sound Lab Beta Test Plan (Simple)
 
-Launch target: **Sunday, February 15, 2026**
+## Launch Link
+https://echo-sound-lab.vercel.app
 
-## A) Pre-Launch Checklist (Internal)
-- [ ] Production URL opens
-- [ ] AI Studio can record and build a song
-- [ ] Cover art appears for generated song
-- [ ] Open in Single Track works
-- [ ] Improve My Mix runs without error
-- [ ] SFS Video Engine renders output
-- [ ] Feedback button opens email to `beta@echosoundlab.com`
+## Tester Goal (10-15 min)
+Test all tabs once, with strongest focus on:
+- **Single Track** mixing/mastering
+- **Stems** mixing/mastering
 
-## B) Tester Scope (Keep It Simple)
-Each tester runs one end-to-end loop only:
-1. Create in AI Studio
-2. Polish in Single Track
-3. Render in SFS Video Engine
-4. Send feedback
+## Required Flow
+1. AI Studio: record + build song
+2. Confirm cover art appears in Library
+3. Open in Single Track: run Improve My Mix
+4. Stems: validate mixing/mastering workflow
+5. SFS Video Engine: render short visual
+6. Submit feedback through in-app button
 
-## C) Success Criteria
-- No blocker bugs in the core loop
-- No severe audio degradation reports
-- Feedback submission path works for all testers
+## Feedback Destination
+**liveconsciouslyllc@gmail.com**
 
-## D) Triage Rules
-- `P0`: Crash, data loss, cannot complete core loop
-- `P1`: Major quality issue, but loop still completes
-- `P2`: UX polish and nice-to-have improvements
+## Priority Triage
+- P0: Crash / cannot complete flow
+- P1: Major audio quality issue
+- P2: UX polish requests
 
-## E) Daily Beta Rhythm
-- Morning: review new feedback emails
-- Midday: classify P0/P1/P2
-- Evening: publish short status note and next fixes
-
-## F) Exit Criteria For Public Launch
-- Core loop stable for 3 consecutive days
-- All P0 fixed
-- P1 list reduced to acceptable launch set
+## Beta Success
+- Testers complete full loop without blockers
+- No unresolved P0
+- Mixing/mastering quality is acceptable in Single Track and Stems

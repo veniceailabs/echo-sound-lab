@@ -1,33 +1,40 @@
-# Beta Invite Email (Ready To Send)
+# Echo Sound Lab Beta Email (Ready To Send)
 
-## Subject
-Echo Sound Lab Beta Opens Sunday (Feb 15) - Quick Invite
+Hello,
 
-## Body
-Hi,
+Echo Sound Lab Beta is officially live, and we'd love your feedback.
 
-Echo Sound Lab beta is ready. We would love your feedback.
+https://echo-sound-lab.vercel.app
 
-Start here:
-- App: https://echo-sound-lab.vercel.app
-- Date: Sunday, February 15, 2026
-- Time needed: 5-10 minutes
+Time needed: **10-15 minutes**
 
-Please do one full loop:
-1. AI Studio: record a short idea and build song
-2. Confirm cover art appears in Library
-3. Open in Single Track and run Improve My Mix
-4. Create a short visual in SFS Video Engine
+Please test all tabs, with extra focus on **Mixing and Mastering** in:
+- **Single Track**
+- **Stems**
 
-When you are done, click the in-app **Feedback** button (bottom-right).
-It opens a pre-filled email to: beta@echosoundlab.com
+Please complete one full loop:
+1. In **AI Studio**, record a short idea and build a song.
+2. Confirm the cover art appears in your Library.
+3. Open the track in **Single Track** and run **Improve My Mix**.
+4. Create a short visual in the **SFS Video Engine**.
+
+When finished, click the in-app **Feedback** button (bottom-right).
+
+It opens a pre-filled email to:
+**liveconsciouslyllc@gmail.com**
 
 What we care about most:
 - Bugs or crashes
 - Audio quality issues
-- Confusing UX
-- Top 1-2 changes you want before launch
+- Confusing UX moments
+- The top 1-2 changes you'd want before launch
 
 Thank you for helping shape this release.
 
 - Echo Sound Lab Team
+
+Warm regards,
+
+Andra V. Kenner Jr.
+liveconsciouslyllc@gmail.com
+https://linktr.ee/itsjustdra

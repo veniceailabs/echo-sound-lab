@@ -4,7 +4,7 @@ import { FeedbackPayload, RevisionLog, RevisionEntry, TestChecklistState } from 
 
 export const FeedbackButton: React.FC<{ onClick?: () => void }> = ({ onClick }) => {
   const handleClick = () => {
-    const email = 'beta@echosoundlab.com';
+    const email = 'liveconsciouslyllc@gmail.com';
     const subject = encodeURIComponent('Echo Sound Lab Beta Feedback');
     const body = encodeURIComponent(
 `Type: Bug | Suggestion | UX | Audio Quality | Other
