@@ -1,0 +1,253 @@
+const fs = require('fs');
+const path = require('path');
+const puppeteer = require('puppeteer');
+
+const OUTPUT_HTML = path.resolve(__dirname, '..', 'docs', 'Echo Sound Lab - Operator Guide (Dark Mode).html');
+const OUTPUT_PDF = path.resolve(__dirname, '..', 'docs', 'Echo Sound Lab - Operator Guide (Dark Mode).pdf');
+
+const html = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Echo Sound Lab Operator Guide</title>
+    <style>
+      :root {
+        --bg: #070a12;
+        --bg-soft: #0d1322;
+        --card: #111a2d;
+        --line: rgba(255,255,255,0.13);
+        --text: #e8edf8;
+        --muted: #a4b0c6;
+        --accent: #ff9a42;
+        --accent-soft: rgba(255,154,66,0.2);
+        --ok: #63dca3;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "SF Pro Display", "Inter", "Avenir Next", "Segoe UI", sans-serif;
+        background:
+          radial-gradient(1200px 900px at -10% -10%, rgba(255,154,66,0.12), transparent 60%),
+          radial-gradient(900px 700px at 110% 10%, rgba(87,145,255,0.14), transparent 58%),
+          var(--bg);
+        color: var(--text);
+        line-height: 1.55;
+      }
+      .page {
+        max-width: 940px;
+        margin: 0 auto;
+        padding: 52px 42px 64px;
+      }
+      .hero {
+        border: 1px solid var(--line);
+        background: linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+        border-radius: 24px;
+        padding: 28px 30px;
+        box-shadow: 0 24px 70px rgba(0,0,0,0.45);
+      }
+      .eyebrow {
+        color: var(--accent);
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        font-weight: 700;
+        font-size: 11px;
+      }
+      h1 {
+        margin: 12px 0 4px;
+        font-size: 38px;
+        line-height: 1.1;
+        letter-spacing: -0.03em;
+      }
+      .sub {
+        margin: 0;
+        color: var(--muted);
+        font-size: 16px;
+      }
+      .grid {
+        margin-top: 24px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+      .chip {
+        border: 1px solid var(--line);
+        background: rgba(9,14,25,0.6);
+        border-radius: 14px;
+        padding: 12px;
+      }
+      .chip b { color: var(--accent); }
+      section {
+        margin-top: 26px;
+        border: 1px solid var(--line);
+        background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+        border-radius: 20px;
+        padding: 20px 22px;
+      }
+      h2 {
+        margin: 0 0 6px;
+        font-size: 21px;
+        letter-spacing: -0.02em;
+      }
+      p { margin: 6px 0; color: var(--muted); }
+      ul, ol { margin: 10px 0; padding-left: 20px; color: var(--muted); }
+      li { margin: 6px 0; }
+      .flow {
+        border-left: 3px solid var(--accent);
+        background: rgba(255,154,66,0.08);
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-top: 10px;
+        color: #ffd6ae;
+        font-weight: 600;
+      }
+      .callout {
+        margin-top: 12px;
+        border: 1px solid rgba(99,220,163,0.4);
+        background: rgba(99,220,163,0.1);
+        color: #cef7e4;
+        border-radius: 12px;
+        padding: 10px 12px;
+      }
+      .small { font-size: 12px; }
+      .footer {
+        margin-top: 24px;
+        color: #8f9bb0;
+        text-align: center;
+        font-size: 12px;
+      }
+      @media print {
+        .page { padding: 28px 20px 34px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <div class="hero">
+        <div class="eyebrow">Echo Sound Lab · Operator Guide</div>
+        <h1>Friendly, Step-by-Step Music Creation</h1>
+        <p class="sub">Non-technical guide for creators who just want to make music, finish songs, and publish confidently.</p>
+        <div class="grid">
+          <div class="chip"><b>Profile:</b> First Song</div>
+          <div class="chip"><b>Mode:</b> Friendly Wizard</div>
+          <div class="chip"><b>Goal:</b> Upload/Record -> Mix -> Master -> Video</div>
+        </div>
+      </div>
+
+      <section>
+        <h2>1) Quick Start (2 Minutes)</h2>
+        <ol>
+          <li>Open Echo Sound Lab and choose <b>First Song</b> profile.</li>
+          <li>Record a vocal or upload your track on the Single Track page.</li>
+          <li>Click the guided buttons in order: <b>Analyze</b>, <b>Mix</b>, <b>Master</b>, <b>Video</b>.</li>
+          <li>Export your final file or queue exports in the background.</li>
+        </ol>
+        <div class="flow">Guided flow: Record/Upload -> Analyze -> Mix -> Master -> Video</div>
+      </section>
+
+      <section>
+        <h2>2) Which Profile Should I Pick?</h2>
+        <ul>
+          <li><b>First Song:</b> most guided, best if this is your first time mixing/mastering.</li>
+          <li><b>Artist Fast Path:</b> fewer prompts, faster turnaround.</li>
+          <li><b>Engineer Advanced:</b> direct controls, logic-style workflow.</li>
+        </ul>
+        <p>You can switch profiles anytime without losing your project.</p>
+      </section>
+
+      <section>
+        <h2>3) Recording and Vocal Workflow</h2>
+        <ul>
+          <li>Pick your input device (USB interface, headset, Bluetooth, built-in mic).</li>
+          <li>Record multiple takes if needed.</li>
+          <li>Enable <b>Smart Comping</b> to merge strongest phrases from multiple takes.</li>
+          <li>Enable <b>Honest Tuner</b> for gentle pitch correction (musical, not robotic).</li>
+          <li>Use <b>Vocal Textures</b> when you want a stylized layer.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>4) Mixing and Mastering (Plain English)</h2>
+        <ul>
+          <li><b>Analyze:</b> finds what your track needs.</li>
+          <li><b>Mix:</b> balances tone, dynamics, and clarity.</li>
+          <li><b>Master:</b> final polish and playback safety.</li>
+          <li><b>What Changed:</b> explains before/after without technical jargon.</li>
+          <li><b>Active Chain:</b> shows exactly what was used.</li>
+        </ul>
+        <div class="callout">If a process is blocked for safety, use <b>Fix Blocked Mix</b> to recover with safer settings.</div>
+      </section>
+
+      <section>
+        <h2>5) Stems, Timeline, and Collaboration</h2>
+        <ul>
+          <li><b>Stem Splitter:</b> create vocals/drums/bass/other when original stems are missing.</li>
+          <li><b>Project Timeline:</b> rearrange sections quickly (intro/verse/chorus/outro).</li>
+          <li><b>Collaboration Panel:</b> generate share links, leave comments, compare revisions.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>6) Background Export Queue + Safe Updates</h2>
+        <ul>
+          <li>Queue WAV/MP3 exports while you continue editing.</li>
+          <li>When a new app build is available, choose <b>Update Now</b> or <b>Later</b>.</li>
+          <li>No forced kick-outs during active sessions.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>7) Friendly Troubleshooting</h2>
+        <ul>
+          <li><b>No audio on mobile Safari:</b> tap the on-screen audio resume button.</li>
+          <li><b>Buttons disabled:</b> read inline reason text under the button.</li>
+          <li><b>Need support:</b> use <b>Copy Debug Info</b> in settings and share it with support.</li>
+          <li><b>Recover work:</b> Echo auto-saves and offers restore on relaunch.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>8) Recommended Beginner Routine</h2>
+        <ol>
+          <li>Start with <b>First Song</b> profile.</li>
+          <li>Upload or record one track.</li>
+          <li>Run Analyze -> Mix -> Master.</li>
+          <li>A/B compare, then export WAV + MP3.</li>
+          <li>Open Video mode and create content clips.</li>
+        </ol>
+      </section>
+
+      <p class="footer">Echo Sound Lab · Second Light OS · Operator Guide (Dark Mode)</p>
+      <p class="footer small">Version generated on ${new Date().toLocaleString()}</p>
+    </main>
+  </body>
+</html>`;
+
+async function main() {
+  fs.mkdirSync(path.dirname(OUTPUT_HTML), { recursive: true });
+  fs.writeFileSync(OUTPUT_HTML, html, 'utf8');
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  });
+  try {
+    const page = await browser.newPage();
+    await page.goto(`file://${OUTPUT_HTML}`, { waitUntil: 'networkidle0' });
+    await page.pdf({
+      path: OUTPUT_PDF,
+      format: 'Letter',
+      printBackground: true,
+      margin: { top: '0.45in', right: '0.45in', bottom: '0.45in', left: '0.45in' },
+    });
+  } finally {
+    await browser.close();
+  }
+
+  console.log(`Generated:\n- ${OUTPUT_HTML}\n- ${OUTPUT_PDF}`);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

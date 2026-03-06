@@ -4,6 +4,8 @@ import { voiceEngineService } from '../services/voiceEngineService';
 import { useRecorder } from '../hooks/useRecorder';
 import { glassCard, glowButton, secondaryButton, sectionHeader, cn } from '../utils/secondLightStyles';
 import AudioDeviceSelector from './AudioDeviceSelector';
+import { PianoRollCanvas, MidiNote } from './PianoRollCanvas';
+import { NoteTranscriptionService } from '../modules/master-class/engine/NoteTranscriptionService';
 
 interface SongGenerationWizardProps {
   voiceModels: VoiceModel[];
@@ -14,6 +16,7 @@ interface SongGenerationWizardProps {
 
 type StudioPane = 'create' | 'library' | 'personas';
 type LocalStyle = 'Trap' | 'Synthwave' | 'Rock' | 'Ambient';
+type VocalTexture = 'none' | 'gospel_choir' | 'rn_b_silk' | 'gritty_soul';
 
 interface PersonaPreset {
   id: string;
@@ -50,6 +53,19 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
   const [voiceId, setVoiceId] = useState('');
 
   const [voiceFile, setVoiceFile] = useState<File | null>(null);
+  const [compTakeFiles, setCompTakeFiles] = useState<File[]>([]);
+  const [enableSmartComping, setEnableSmartComping] = useState(false);
+  const [compingSegmentMs, setCompingSegmentMs] = useState(420);
+  const [enableHonestTuner, setEnableHonestTuner] = useState(false);
+  const [tunerKey, setTunerKey] = useState('C');
+  const [tunerScale, setTunerScale] = useState<'major' | 'minor' | 'chromatic'>('chromatic');
+  const [tunerStrength, setTunerStrength] = useState(18);
+  const [vocalTexture, setVocalTexture] = useState<VocalTexture>('none');
+  const [tunerNotes, setTunerNotes] = useState<MidiNote[]>([]);
+  const [tunerDurationSeconds, setTunerDurationSeconds] = useState(0);
+  const [isAnalyzingVoice, setIsAnalyzingVoice] = useState(false);
+  const [compingInsight, setCompingInsight] = useState<string | null>(null);
+  const [compingTakeStats, setCompingTakeStats] = useState<Array<{ name: string; rmsDb: number; noteCount: number; duration: number }>>([]);
   const [usingRecordedVoice, setUsingRecordedVoice] = useState(false);
   const [selectedInputDeviceId, setSelectedInputDeviceId] = useState('');
   const [channelMode, setChannelMode] = useState<'mono' | 'stereo'>('mono');
@@ -57,6 +73,8 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
   const [personas, setPersonas] = useState<PersonaPreset[]>([]);
   const [generatedSongs, setGeneratedSongs] = useState<Array<GeneratedSong & { createdAt: number }>>([]);
   const [latestSong, setLatestSong] = useState<GeneratedSong | null>(null);
+  const [editingExtensionSongId, setEditingExtensionSongId] = useState<string | null>(null);
+  const [extensionStartBySongId, setExtensionStartBySongId] = useState<Record<string, number>>({});
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Idle');
@@ -88,6 +106,75 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
   }, [voiceModels, selectedModelId]);
 
   useEffect(() => {
+    const sourceInput = audioBlob || voiceFile;
+    if (!sourceInput || (!enableHonestTuner && !enableSmartComping)) {
+      setTunerNotes([]);
+      setTunerDurationSeconds(0);
+      setCompingInsight(null);
+      setCompingTakeStats([]);
+      return;
+    }
+
+    let cancelled = false;
+    const analyze = async () => {
+      setIsAnalyzingVoice(true);
+      try {
+        if (enableHonestTuner && sourceInput) {
+          const decoded = await decodeAudioInput(sourceInput);
+          if (!cancelled) {
+            const notes = NoteTranscriptionService.transcribeAudioBufferToNotes(decoded, 0.07)
+              .slice(0, 240)
+              .map((note) => ({ ...note, stemId: 'vocals' as const }));
+            setTunerNotes(notes);
+            setTunerDurationSeconds(decoded.duration);
+          }
+        }
+
+        if (enableSmartComping && compTakeFiles.length >= 2) {
+          const stats = await Promise.all(compTakeFiles.map(async (file) => {
+            const decoded = await decodeAudioInput(file);
+            const notes = NoteTranscriptionService.transcribeAudioBufferToNotes(decoded, 0.08);
+            return {
+              name: file.name,
+              rmsDb: computeRmsDb(decoded),
+              noteCount: notes.length,
+              duration: decoded.duration,
+            };
+          }));
+          if (!cancelled) {
+            setCompingTakeStats(stats);
+            const bestEnergy = [...stats].sort((a, b) => b.rmsDb - a.rmsDb)[0];
+            const bestPitch = [...stats].sort((a, b) => b.noteCount - a.noteCount)[0];
+            if (bestEnergy && bestPitch) {
+              setCompingInsight(
+                bestEnergy.name === bestPitch.name
+                  ? `Use ${bestEnergy.name} as the base take. It has the strongest energy and the most pitch-stable phrases.`
+                  : `Use ${bestEnergy.name} for emotion/energy and comp in pitch-sensitive lines from ${bestPitch.name}.`
+              );
+            }
+          }
+        } else if (!enableSmartComping || compTakeFiles.length < 2) {
+          setCompingInsight(null);
+          setCompingTakeStats([]);
+        }
+      } catch {
+        if (!cancelled) {
+          setCompingInsight('Could not analyze takes yet. You can still run Smart Comping during render.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsAnalyzingVoice(false);
+        }
+      }
+    };
+
+    void analyze();
+    return () => {
+      cancelled = true;
+    };
+  }, [audioBlob, voiceFile, enableHonestTuner, enableSmartComping, compTakeFiles]);
+
+  useEffect(() => {
     try {
       const raw = localStorage.getItem(PERSONA_STORAGE_KEY);
       if (raw) {
@@ -105,13 +192,42 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
   );
 
   const canGenerate = useMemo(
-    () => !!voiceFile || !!audioBlob,
-    [voiceFile, audioBlob]
+    () => !!voiceFile || !!audioBlob || (enableSmartComping && compTakeFiles.length > 0),
+    [voiceFile, audioBlob, enableSmartComping, compTakeFiles.length]
   );
 
   const persistPersonas = (next: PersonaPreset[]) => {
     setPersonas(next);
     localStorage.setItem(PERSONA_STORAGE_KEY, JSON.stringify(next));
+  };
+
+  const decodeAudioInput = async (input: Blob): Promise<AudioBuffer> => {
+    const ContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+    const ctx = new ContextCtor();
+    try {
+      const arrayBuffer = await input.arrayBuffer();
+      return await ctx.decodeAudioData(arrayBuffer.slice(0));
+    } finally {
+      try {
+        await ctx.close();
+      } catch {
+        // ignore close failures
+      }
+    }
+  };
+
+  const computeRmsDb = (buffer: AudioBuffer): number => {
+    const data = buffer.getChannelData(0);
+    if (!data.length) return -120;
+    const step = Math.max(1, Math.floor(data.length / 12000));
+    let sum = 0;
+    let count = 0;
+    for (let i = 0; i < data.length; i += step) {
+      sum += data[i] * data[i];
+      count += 1;
+    }
+    const rms = Math.sqrt(sum / Math.max(1, count));
+    return 20 * Math.log10(Math.max(1e-6, rms));
   };
 
   const insertLyricTag = (tag: 'Intro' | 'Verse' | 'Chorus' | 'Outro') => {
@@ -185,6 +301,14 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
           voiceId,
           instrumental,
           outputName,
+          vocalTexture,
+          enableHonestTuner,
+          tunerKey,
+          tunerScale,
+          tunerStrength,
+          enableSmartComping,
+          compingSegmentMs,
+          compTakeInputs: enableSmartComping ? compTakeFiles : [],
         }
       );
 
@@ -200,40 +324,102 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
     }
   };
 
+  const formatTime = (seconds: number) => {
+    const s = Math.max(0, Math.floor(seconds));
+    const mm = Math.floor(s / 60);
+    const ss = s % 60;
+    return `${mm}:${ss.toString().padStart(2, '0')}`;
+  };
+
+  const getDefaultExtensionStart = (song: GeneratedSong) => Math.max(0, (song.buffer?.duration || 0) - 5);
+
+  const enterExtensionEditMode = (song: GeneratedSong) => {
+    setEditingExtensionSongId(song.id);
+    setExtensionStartBySongId((prev) => {
+      if (Number.isFinite(prev[song.id])) return prev;
+      return { ...prev, [song.id]: getDefaultExtensionStart(song) };
+    });
+  };
+
+  const extendSong = async (baseSong: GeneratedSong, explicitStartTime?: number) => {
+    setError(null);
+    setIsGenerating(true);
+    setStatusMessage(`Extending "${baseSong.name}" locally...`);
+
+    try {
+      const chosenStartTime = Number.isFinite(explicitStartTime)
+        ? explicitStartTime!
+        : (Number.isFinite(extensionStartBySongId[baseSong.id])
+          ? extensionStartBySongId[baseSong.id]
+          : getDefaultExtensionStart(baseSong));
+      const extension = await voiceEngineService.extendSong(baseSong, {
+        lyrics,
+        style,
+        tempo,
+        songTitle: `${baseSong.name} Extended`,
+        voiceId,
+        instrumental,
+        startTime: chosenStartTime,
+        voiceInput: audioBlob || voiceFile || undefined,
+        vocalTexture,
+        enableHonestTuner,
+        tunerKey,
+        tunerScale,
+        tunerStrength,
+        enableSmartComping,
+        compingSegmentMs,
+        compTakeInputs: enableSmartComping ? compTakeFiles : [],
+      });
+
+      setLatestSong(extension);
+      setGeneratedSongs((prev) => [{ ...extension, createdAt: Date.now() }, ...prev]);
+      setEditingExtensionSongId(null);
+      setStatusMessage('Song extension complete.');
+      setPane('library');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Song extension failed.');
+      setStatusMessage('Extension failed.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <div className={cn(glassCard, 'p-0 overflow-hidden max-w-6xl mx-auto')}>
-      <div className="flex min-h-[720px]">
-        <aside className="w-[230px] border-r border-slate-800/60 bg-slate-950/70 p-4 space-y-2">
+      <div className="flex min-h-[720px] flex-col md:flex-row">
+        <aside className="w-full md:w-[230px] border-b md:border-b-0 md:border-r border-slate-800/60 bg-slate-950/70 p-4 space-y-2">
           <div className="mb-4">
             <h2 className={cn(sectionHeader, 'text-xl mb-1')}>Echo AI Studio</h2>
             <p className="text-[11px] text-slate-500 uppercase tracking-wider">Suno-Grade Local</p>
           </div>
 
-          {([
-            ['create', 'Create'],
-            ['library', 'Library'],
-            ['personas', 'Personas'],
-          ] as const).map(([id, label]) => (
-            <button
-              key={id}
-              onClick={() => setPane(id)}
-              className={cn(
-                'w-full text-left rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-wider transition-all',
-                pane === id
-                  ? 'bg-orange-500/20 border border-orange-500/40 text-orange-200'
-                  : 'bg-slate-900/70 border border-slate-800/70 text-slate-400 hover:text-slate-200'
-              )}
-            >
-              {label}
-            </button>
-          ))}
+          <div className="grid grid-cols-3 md:grid-cols-1 gap-2">
+            {([
+              ['create', 'Create'],
+              ['library', 'Library'],
+              ['personas', 'Personas'],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setPane(id)}
+                className={cn(
+                  'w-full text-left rounded-xl px-3 py-2 text-xs font-bold uppercase tracking-wider transition-all',
+                  pane === id
+                    ? 'bg-orange-500/20 border border-orange-500/40 text-orange-200'
+                    : 'bg-slate-900/70 border border-slate-800/70 text-slate-400 hover:text-slate-200'
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
           <button onClick={onCancel} className={cn(secondaryButton, 'w-full mt-6 py-2 text-xs')}>
             Close Studio
           </button>
         </aside>
 
-        <main className="flex-1 p-6 space-y-6">
+        <main className="flex-1 p-4 sm:p-6 space-y-6">
           {pane === 'create' && (
             <>
               <div className="flex items-center justify-between">
@@ -416,6 +602,163 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
                     {audioUrl && usingRecordedVoice && <audio src={audioUrl} controls className="w-full" />}
                   </div>
 
+                  <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] uppercase tracking-wider text-slate-500">Smart Vocal Comping</label>
+                      <input
+                        type="checkbox"
+                        checked={enableSmartComping}
+                        onChange={(e) => setEnableSmartComping(e.target.checked)}
+                        className="accent-orange-400"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Upload 2-6 takes. The engine keeps the strongest phrases per segment.
+                    </p>
+                    <label className="rounded-xl border border-slate-700 bg-slate-800/70 text-slate-200 text-xs font-bold uppercase tracking-wider px-3 py-2 text-center cursor-pointer block">
+                      Add Vocal Takes
+                      <input
+                        type="file"
+                        accept="audio/*,.wav,.mp3,.aiff,.flac,.m4a"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          setCompTakeFiles(files.slice(0, 6));
+                        }}
+                      />
+                    </label>
+                    {compTakeFiles.length > 0 && (
+                      <p className="text-xs text-emerald-300">
+                        {compTakeFiles.length} take{compTakeFiles.length === 1 ? '' : 's'} loaded
+                      </p>
+                    )}
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider text-slate-500">
+                        Phrase Window: {Math.round(compingSegmentMs)}ms
+                      </label>
+                      <input
+                        type="range"
+                        min={180}
+                        max={1200}
+                        step={10}
+                        value={compingSegmentMs}
+                        onChange={(e) => setCompingSegmentMs(parseInt(e.target.value, 10))}
+                        className="w-full accent-orange-400 mt-2"
+                      />
+                    </div>
+                    {enableSmartComping && (
+                      <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-emerald-300">Smart Comp Assistant</p>
+                        <p className="mt-1 text-xs text-emerald-100/90">
+                          {isAnalyzingVoice
+                            ? 'Analyzing takes for energy and pitch stability...'
+                            : compingInsight || 'Load at least two takes to get merge guidance.'}
+                        </p>
+                        {compingTakeStats.length > 0 && (
+                          <ul className="mt-2 space-y-1 text-[11px] text-emerald-100/85">
+                            {compingTakeStats.map((take) => (
+                              <li key={take.name} className="rounded-lg border border-emerald-300/20 bg-slate-950/40 px-2 py-1">
+                                {take.name} · {take.rmsDb.toFixed(1)} dB RMS · {take.noteCount} notes
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] uppercase tracking-wider text-slate-500">Honest Tuner</label>
+                      <input
+                        type="checkbox"
+                        checked={enableHonestTuner}
+                        onChange={(e) => setEnableHonestTuner(e.target.checked)}
+                        className="accent-orange-400"
+                      />
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Gentle note correction that preserves performance character.
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <select
+                        value={tunerKey}
+                        onChange={(e) => setTunerKey(e.target.value)}
+                        className="rounded-xl border border-slate-700 bg-slate-800 px-2 py-2 text-xs text-slate-100 outline-none"
+                      >
+                        {['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'].map((k) => (
+                          <option key={k} value={k}>{k}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={tunerScale}
+                        onChange={(e) => setTunerScale(e.target.value as 'major' | 'minor' | 'chromatic')}
+                        className="rounded-xl border border-slate-700 bg-slate-800 px-2 py-2 text-xs text-slate-100 outline-none"
+                      >
+                        <option value="chromatic">Chromatic</option>
+                        <option value="major">Major</option>
+                        <option value="minor">Minor</option>
+                      </select>
+                      <div className="rounded-xl border border-slate-700 bg-slate-800 px-2 py-2 text-xs text-slate-200">
+                        {tunerKey} {tunerScale}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[11px] uppercase tracking-wider text-slate-500">Tuning Strength: {tunerStrength}%</label>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        step={1}
+                        value={tunerStrength}
+                        onChange={(e) => setTunerStrength(parseInt(e.target.value, 10))}
+                        className="w-full accent-orange-400 mt-2"
+                      />
+                    </div>
+                    {enableHonestTuner && (
+                      <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/10 p-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-cyan-300">Honest Tuner Visual Notes</p>
+                          <p className="text-[10px] text-cyan-100/80">{Math.round(tunerDurationSeconds || 0)}s scanned</p>
+                        </div>
+                        <p className="mt-1 text-xs text-cyan-100/85">
+                          {isAnalyzingVoice
+                            ? 'Scanning note stability...'
+                            : tunerNotes.length > 0
+                              ? 'Tap notes after render to nudge only problem phrases.'
+                              : 'Record or upload a vocal to preview detected notes.'}
+                        </p>
+                        <div className="mt-2 rounded-xl border border-cyan-300/15 overflow-hidden bg-slate-950/60">
+                          <PianoRollCanvas
+                            notes={tunerNotes}
+                            duration={Math.max(1, tunerDurationSeconds)}
+                            currentTime={0}
+                            height={160}
+                            timelineHeight={28}
+                            showPianoKeys={false}
+                            showNoteLabels={false}
+                            interactive={false}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-3">
+                    <label className="text-[11px] uppercase tracking-wider text-slate-500">Vocal Texture</label>
+                    <select
+                      value={vocalTexture}
+                      onChange={(e) => setVocalTexture(e.target.value as VocalTexture)}
+                      className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 outline-none"
+                    >
+                      <option value="none">None (Natural)</option>
+                      <option value="gospel_choir">Gospel Choir</option>
+                      <option value="rn_b_silk">90s RnB Silk</option>
+                      <option value="gritty_soul">Gritty Soul</option>
+                    </select>
+                  </div>
+
                   <div className="flex gap-2">
                     <button onClick={savePersona} className={cn(secondaryButton, 'flex-1 py-3 text-xs')}>Save Persona</button>
                     <button
@@ -443,10 +786,68 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
               {latestSong && (
                 <div className="rounded-2xl border border-green-500/30 bg-green-500/10 p-4 mb-4">
                   <p className="text-sm text-green-200 font-semibold">Latest: {latestSong.name}</p>
+                  {editingExtensionSongId === latestSong.id && (
+                    <div className="mt-3 rounded-xl border border-slate-700/60 bg-slate-900/70 p-3 space-y-3">
+                      <div className="flex items-center justify-between text-xs text-slate-300">
+                        <span>Start Extension at: {formatTime(extensionStartBySongId[latestSong.id] ?? getDefaultExtensionStart(latestSong))}</span>
+                        <span className="text-slate-500">Duration: {formatTime(latestSong.buffer?.duration || 0)}</span>
+                      </div>
+                      <div className="relative h-2 rounded bg-slate-800 overflow-hidden border border-slate-700/60">
+                        <div
+                          className="absolute inset-y-0 left-0 bg-emerald-500/70"
+                          style={{
+                            width: `${Math.max(0, Math.min(100, (((extensionStartBySongId[latestSong.id] ?? getDefaultExtensionStart(latestSong)) / Math.max(0.001, latestSong.buffer?.duration || 0.001)) * 100)))}%`,
+                          }}
+                        />
+                        <div
+                          className="absolute inset-y-0 border-t border-dashed border-slate-400/80"
+                          style={{
+                            left: `${Math.max(0, Math.min(100, (((extensionStartBySongId[latestSong.id] ?? getDefaultExtensionStart(latestSong)) / Math.max(0.001, latestSong.buffer?.duration || 0.001)) * 100)))}%`,
+                            right: 0,
+                          }}
+                        />
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={Math.max(0, latestSong.buffer?.duration || 0)}
+                        step={0.1}
+                        value={extensionStartBySongId[latestSong.id] ?? getDefaultExtensionStart(latestSong)}
+                        onChange={(e) =>
+                          setExtensionStartBySongId((prev) => ({
+                            ...prev,
+                            [latestSong.id]: parseFloat(e.target.value),
+                          }))
+                        }
+                        className="w-full accent-orange-400"
+                      />
+                    </div>
+                  )}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button onClick={() => onComplete(latestSong)} className={cn(glowButton, 'px-4 py-2 text-xs')}>
                       Route To Stems
                     </button>
+                    <button
+                      onClick={() => {
+                        if (editingExtensionSongId === latestSong.id) {
+                          extendSong(latestSong, extensionStartBySongId[latestSong.id] ?? getDefaultExtensionStart(latestSong));
+                        } else {
+                          enterExtensionEditMode(latestSong);
+                        }
+                      }}
+                      disabled={isGenerating}
+                      className={cn(secondaryButton, 'px-4 py-2 text-xs', isGenerating && 'opacity-50 cursor-not-allowed')}
+                    >
+                      {editingExtensionSongId === latestSong.id ? 'Run Extension' : 'Extend'}
+                    </button>
+                    {editingExtensionSongId === latestSong.id && (
+                      <button
+                        onClick={() => setEditingExtensionSongId(null)}
+                        className={cn(secondaryButton, 'px-4 py-2 text-xs')}
+                      >
+                        Cancel
+                      </button>
+                    )}
                     <button
                       onClick={() => onOpenSingleTrack?.(latestSong)}
                       className={cn(secondaryButton, 'px-4 py-2 text-xs')}
@@ -471,8 +872,66 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
                     <div className="min-w-0 flex-1">
                       <p className="text-sm text-slate-100 truncate">{entry.name}</p>
                       <p className="text-xs text-slate-500">{entry.metadata.style} · {new Date(entry.createdAt).toLocaleString()}</p>
+                      {editingExtensionSongId === entry.id && (
+                        <div className="mt-2 rounded-xl border border-slate-700/60 bg-slate-950/70 p-3 space-y-3">
+                          <div className="flex items-center justify-between text-[11px] text-slate-300">
+                            <span>Start Extension at: {formatTime(extensionStartBySongId[entry.id] ?? getDefaultExtensionStart(entry))}</span>
+                            <span className="text-slate-500">Duration: {formatTime(entry.buffer?.duration || 0)}</span>
+                          </div>
+                          <div className="relative h-2 rounded bg-slate-800 overflow-hidden border border-slate-700/60">
+                            <div
+                              className="absolute inset-y-0 left-0 bg-emerald-500/70"
+                              style={{
+                                width: `${Math.max(0, Math.min(100, (((extensionStartBySongId[entry.id] ?? getDefaultExtensionStart(entry)) / Math.max(0.001, entry.buffer?.duration || 0.001)) * 100)))}%`,
+                              }}
+                            />
+                            <div
+                              className="absolute inset-y-0 border-t border-dashed border-slate-400/80"
+                              style={{
+                                left: `${Math.max(0, Math.min(100, (((extensionStartBySongId[entry.id] ?? getDefaultExtensionStart(entry)) / Math.max(0.001, entry.buffer?.duration || 0.001)) * 100)))}%`,
+                                right: 0,
+                              }}
+                            />
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={Math.max(0, entry.buffer?.duration || 0)}
+                            step={0.1}
+                            value={extensionStartBySongId[entry.id] ?? getDefaultExtensionStart(entry)}
+                            onChange={(e) =>
+                              setExtensionStartBySongId((prev) => ({
+                                ...prev,
+                                [entry.id]: parseFloat(e.target.value),
+                              }))
+                            }
+                            className="w-full accent-orange-400"
+                          />
+                        </div>
+                      )}
                       <div className="mt-2 flex flex-wrap gap-2">
                         <button onClick={() => onComplete(entry)} className={cn(secondaryButton, 'px-3 py-1.5 text-[10px]')}>To Stems</button>
+                        <button
+                          onClick={() => {
+                            if (editingExtensionSongId === entry.id) {
+                              extendSong(entry, extensionStartBySongId[entry.id] ?? getDefaultExtensionStart(entry));
+                            } else {
+                              enterExtensionEditMode(entry);
+                            }
+                          }}
+                          disabled={isGenerating}
+                          className={cn(secondaryButton, 'px-3 py-1.5 text-[10px]', isGenerating && 'opacity-50 cursor-not-allowed')}
+                        >
+                          {editingExtensionSongId === entry.id ? 'Run Extension' : 'Extend'}
+                        </button>
+                        {editingExtensionSongId === entry.id && (
+                          <button
+                            onClick={() => setEditingExtensionSongId(null)}
+                            className={cn(secondaryButton, 'px-3 py-1.5 text-[10px]')}
+                          >
+                            Cancel
+                          </button>
+                        )}
                         <button onClick={() => onOpenSingleTrack?.(entry)} className={cn(secondaryButton, 'px-3 py-1.5 text-[10px]')}>Open In Single Track</button>
                       </div>
                     </div>

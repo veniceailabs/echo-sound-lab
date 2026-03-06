@@ -2,13 +2,54 @@
   "name": "echo-sound-lab",
   "private": true,
   "version": "0.0.0",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/writeBuildMeta.cjs",
+    "prebuild": "node scripts/writeBuildMeta.cjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "desktop:dev": "concurrently -k \"vite --host 127.0.0.1 --port 3005\" \"wait-on tcp:3005 && cross-env ELECTRON_START_URL=http://127.0.0.1:3005 electron .\"",
+    "desktop:pack:mac": "npm run build && electron-builder --mac dmg --publish never",
+    "desktop:pack:win": "npm run build && electron-builder --win nsis --x64 --publish never",
+    "desktop:pack:all": "npm run build && electron-builder --mac dmg --win nsis --x64 --publish never",
+    "docs:operator-guide": "node scripts/generate-operator-guide-pdf.cjs"
+  },
+  "build": {
+    "appId": "com.veniceailabs.echosoundlab",
+    "productName": "Echo Sound Lab",
+    "directories": {
+      "output": "desktop-dist"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "target": [
+        "dmg"
+      ]
+    },
+    "dmg": {
+      "artifactName": "Echo-Sound-Lab-${version}-mac.${ext}"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "Echo-Sound-Lab-${version}-win.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
@@ -23,13 +64,19 @@
     "react-dom": "^19.2.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.0.0",
+    "electron": "^37.3.1",
+    "electron-builder": "^26.0.12",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vitest": "^1.6.0"
+    "vitest": "^1.6.0",
+    "wait-on": "^8.0.5"
   }
 }
