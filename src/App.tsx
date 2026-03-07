@@ -216,6 +216,13 @@ const App: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [playIntent, setPlayIntent] = useState(false);
   const [currentPlayheadSeconds, setCurrentPlayheadSeconds] = useState(0);
+  const safeAreaVars = useMemo(
+    () => ({
+      '--esl-safe-bottom': 'env(safe-area-inset-bottom, 0px)',
+      '--esl-safe-top': 'env(safe-area-inset-top, 0px)',
+    } as React.CSSProperties),
+    []
+  );
   const cornerUiOffsetPx = (isPhone || isTablet) && appState === AppState.READY && activeMode === 'SINGLE' ? 92 : 0;
   const audioContextState = useAudioContextState(typeof window !== 'undefined' ? audioEngine.getAudioContext() : null);
 
@@ -3777,7 +3784,10 @@ const App: React.FC = () => {
       appId="com.echo-sound-lab.app"
       processIdentity={processIdentity}
     >
-      <div className="min-h-screen bg-[#0a0c12] text-slate-300 font-sans flex flex-col pb-24 relative overflow-hidden">
+      <div
+        className="min-h-screen bg-[#0a0c12] text-slate-300 font-sans flex flex-col pb-24 relative overflow-hidden"
+        style={safeAreaVars}
+      >
 
       {/* ===== PHASE 5: LOCKDOWN BANNER ===== */}
       {isInLockdown && (
