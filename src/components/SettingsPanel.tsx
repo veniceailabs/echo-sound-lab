@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { i18nService, SupportedLanguage } from '../services/i18nService';
 import { EngineMode } from '../types';
+import { useViewport } from '../context/ViewportContext';
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -10,12 +11,20 @@ interface SettingsPanelProps {
   appVersion: string;
   themeMode: 'light' | 'dark';
   setThemeMode: (mode: 'light' | 'dark') => void;
+  reducedMotionEnabled: boolean;
+  setReducedMotionEnabled: (enabled: boolean) => void;
+  highContrastEnabled: boolean;
+  setHighContrastEnabled: (enabled: boolean) => void;
+  largeTouchTargetsEnabled: boolean;
+  setLargeTouchTargetsEnabled: (enabled: boolean) => void;
   networkSettings: { ssid: string; proxy: string; isLocal: boolean };
   setNetworkSettings: (settings: { ssid: string; proxy: string; isLocal: boolean }) => void;
+  onCopyDebugInfo?: () => Promise<void>;
+  onClearDebugInfo?: () => void;
 }
 
 const modeDescriptions: Record<EngineMode, { title: string; subtitle: string }> = {
-  FRIENDLY: { title: 'Friendly mode', subtitle: 'Simplified sliders and guided guidance' },
+  FRIENDLY: { title: 'Friendly mode', subtitle: 'Simplified controls with guided steps' },
   ADVANCED: { title: 'Advanced mode', subtitle: 'Full plugin rack, EQ, and meters' },
   FULL_STUDIO: { title: 'Full Studio', subtitle: 'Auto-Mix with entire custom plug-in suite' },
 };
@@ -57,10 +66,30 @@ const sectionIcons: Record<SectionKey, React.ReactNode> = {
   ),
 };
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, engineMode, setEngineMode, onResetToOriginal, appVersion, themeMode, setThemeMode, networkSettings, setNetworkSettings }) => {
+const SettingsPanel: React.FC<SettingsPanelProps> = ({
+  onClose,
+  engineMode,
+  setEngineMode,
+  onResetToOriginal,
+  appVersion,
+  themeMode,
+  setThemeMode,
+  reducedMotionEnabled,
+  setReducedMotionEnabled,
+  highContrastEnabled,
+  setHighContrastEnabled,
+  largeTouchTargetsEnabled,
+  setLargeTouchTargetsEnabled,
+  networkSettings,
+  setNetworkSettings,
+  onCopyDebugInfo,
+  onClearDebugInfo
+}) => {
+  const { isPhone } = useViewport();
   const [currentLanguage, setCurrentLanguage] = useState<SupportedLanguage>(i18nService.getLanguage());
   const [isChanging, setIsChanging] = useState(false);
   const [openSection, setOpenSection] = useState<SectionKey | null>('mode');
+  const [debugStatus, setDebugStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const languages = i18nService.getSupportedLanguages();
 
   useEffect(() => {
@@ -94,10 +123,30 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, engineMode, setE
     }
   };
 
+  const handleCopyDebugInfo = async () => {
+    if (!onCopyDebugInfo) return;
+    setDebugStatus('idle');
+    try {
+      await onCopyDebugInfo();
+      setDebugStatus('copied');
+      window.setTimeout(() => setDebugStatus('idle'), 2500);
+    } catch (e) {
+      console.warn('[SettingsPanel] copyDebugInfo failed', e);
+      setDebugStatus('error');
+      window.setTimeout(() => setDebugStatus('idle'), 3000);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-[28px] z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-950/70 backdrop-blur-3xl rounded-3xl border border-white/12 shadow-[0_30px_80px_rgba(0,0,0,0.55)] max-w-xl w-full max-h-[85vh] overflow-hidden">
-        <div className="p-5 border-b border-white/10 flex items-center justify-between">
+    <div
+      className={`fixed inset-0 bg-black/70 backdrop-blur-[28px] z-50 flex ${isPhone ? 'items-stretch justify-stretch p-0' : 'items-center justify-center p-4'}`}
+    >
+      <div
+        className={`bg-slate-950/70 backdrop-blur-3xl border border-white/12 shadow-[0_30px_80px_rgba(0,0,0,0.55)] w-full overflow-hidden flex flex-col ${
+          isPhone ? 'rounded-none max-w-none h-[100dvh] max-h-none' : 'rounded-3xl max-w-xl max-h-[85vh]'
+        }`}
+      >
+        <div className={`p-5 border-b border-white/10 flex items-center justify-between ${isPhone ? 'pt-[calc(20px+var(--esl-safe-top))]' : ''}`}>
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-slate-500 mb-1">Settings</p>
             <h2 className="text-2xl font-bold text-white">Studio Controls</h2>
@@ -109,7 +158,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, engineMode, setE
           </button>
         </div>
 
-        <div className="p-4 overflow-y-auto max-h-[calc(85vh-150px)]">
+        <div className={`p-4 overflow-y-auto flex-1 min-h-0 ${isPhone ? 'pb-[calc(16px+var(--esl-safe-bottom))]' : ''}`}>
           <div className="space-y-3">
             {sections.map((section) => (
               <div key={section} className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
@@ -163,19 +212,51 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, engineMode, setE
                         </div>
                       </>
                     )}
-                    {section === 'display' && (
-                      <div className="flex gap-3">
-                        {['dark', 'light'].map((mode) => (
-                          <button
-                            key={mode}
-                            onClick={() => setThemeMode(mode as 'light' | 'dark')}
-                            className={`flex-1 py-3 rounded-2xl border text-sm font-semibold uppercase tracking-wide ${themeMode === mode
-                              ? 'bg-orange-500/10 border-orange-400 text-white'
-                              : 'bg-white/5 border-white/10 text-slate-300 hover:border-white/40 hover:bg-white/10'}`}
-                          >
-                            {mode}
-                          </button>
-                        ))}
+                                        {section === 'display' && (
+                      <div className="space-y-3">
+                        <div className="flex gap-3">
+                          {['dark', 'light'].map((mode) => (
+                            <button
+                              key={mode}
+                              onClick={() => setThemeMode(mode as 'light' | 'dark')}
+                              className={`flex-1 py-3 rounded-2xl border text-sm font-semibold uppercase tracking-wide ${themeMode === mode
+                                ? 'bg-orange-500/10 border-orange-400 text-white'
+                                : 'bg-white/5 border-white/10 text-slate-300 hover:border-white/40 hover:bg-white/10'}`}
+                            >
+                              {mode}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="grid gap-2">
+                          <label className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/40 px-3 py-2 text-sm text-slate-300">
+                            <span>Reduced motion</span>
+                            <input
+                              type="checkbox"
+                              checked={reducedMotionEnabled}
+                              onChange={(event) => setReducedMotionEnabled(event.target.checked)}
+                              className="h-4 w-4 rounded border-white/20 bg-slate-800 text-orange-400"
+                            />
+                          </label>
+                          <label className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/40 px-3 py-2 text-sm text-slate-300">
+                            <span>High contrast mode</span>
+                            <input
+                              type="checkbox"
+                              checked={highContrastEnabled}
+                              onChange={(event) => setHighContrastEnabled(event.target.checked)}
+                              className="h-4 w-4 rounded border-white/20 bg-slate-800 text-orange-400"
+                            />
+                          </label>
+                          <label className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/40 px-3 py-2 text-sm text-slate-300">
+                            <span>Larger touch targets</span>
+                            <input
+                              type="checkbox"
+                              checked={largeTouchTargetsEnabled}
+                              onChange={(event) => setLargeTouchTargetsEnabled(event.target.checked)}
+                              className="h-4 w-4 rounded border-white/20 bg-slate-800 text-orange-400"
+                            />
+                          </label>
+                        </div>
                       </div>
                     )}
                     {section === 'language' && (
@@ -248,6 +329,39 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, engineMode, setE
                         <p>• No audio is altered unless you ask.</p>
                         <p>• Always let you compare your original.</p>
                         <p>• Silence is success. Restraint is power.</p>
+
+                        <div className="pt-3 mt-3 border-t border-white/10 space-y-2">
+                          <p className="text-[11px] uppercase tracking-wider text-slate-500">Beta Tools</p>
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <button
+                              type="button"
+                              onClick={handleCopyDebugInfo}
+                              disabled={!onCopyDebugInfo}
+                              className={`flex-1 px-4 py-2.5 min-h-[44px] rounded-xl text-xs uppercase tracking-wider font-bold transition-all border ${
+                                onCopyDebugInfo
+                                  ? 'bg-slate-900/60 border-orange-500/30 text-orange-300 hover:bg-slate-900'
+                                  : 'bg-white/5 border-white/10 text-slate-600 cursor-not-allowed opacity-60'
+                              }`}
+                            >
+                              {debugStatus === 'copied' ? 'Copied' : debugStatus === 'error' ? 'Copy Failed' : 'Copy Debug Info'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onClearDebugInfo?.()}
+                              disabled={!onClearDebugInfo}
+                              className={`px-4 py-2.5 min-h-[44px] rounded-xl text-xs uppercase tracking-wider font-bold transition-all border ${
+                                onClearDebugInfo
+                                  ? 'bg-white/5 border-white/10 text-slate-200 hover:bg-white/10'
+                                  : 'bg-white/5 border-white/10 text-slate-600 cursor-not-allowed opacity-60'
+                              }`}
+                            >
+                              Clear Log
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            If something breaks, tap Copy Debug Info and paste it into your beta reply email.
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>

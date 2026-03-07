@@ -111,6 +111,9 @@ declare global {
 const ENGINE_MODE_KEY = 'echo.engineMode.v1';
 const FRIENDLY_TOUR_KEY = 'echo.friendlyTourSeen.v1';
 const ONBOARDING_PROFILE_KEY = 'echo.onboardingProfile.v1';
+const REDUCED_MOTION_KEY = 'echo.a11y.reducedMotion.v1';
+const HIGH_CONTRAST_KEY = 'echo.a11y.highContrast.v1';
+const LARGE_TOUCH_TARGETS_KEY = 'echo.a11y.largeTouchTargets.v1';
 const MODE_LABELS: Record<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO', string> = {
   SINGLE: 'Single Track',
   MULTI: 'Stems',
@@ -157,6 +160,15 @@ type BlockedMixRecovery = {
   reason: string;
   source: 'preservation' | 'quality';
   createdAt: number;
+};
+type RecordedTake = {
+  id: string;
+  label: string;
+  blob: Blob;
+  url: string;
+  durationSec: number;
+  createdAt: number;
+  sizeBytes: number;
 };
 type RestoreMode = 'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO';
 
@@ -345,6 +357,45 @@ const App: React.FC = () => {
     error: recorderError,
     inputLevel
   } = useRecorder();
+  const [recordCountInBeats, setRecordCountInBeats] = useState<number>(2);
+  const [recordMetronomeEnabled, setRecordMetronomeEnabled] = useState(true);
+  const [recordMetronomeBpm, setRecordMetronomeBpm] = useState<number>(92);
+  const [recordPunchInSeconds, setRecordPunchInSeconds] = useState<number>(0);
+  const [recordPunchOutSeconds, setRecordPunchOutSeconds] = useState<number>(0);
+  const [recordingPrepCountdown, setRecordingPrepCountdown] = useState<number | null>(null);
+  const [recordingElapsedSec, setRecordingElapsedSec] = useState<number>(0);
+  const [recordingHint, setRecordingHint] = useState<string | null>(null);
+  const [recordedTakes, setRecordedTakes] = useState<RecordedTake[]>([]);
+  const [selectedTakeId, setSelectedTakeId] = useState<string | null>(null);
+  const [reducedMotionEnabled, setReducedMotionEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(REDUCED_MOTION_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [highContrastEnabled, setHighContrastEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(HIGH_CONTRAST_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [largeTouchTargetsEnabled, setLargeTouchTargetsEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(LARGE_TOUCH_TARGETS_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const metronomeIntervalRef = useRef<number | null>(null);
+  const metronomeContextRef = useRef<AudioContext | null>(null);
+  const prepCountdownIntervalRef = useRef<number | null>(null);
+  const delayedStartTimeoutRef = useRef<number | null>(null);
+  const punchOutTimeoutRef = useRef<number | null>(null);
+  const elapsedIntervalRef = useRef<number | null>(null);
+  const recordingElapsedRef = useRef<number>(0);
+  const lastCapturedBlobRef = useRef<Blob | null>(null);
   const [renderQueueJobs, setRenderQueueJobs] = useState<RenderQueueJobView[]>([]);
   const [isRenderQueueBusy, setIsRenderQueueBusy] = useState(false);
 
@@ -437,6 +488,265 @@ const App: React.FC = () => {
       root.classList.add('theme-dark');
     }
   }, [themeMode]);
+
+  const clearRecordingTimers = useCallback(() => {
+    if (metronomeIntervalRef.current) {
+      window.clearInterval(metronomeIntervalRef.current);
+      metronomeIntervalRef.current = null;
+    }
+    if (prepCountdownIntervalRef.current) {
+      window.clearInterval(prepCountdownIntervalRef.current);
+      prepCountdownIntervalRef.current = null;
+    }
+    if (delayedStartTimeoutRef.current) {
+      window.clearTimeout(delayedStartTimeoutRef.current);
+      delayedStartTimeoutRef.current = null;
+    }
+    if (punchOutTimeoutRef.current) {
+      window.clearTimeout(punchOutTimeoutRef.current);
+      punchOutTimeoutRef.current = null;
+    }
+    if (elapsedIntervalRef.current) {
+      window.clearInterval(elapsedIntervalRef.current);
+      elapsedIntervalRef.current = null;
+    }
+  }, []);
+
+  const playMetronomeTick = useCallback((accent = false) => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!metronomeContextRef.current || metronomeContextRef.current.state === 'closed') {
+        metronomeContextRef.current = new AudioCtx();
+      }
+      const context = metronomeContextRef.current;
+      const osc = context.createOscillator();
+      const gain = context.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = accent ? 1320 : 980;
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(accent ? 0.12 : 0.09, context.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.09);
+      osc.connect(gain);
+      gain.connect(context.destination);
+      osc.start();
+      osc.stop(context.currentTime + 0.1);
+    } catch (error) {
+      console.warn('[App] Metronome tick skipped', error);
+    }
+  }, []);
+
+  const startMetronomePulse = useCallback((accentFirstBeat = true) => {
+    if (!recordMetronomeEnabled) return;
+    const bpm = Math.max(40, Math.min(220, recordMetronomeBpm || 92));
+    const beatMs = Math.round(60000 / bpm);
+    let beatCount = 0;
+    playMetronomeTick(accentFirstBeat);
+    metronomeIntervalRef.current = window.setInterval(() => {
+      beatCount += 1;
+      playMetronomeTick(beatCount % 4 === 0);
+    }, beatMs);
+  }, [recordMetronomeEnabled, recordMetronomeBpm, playMetronomeTick]);
+
+  const beginRecorderCapture = useCallback(async () => {
+    setRecordingHint('Recording now. Capture your best pass.');
+    recordingElapsedRef.current = 0;
+    setRecordingElapsedSec(0);
+    await startRecording({
+      channelCount: recordingChannelMode === 'stereo' ? 2 : 1,
+      deviceId: recordingInputDeviceId || undefined
+    });
+  }, [recordingChannelMode, recordingInputDeviceId, startRecording]);
+
+  const startGuidedRecording = useCallback(() => {
+    if (recordingState === 'recording') return;
+    clearRecordingTimers();
+
+    const runStart = () => {
+      if (recordPunchInSeconds > 0) {
+        setRecordingHint(`Punch-in armed. Recording starts in ${recordPunchInSeconds.toFixed(1)}s.`);
+        if (recordMetronomeEnabled) startMetronomePulse();
+        delayedStartTimeoutRef.current = window.setTimeout(() => {
+          delayedStartTimeoutRef.current = null;
+          void beginRecorderCapture();
+        }, Math.round(recordPunchInSeconds * 1000));
+        return;
+      }
+      if (recordMetronomeEnabled) startMetronomePulse();
+      void beginRecorderCapture();
+    };
+
+    if (recordCountInBeats > 0) {
+      const bpm = Math.max(40, Math.min(220, recordMetronomeBpm || 92));
+      const beatMs = Math.round(60000 / bpm);
+      let beatsLeft = recordCountInBeats;
+      setRecordingPrepCountdown(beatsLeft);
+      setRecordingHint(`Count-in: ${beatsLeft} beat${beatsLeft === 1 ? '' : 's'} before recording.`);
+      if (recordMetronomeEnabled) playMetronomeTick(true);
+
+      prepCountdownIntervalRef.current = window.setInterval(() => {
+        beatsLeft -= 1;
+        if (beatsLeft <= 0) {
+          if (prepCountdownIntervalRef.current) {
+            window.clearInterval(prepCountdownIntervalRef.current);
+            prepCountdownIntervalRef.current = null;
+          }
+          setRecordingPrepCountdown(null);
+          runStart();
+          return;
+        }
+        setRecordingPrepCountdown(beatsLeft);
+        setRecordingHint(`Count-in: ${beatsLeft} beat${beatsLeft === 1 ? '' : 's'} before recording.`);
+        if (recordMetronomeEnabled) playMetronomeTick(beatsLeft % 4 === 0);
+      }, beatMs);
+      return;
+    }
+
+    setRecordingPrepCountdown(null);
+    runStart();
+  }, [
+    beginRecorderCapture,
+    clearRecordingTimers,
+    playMetronomeTick,
+    recordCountInBeats,
+    recordMetronomeBpm,
+    recordMetronomeEnabled,
+    recordPunchInSeconds,
+    recordingState,
+    startMetronomePulse
+  ]);
+
+  const handleStopGuidedRecording = useCallback(() => {
+    setRecordingHint('Finishing take...');
+    stopRecording();
+  }, [stopRecording]);
+
+  const handleResetRecorderSession = useCallback(() => {
+    clearRecordingTimers();
+    setRecordingPrepCountdown(null);
+    setRecordingElapsedSec(0);
+    recordingElapsedRef.current = 0;
+    setRecordingHint(null);
+    resetRecording();
+  }, [clearRecordingTimers, resetRecording]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle('esl-reduced-motion', reducedMotionEnabled);
+    root.classList.toggle('esl-high-contrast', highContrastEnabled);
+    root.classList.toggle('esl-large-touch', largeTouchTargetsEnabled);
+    try {
+      localStorage.setItem(REDUCED_MOTION_KEY, String(reducedMotionEnabled));
+      localStorage.setItem(HIGH_CONTRAST_KEY, String(highContrastEnabled));
+      localStorage.setItem(LARGE_TOUCH_TARGETS_KEY, String(largeTouchTargetsEnabled));
+    } catch (error) {
+      console.warn('[App] Failed to persist accessibility settings', error);
+    }
+  }, [reducedMotionEnabled, highContrastEnabled, largeTouchTargetsEnabled]);
+
+  useEffect(() => {
+    if (recordingState === 'recording') {
+      const startedAt = performance.now();
+      setRecordingElapsedSec(0);
+      recordingElapsedRef.current = 0;
+      elapsedIntervalRef.current = window.setInterval(() => {
+        const elapsed = Math.max(0, (performance.now() - startedAt) / 1000);
+        recordingElapsedRef.current = elapsed;
+        setRecordingElapsedSec(elapsed);
+      }, 120);
+
+      if (recordPunchOutSeconds > 0) {
+        punchOutTimeoutRef.current = window.setTimeout(() => {
+          setRecordingHint('Punch-out reached. Stopping take now.');
+          stopRecording();
+        }, Math.round(recordPunchOutSeconds * 1000));
+      }
+      return;
+    }
+
+    if (elapsedIntervalRef.current) {
+      window.clearInterval(elapsedIntervalRef.current);
+      elapsedIntervalRef.current = null;
+    }
+    if (metronomeIntervalRef.current) {
+      window.clearInterval(metronomeIntervalRef.current);
+      metronomeIntervalRef.current = null;
+    }
+    if (punchOutTimeoutRef.current) {
+      window.clearTimeout(punchOutTimeoutRef.current);
+      punchOutTimeoutRef.current = null;
+    }
+  }, [recordingState, recordPunchOutSeconds, stopRecording]);
+
+  useEffect(() => {
+    if (recordingState !== 'stopped' || !recordedAudioBlob) return;
+    if (recordedAudioBlob === lastCapturedBlobRef.current) return;
+
+    lastCapturedBlobRef.current = recordedAudioBlob;
+    const now = Date.now();
+    const durationSec = Math.max(0.1, recordingElapsedRef.current);
+    const take: RecordedTake = {
+      id: `take-${now}`,
+      label: `Take ${recordedTakes.length + 1}`,
+      blob: recordedAudioBlob,
+      url: recordedAudioUrl || URL.createObjectURL(recordedAudioBlob),
+      durationSec,
+      createdAt: now,
+      sizeBytes: recordedAudioBlob.size,
+    };
+
+    setRecordedTakes((prev) => [take, ...prev].slice(0, 12));
+    setSelectedTakeId(take.id);
+    setRecordingHint(`${take.label} saved. Review it, then load into Single Track or Stems.`);
+  }, [recordingState, recordedAudioBlob, recordedAudioUrl, recordedTakes.length]);
+
+  useEffect(() => {
+    if (recordedTakes.length === 0) {
+      setSelectedTakeId(null);
+      return;
+    }
+    if (!selectedTakeId || !recordedTakes.some((take) => take.id === selectedTakeId)) {
+      setSelectedTakeId(recordedTakes[0].id);
+    }
+  }, [recordedTakes, selectedTakeId]);
+
+  useEffect(() => () => {
+    clearRecordingTimers();
+    if (metronomeContextRef.current && metronomeContextRef.current.state !== 'closed') {
+      void metronomeContextRef.current.close();
+    }
+  }, [clearRecordingTimers]);
+
+  const selectedRecordedTake = useMemo(() => (
+    selectedTakeId ? recordedTakes.find((take) => take.id === selectedTakeId) || null : null
+  ), [recordedTakes, selectedTakeId]);
+
+  const bestTakeSuggestion = useMemo(() => {
+    if (recordedTakes.length < 2) return null;
+    const maxDuration = Math.max(...recordedTakes.map((take) => take.durationSec));
+    const maxSize = Math.max(...recordedTakes.map((take) => take.sizeBytes));
+    let winner = recordedTakes[0];
+    let winnerScore = -1;
+
+    for (const take of recordedTakes) {
+      const durationScore = maxDuration > 0 ? take.durationSec / maxDuration : 0;
+      const sizeScore = maxSize > 0 ? take.sizeBytes / maxSize : 0;
+      const score = (durationScore * 0.65) + (sizeScore * 0.35);
+      if (score > winnerScore) {
+        winner = take;
+        winnerScore = score;
+      }
+    }
+
+    return {
+      takeId: winner.id,
+      label: winner.label,
+      reason: 'Longest and most complete capture. Great starting point for comping.'
+    };
+  }, [recordedTakes]);
+
+  const activeRecordedBlob = selectedRecordedTake?.blob ?? recordedAudioBlob;
+  const activeRecordedUrl = selectedRecordedTake?.url ?? recordedAudioUrl;
 
   const handleResetToOriginal = useCallback(() => {
     audioEngine.resetToOriginal();
@@ -1713,19 +2023,19 @@ const App: React.FC = () => {
   };
 
   const handleUseRecordedTake = async () => {
-    if (!recordedAudioBlob) {
+    if (!activeRecordedBlob) {
       showNotification('Record audio first, then load it into Single Track.', 'info', 2600);
       return;
     }
-    const mime = recordedAudioBlob.type || 'audio/webm';
+    const mime = activeRecordedBlob.type || 'audio/webm';
     const extension = mime.includes('wav')
       ? 'wav'
       : mime.includes('mp4') || mime.includes('aac')
         ? 'm4a'
         : 'webm';
-    const file = new File([recordedAudioBlob], `Echo-Recording-${Date.now()}.${extension}`, { type: mime });
+    const file = new File([activeRecordedBlob], `Echo-Recording-${Date.now()}.${extension}`, { type: mime });
     await processSelectedFile(file);
-    resetRecording();
+    handleResetRecorderSession();
     showNotification('Recording loaded. You can now analyze and master it.', 'success', 2800);
   };
 
@@ -1816,7 +2126,7 @@ const App: React.FC = () => {
         ? `${Math.round(stems.metadata.confidenceScore)}%`
         : '--';
       showNotification(
-        `Stem split ready: ${separatedStems.length} stems created (${confidenceLabel} confidence).`,
+        `Stem split ready: ${separatedStems.length} stems created (${confidenceLabel} split quality).`,
         'success',
         2800
       );
@@ -1844,17 +2154,17 @@ const App: React.FC = () => {
   };
 
   const handleUseRecordedTakeToStems = async () => {
-    if (!recordedAudioBlob) {
+    if (!activeRecordedBlob) {
       showNotification('Record audio first, then split it into stems.', 'info', 2600);
       return;
     }
-    const mime = recordedAudioBlob.type || 'audio/webm';
+    const mime = activeRecordedBlob.type || 'audio/webm';
     const extension = mime.includes('wav')
       ? 'wav'
       : mime.includes('mp4') || mime.includes('aac')
         ? 'm4a'
         : 'webm';
-    const file = new File([recordedAudioBlob], `Echo-Recording-${Date.now()}.${extension}`, { type: mime });
+    const file = new File([activeRecordedBlob], `Echo-Recording-${Date.now()}.${extension}`, { type: mime });
     const loadedBuffer = await processSelectedFile(file);
     if (!loadedBuffer) {
       showNotification('Could not load recording for stem split.', 'error', 3200);
@@ -1863,7 +2173,7 @@ const App: React.FC = () => {
 
     const splitOk = await splitBufferToStems(loadedBuffer, file.name.replace(/\.[^/.]+$/, ''));
     if (splitOk) {
-      resetRecording();
+      handleResetRecorderSession();
       showNotification('Recording loaded into Multi-Stem with full stem controls ready.', 'success', 3000);
     }
   };
@@ -3583,6 +3893,27 @@ const App: React.FC = () => {
     || (activeFriendlyJourneyStep !== 'master' ? 'Complete the current step first.' : null);
   const friendlyVideoReason = (!friendlyWizardProgress.mastered ? 'Run Master first.' : null)
     || (activeFriendlyJourneyStep !== 'video' ? 'Complete the current step first.' : null);
+  const friendlyTabLockReasons: Partial<Record<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO', string>> =
+    engineMode !== 'FRIENDLY'
+      ? {}
+      : {
+          SINGLE: undefined,
+          MULTI: 'Friendly mode keeps you in the guided single-track flow. Switch to Advanced to open Stems.',
+          AI_STUDIO: 'Friendly mode keeps you in the guided single-track flow. Switch to Advanced to open AI Studio.',
+          VIDEO: friendlyVideoReason || undefined,
+        };
+  const friendlyTabHelperText = engineMode === 'FRIENDLY'
+    ? 'Friendly mode stays focused on one song path. Finish Master to unlock Video, or switch to Advanced for Stems and AI Studio.'
+    : null;
+
+  const handleModeTabSelect = useCallback((mode: 'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO') => {
+    const lockReason = friendlyTabLockReasons[mode];
+    if (lockReason) {
+      showNotification(lockReason, 'info', 2600);
+      return;
+    }
+    setActiveMode(mode);
+  }, [friendlyTabLockReasons, showNotification]);
   const whatChangedSummary = useMemo(() => {
     if (!originalMetrics || !processedMetrics) return null;
     const beforeLufs = originalMetrics.lufs?.integrated ?? originalMetrics.rms + 3;
@@ -3978,21 +4309,32 @@ const App: React.FC = () => {
           {/* Mode Tabs (scrollable on mobile) */}
           <div className="mt-3 -mx-3 px-3 sm:mx-0 sm:px-0">
             <div className="flex items-center gap-2 bg-slate-950/80 rounded-2xl p-1.5 border border-slate-800/50 shadow-[inset_2px_2px_4px_#000000,inset_-2px_-2px_4px_#0a0c12] overflow-x-auto no-scrollbar">
-              {(['SINGLE', 'MULTI', 'AI_STUDIO', 'VIDEO'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setActiveMode(mode)}
-                  data-testid={`mode-tab-${mode.toLowerCase()}`}
-                  className={`shrink-0 px-4 sm:px-5 py-2.5 sm:py-2.5 min-h-[44px] rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
-                    activeMode === mode
-                      ? 'bg-slate-900 text-orange-400 shadow-[inset_3px_3px_6px_#050710,inset_-3px_-3px_6px_#0f1828] border border-orange-500/30'
-                      : 'bg-slate-900/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/70 shadow-[3px_3px_6px_#050710,-3px_-3px_6px_#0f1828] border border-slate-800/30 hover:border-slate-700/50'
-                  }`}
-                >
-                  {MODE_LABELS[mode]}
-                </button>
-              ))}
+              {(['SINGLE', 'MULTI', 'AI_STUDIO', 'VIDEO'] as const).map((mode) => {
+                const lockReason = friendlyTabLockReasons[mode];
+                const isLocked = !!lockReason;
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => handleModeTabSelect(mode)}
+                    disabled={isLocked}
+                    title={isLocked ? lockReason : `Open ${MODE_LABELS[mode]}`}
+                    data-testid={`mode-tab-${mode.toLowerCase()}`}
+                    className={`shrink-0 px-4 sm:px-5 py-2.5 sm:py-2.5 min-h-[44px] rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
+                      isLocked
+                        ? 'bg-slate-900/30 text-slate-600 border border-white/5 cursor-not-allowed opacity-55'
+                        : activeMode === mode
+                          ? 'bg-slate-900 text-orange-400 shadow-[inset_3px_3px_6px_#050710,inset_-3px_-3px_6px_#0f1828] border border-orange-500/30'
+                          : 'bg-slate-900/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/70 shadow-[3px_3px_6px_#050710,-3px_-3px_6px_#0f1828] border border-slate-800/30 hover:border-slate-700/50'
+                    }`}
+                  >
+                    {MODE_LABELS[mode]}
+                  </button>
+                );
+              })}
             </div>
+          {friendlyTabHelperText && (
+            <p className="mt-2 px-1 text-[11px] text-slate-500">{friendlyTabHelperText}</p>
+          )}
           </div>
         </div>
       </header>
@@ -4215,24 +4557,80 @@ const App: React.FC = () => {
               <p className="text-[11px] text-slate-400">
                 Supports USB interfaces, wired mics, Bluetooth headsets, and built-in device audio inputs.
               </p>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <label className="rounded-lg border border-white/10 bg-slate-950/50 px-2 py-2 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                  Count-In
+                  <select
+                    value={recordCountInBeats}
+                    onChange={(event) => setRecordCountInBeats(Number(event.target.value))}
+                    className="mt-1 w-full rounded-md border border-white/10 bg-slate-900/70 px-2 py-1 text-[11px] text-slate-200"
+                  >
+                    {[0, 2, 4, 8].map((beats) => (
+                      <option key={beats} value={beats}>{beats === 0 ? 'Off' : `${beats} beats`}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="rounded-lg border border-white/10 bg-slate-950/50 px-2 py-2 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                  BPM
+                  <input
+                    type="number"
+                    min={40}
+                    max={220}
+                    value={recordMetronomeBpm}
+                    onChange={(event) => setRecordMetronomeBpm(Math.max(40, Math.min(220, Number(event.target.value) || 92)))}
+                    className="mt-1 w-full rounded-md border border-white/10 bg-slate-900/70 px-2 py-1 text-[11px] text-slate-200"
+                  />
+                </label>
+                <label className="rounded-lg border border-white/10 bg-slate-950/50 px-2 py-2 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                  Punch In
+                  <input
+                    type="number"
+                    min={0}
+                    max={10}
+                    step={0.1}
+                    value={recordPunchInSeconds}
+                    onChange={(event) => setRecordPunchInSeconds(Math.max(0, Math.min(10, Number(event.target.value) || 0)))}
+                    className="mt-1 w-full rounded-md border border-white/10 bg-slate-900/70 px-2 py-1 text-[11px] text-slate-200"
+                  />
+                </label>
+                <label className="rounded-lg border border-white/10 bg-slate-950/50 px-2 py-2 text-[10px] uppercase tracking-[0.14em] text-slate-500">
+                  Punch Out
+                  <input
+                    type="number"
+                    min={0}
+                    max={120}
+                    step={0.1}
+                    value={recordPunchOutSeconds}
+                    onChange={(event) => setRecordPunchOutSeconds(Math.max(0, Math.min(120, Number(event.target.value) || 0)))}
+                    className="mt-1 w-full rounded-md border border-white/10 bg-slate-900/70 px-2 py-1 text-[11px] text-slate-200"
+                  />
+                </label>
+              </div>
+
+              <label className="inline-flex items-center gap-2 text-[11px] text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={recordMetronomeEnabled}
+                  onChange={(event) => setRecordMetronomeEnabled(event.target.checked)}
+                  className="h-4 w-4 rounded border-white/20 bg-slate-900 text-orange-400"
+                />
+                Metronome
+              </label>
+
               <div className="flex gap-2">
                 {recordingState !== 'recording' ? (
                   <button
                     type="button"
-                    onClick={() =>
-                      void startRecording({
-                        channelCount: recordingChannelMode === 'stereo' ? 2 : 1,
-                        deviceId: recordingInputDeviceId || undefined
-                      })
-                    }
+                    onClick={startGuidedRecording}
                     className="flex-1 rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20"
                   >
-                    Record Track
+                    {recordingPrepCountdown ? `Starting in ${recordingPrepCountdown}...` : 'Record Track'}
                   </button>
                 ) : (
                   <button
                     type="button"
-                    onClick={stopRecording}
+                    onClick={handleStopGuidedRecording}
                     className="flex-1 rounded-xl border border-red-400/40 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-300 transition-colors hover:bg-red-500/20"
                   >
                     Stop Recording
@@ -4240,13 +4638,61 @@ const App: React.FC = () => {
                 )}
                 <button
                   type="button"
-                  onClick={resetRecording}
+                  onClick={handleResetRecorderSession}
                   className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-300 transition-colors hover:border-white/30 hover:text-slate-100"
                 >
                   Reset
                 </button>
               </div>
-              {recordingState === 'stopped' && recordedAudioBlob && (
+
+              <div className="rounded-lg border border-white/10 bg-slate-950/45 px-3 py-2 text-[11px] text-slate-400">
+                <span className="text-slate-300 font-semibold">Status:</span>{' '}
+                {recordingHint || (recordingState === 'recording'
+                  ? `Recording... ${recordingElapsedSec.toFixed(1)}s captured.`
+                  : 'Ready to record a new take.')}
+              </div>
+
+              {recordedTakes.length > 0 && (
+                <div className="rounded-xl border border-white/10 bg-slate-950/50 p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Takes</p>
+                    {bestTakeSuggestion && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTakeId(bestTakeSuggestion.takeId)}
+                        className="rounded-md border border-emerald-400/35 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200 hover:bg-emerald-500/20"
+                      >
+                        Best Take: {bestTakeSuggestion.label}
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    {recordedTakes.map((take) => {
+                      const selected = selectedTakeId === take.id;
+                      return (
+                        <button
+                          key={take.id}
+                          type="button"
+                          onClick={() => setSelectedTakeId(take.id)}
+                          className={`w-full rounded-lg border px-2.5 py-2 text-left text-[11px] transition-colors ${
+                            selected
+                              ? 'border-orange-400/45 bg-orange-500/10 text-orange-100'
+                              : 'border-white/10 bg-slate-900/40 text-slate-300 hover:border-orange-400/30'
+                          }`}
+                        >
+                          <span className="font-semibold">{take.label}</span>
+                          <span className="ml-2 text-slate-500">{take.durationSec.toFixed(1)}s</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {bestTakeSuggestion && (
+                    <p className="mt-2 text-[11px] text-slate-500">{bestTakeSuggestion.reason}</p>
+                  )}
+                </div>
+              )}
+
+              {(recordingState === 'stopped' || recordedTakes.length > 0) && activeRecordedBlob && (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <button
                     type="button"
@@ -4266,9 +4712,9 @@ const App: React.FC = () => {
               )}
             </div>
           </div>
-          {recordedAudioUrl && recordingState === 'stopped' && (
+          {activeRecordedUrl && (
             <div className="mt-3 rounded-xl border border-white/10 bg-slate-950/50 p-3">
-              <audio controls src={recordedAudioUrl} className="w-full" />
+              <audio controls src={activeRecordedUrl} className="w-full" />
             </div>
           )}
           {recorderError && (
@@ -4293,7 +4739,7 @@ const App: React.FC = () => {
 
         <div className="mt-8 flex justify-center">
           <p className="text-xs text-slate-500 tracking-wide">
-            Powered by IntentCore™
+            Powered by Echo Sound Lab
           </p>
         </div>
 
@@ -4326,15 +4772,15 @@ const App: React.FC = () => {
             </div>
             <div className="grid min-w-0 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
               <div className="min-w-0 rounded-xl border border-white/10 bg-slate-950/50 p-3.5">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Telemetry</p>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Clarity</p>
                 <p className="mt-1.5 text-sm font-semibold leading-5 text-slate-100 break-words">Simple Quality Score</p>
               </div>
               <div className="min-w-0 rounded-xl border border-white/10 bg-slate-950/50 p-3.5">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Safety</p>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Protection</p>
                 <p className="mt-1.5 text-sm font-semibold leading-5 text-slate-100 break-words">Keeps Punch Alive</p>
               </div>
               <div className="min-w-0 rounded-xl border border-white/10 bg-slate-950/50 p-3.5">
-                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Control</p>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Guidance</p>
                 <p className="mt-1.5 text-sm font-semibold leading-5 text-slate-100 break-words">You Approve Changes</p>
               </div>
             </div>
@@ -4495,7 +4941,7 @@ const App: React.FC = () => {
                               : 'border-red-400/35 bg-red-500/10 text-red-300'
                         )}
                       >
-                        Confidence {stemSplitState.confidenceScore ?? '--'}%
+                        Split Quality {stemSplitState.confidenceScore ?? '--'}%
                       </span>
                     )}
                     <span className="font-mono text-orange-300">{Math.round(stemSplitState.progress)}%</span>
@@ -4527,7 +4973,7 @@ const App: React.FC = () => {
                       Use Manual Stems
                     </button>
                     <span className="text-[11px] text-slate-500">
-                      Best for release-critical mixes when split confidence is low.
+                      When split quality is low, upload your own stems for best control.
                     </span>
                   </div>
                 )}
@@ -5171,7 +5617,7 @@ const App: React.FC = () => {
 
       {/* Mode Switcher - Always Visible */}
       <div
-        className="fixed left-6 z-50 flex gap-2 items-center"
+        className="fixed left-4 sm:left-6 z-50 flex gap-2 items-center"
         style={{ bottom: `calc(24px + var(--esl-safe-bottom) + ${cornerUiOffsetPx}px)` }}
       >
         <div className="flex gap-3 items-center group/mode-switcher">
@@ -5216,7 +5662,7 @@ const App: React.FC = () => {
               <div className="absolute right-full top-1/2 -translate-y-1/2 w-2 h-2 bg-slate-900/95 border-l border-t border-slate-700/50 rotate-45" />
             </div>
           </button>
-          <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
+          <div className="hidden sm:block text-xs font-bold uppercase tracking-wide text-slate-400">
             {engineMode === 'FRIENDLY' ? 'Friendly' : 'Advanced'} Mode
           </div>
         </div>
@@ -5414,6 +5860,12 @@ const App: React.FC = () => {
           appVersion={appVersion}
           themeMode={themeMode}
           setThemeMode={setThemeMode}
+          reducedMotionEnabled={reducedMotionEnabled}
+          setReducedMotionEnabled={setReducedMotionEnabled}
+          highContrastEnabled={highContrastEnabled}
+          setHighContrastEnabled={setHighContrastEnabled}
+          largeTouchTargetsEnabled={largeTouchTargetsEnabled}
+          setLargeTouchTargetsEnabled={setLargeTouchTargetsEnabled}
           networkSettings={networkSettings}
           setNetworkSettings={setNetworkSettings}
           onCopyDebugInfo={copyDebugInfo}

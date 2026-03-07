@@ -150,6 +150,8 @@ interface AnalysisPanelProps {
   onPreservationModeChange?: (mode: PreservationMode) => void;
   engineVerdict?: 'accept' | 'warn' | 'block' | null;
   engineVerdictReason?: string | null;
+  onFixBlockedMix?: () => Promise<void>;
+  isFixingBlockedMix?: boolean;
   debugTelemetry?: boolean;
 }
 
@@ -212,10 +214,12 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   onPreservationModeChange,
   engineVerdict,
   engineVerdictReason,
+  onFixBlockedMix,
+  isFixingBlockedMix,
   debugTelemetry
 }) => {
   if (!analysisResult) return null;
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(true);
   const [isImprovingMix, setIsImprovingMix] = useState(false);
   const isFriendly = engineMode === 'FRIENDLY';
   const showFullStudio = !isFriendly && !!onFullStudioAutoMix;
@@ -232,14 +236,14 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   };
 
   return (
-    <div className="bg-gradient-to-br from-slate-900/90 to-slate-800/90 backdrop-blur-xl rounded-3xl p-8 shadow-[6px_6px_20px_rgba(0,0,0,0.4),-2px_-2px_10px_rgba(255,255,255,0.02)] border border-slate-700/30 mb-6">
-      <div className="mb-6 rounded-2xl border border-slate-700/60 bg-gradient-to-b from-slate-800 to-slate-900 p-8 text-center shadow-xl">
+    <div className="bg-gradient-to-br from-slate-900/90 to-slate-800/90 backdrop-blur-xl rounded-3xl p-5 sm:p-8 shadow-[6px_6px_20px_rgba(0,0,0,0.4),-2px_-2px_10px_rgba(255,255,255,0.02)] border border-slate-700/30 mb-6">
+      <div className="mb-6 rounded-2xl border border-slate-700/60 bg-gradient-to-b from-slate-800 to-slate-900 p-5 sm:p-8 text-center shadow-xl">
         <h2 className="text-2xl font-bold text-white">Ready to finish your track?</h2>
         <p className="mt-2 text-slate-400">Our AI will polish your sound while keeping your drums punchy.</p>
         <button
           onClick={handleImproveMyMixClick}
           disabled={!onImproveMyMix || isImprovingMix || isProcessing}
-          className="mt-6 rounded-full bg-emerald-500 px-10 py-4 font-bold text-black transition-all hover:scale-105 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+          className="mt-6 rounded-full bg-emerald-500 px-8 sm:px-10 py-3.5 sm:py-4 font-bold text-black transition-all hover:scale-105 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
         >
           {isImprovingMix || isProcessing ? '✨ Working Magic...' : '✨ Improve My Mix'}
         </button>
@@ -274,7 +278,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           </div>
           <div className="flex items-center gap-2">
             {typeof humanIntentIndex === 'number' && (
-              <span className="text-xs text-slate-500">Match Score: {Math.round(humanIntentIndex)}</span>
+              <span className="text-xs text-slate-500">Quality Score: {Math.round(humanIntentIndex)}</span>
             )}
             <ShadowDeltaBadge
               delta={shadowDelta}
@@ -407,6 +411,18 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           >
             {engineVerdict === 'block' ? 'Hold on a second...' : engineVerdict === 'warn' ? 'Quick heads-up:' : 'Nice. Your mix is in a healthy zone.'}
             {engineVerdictReason ? ` ${engineVerdictReason}` : ''}
+            {engineVerdict === 'block' && onFixBlockedMix && (
+              <div className="mt-3">
+                <button
+                  type="button"
+                  onClick={() => void onFixBlockedMix()}
+                  disabled={isProcessing || !!isAutoMixing || !!isFixingBlockedMix}
+                  className="rounded-md border border-orange-400/40 bg-orange-500/15 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-orange-200 transition-colors hover:bg-orange-500/25 disabled:cursor-not-allowed disabled:border-white/15 disabled:bg-white/5 disabled:text-slate-500"
+                >
+                  {isFixingBlockedMix ? 'Applying safer settings...' : 'Fix and Retry'}
+                </button>
+              </div>
+            )}
           </div>
         )}
         {debugTelemetry &&
@@ -415,9 +431,15 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
           Number.isFinite(shadowDelta) &&
           Number.isFinite(quantumConfidence) && (
             <div className="mb-4 rounded-lg border border-slate-700/60 bg-slate-900/30 px-3 py-2 text-[11px] font-mono text-slate-400">
-              Match:{Number.isFinite(humanIntentIndex) ? Math.round(humanIntentIndex as number) : '--'} | Classic:{Math.round(classicalScore as number)} | AI:{Math.round(quantumScore as number)} | Boost:{(shadowDelta as number) >= 0 ? '+' : ''}{Math.round(shadowDelta as number)} | confidence:{(quantumConfidence as number).toFixed(2)}
+              Quality:{Number.isFinite(humanIntentIndex) ? Math.round(humanIntentIndex as number) : '--'} | Baseline:{Math.round(classicalScore as number)} | AI:{Math.round(quantumScore as number)} | Extra:{(shadowDelta as number) >= 0 ? '+' : ''}{Math.round(shadowDelta as number)} | Confidence:{(quantumConfidence as number).toFixed(2)}
             </div>
           )}
+
+        <div className="mb-4 rounded-lg border border-orange-500/25 bg-orange-500/5 px-3 py-2 text-[11px] text-slate-300">
+          <span className="font-semibold text-orange-300">Defender License Policy:</span>{' '}
+          Founding Defender ($199) is limited to the first 500 users and grants v2.x lifetime access.
+          Unlimited usage is for human creators; high-frequency headless automation is not allowed on standard licenses.
+        </div>
 
         {onAutoMix && (isAutoMixing || autoMixProgress || autoMixError) && (
           <div className="mb-5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-4 py-3 text-sm">
@@ -438,7 +460,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             </div>
             {autoMixProgress?.score !== undefined && (
               <div className="mt-1 text-slate-400">
-                Match Score: <span className="text-orange-300 font-semibold">{autoMixProgress.score}</span>
+                Quality Score: <span className="text-orange-300 font-semibold">{autoMixProgress.score}</span>
               </div>
             )}
             {autoMixError && (
@@ -455,7 +477,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               </svg>
             </div>
             <p className="text-slate-300 text-base font-semibold mb-2">Ready to Improve</p>
-            <p className="text-slate-500 text-sm mb-6 max-w-sm mx-auto">IntentCore will analyze your track and suggest easy upgrades.</p>
+            <p className="text-slate-500 text-sm mb-6 max-w-sm mx-auto">Echo will analyze your track and suggest easy upgrades.</p>
             <button
               onClick={onRequestAIAnalysis}
               className="relative overflow-hidden bg-gradient-to-r from-orange-500 to-orange-600 text-white font-bold py-4 px-8 rounded-xl shadow-[0_4px_20px_rgba(251,146,60,0.3)] hover:shadow-[0_8px_40px_rgba(251,146,60,0.5)] hover:from-orange-600 hover:to-orange-700 active:scale-[0.98] transition-all duration-300 ease-out uppercase tracking-wider text-sm backdrop-blur-xl border border-orange-400/20 before:absolute before:inset-0 before:bg-gradient-to-r before:from-transparent before:via-white/20 before:to-transparent before:-translate-x-full hover:before:translate-x-full before:transition-transform before:duration-700 before:ease-out before:pointer-events-none"
@@ -469,7 +491,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               <div className="absolute inset-0 rounded-full bg-gradient-to-r from-orange-500 to-blue-500 opacity-20 animate-pulse" />
               <div className="absolute inset-2 rounded-full border-4 border-transparent border-t-orange-500 border-r-blue-500 animate-spin" />
             </div>
-            <p className="text-slate-200 font-semibold mb-1">IntentCore is analyzing your sound...</p>
+            <p className="text-slate-200 font-semibold mb-1">AI is analyzing your track...</p>
             <p className="text-slate-500 text-sm">This may take a few moments</p>
           </div>
         ) : (
@@ -598,8 +620,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         )}
       </div>
 
-      {/* Reference Track - Second - Hidden when Echo Report is active */}
-      {!isFriendly && (echoReportStatus !== 'loading' && echoReportStatus !== 'success') && (
+      {/* Reference Profiling - always available in Advanced mode */}
+      {!isFriendly && (
       <div>
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-blue-500 flex items-center justify-center shadow-lg">
@@ -608,8 +630,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             </svg>
           </div>
           <div>
-            <h3 className="text-lg font-black text-white tracking-tight">Reference Track</h3>
-            <p className="text-xs text-slate-400">Optional AI matching</p>
+            <h3 className="text-lg font-black text-white tracking-tight">Reference Profiling</h3>
+            <p className="text-xs text-slate-400">Upload a target record and master toward its intent</p>
           </div>
         </div>
 
