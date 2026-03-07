@@ -79,7 +79,23 @@ export const ViewportProvider: React.FC<React.PropsWithChildren> = ({ children }
 
 export function useViewport(): ViewportState {
   const ctx = useContext(ViewportContext);
-  if (!ctx) throw new Error('useViewport must be used inside <ViewportProvider>.');
-  return ctx;
-}
+  if (ctx) return ctx;
 
+  // Emergency-safe fallback so the app never hard-crashes in production
+  // if context wiring is temporarily out of sync during deploy/runtime.
+  const width = typeof window === 'undefined' ? 1024 : window.innerWidth;
+  const height = typeof window === 'undefined' ? 768 : window.innerHeight;
+  const device = classifyDevice(width);
+  const orientation = getOrientation(width, height);
+
+  return {
+    width,
+    height,
+    device,
+    isPhone: device === 'phone',
+    isTablet: device === 'tablet',
+    isDesktop: device === 'desktop',
+    isTouch: detectTouch(),
+    orientation,
+  };
+}
