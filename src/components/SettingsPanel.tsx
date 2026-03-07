@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { i18nService, SupportedLanguage } from '../services/i18nService';
+import React, { useMemo, useState } from 'react';
 import { EngineMode } from '../types';
 import { useViewport } from '../context/ViewportContext';
+import { useI18n } from '../context/I18nContext';
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -23,21 +23,20 @@ interface SettingsPanelProps {
   onClearDebugInfo?: () => void;
 }
 
-const modeDescriptions: Record<EngineMode, { title: string; subtitle: string }> = {
-  FRIENDLY: { title: 'Friendly mode', subtitle: 'Simplified controls with guided steps' },
-  ADVANCED: { title: 'Advanced mode', subtitle: 'Full plugin rack, EQ, and meters' },
-  FULL_STUDIO: { title: 'Full Studio', subtitle: 'Auto-Mix with entire custom plug-in suite' },
+const modeDescriptionKeys: Record<EngineMode, { titleKey: string; subtitleKey: string }> = {
+  FRIENDLY: {
+    titleKey: 'settingsPanel.friendlyModeTitle',
+    subtitleKey: 'settingsPanel.friendlyModeSubtitle',
+  },
+  ADVANCED: {
+    titleKey: 'settingsPanel.advancedModeTitle',
+    subtitleKey: 'settingsPanel.advancedModeSubtitle',
+  },
 };
 
 const sections = ['mode', 'display', 'language', 'network', 'about'] as const;
 type SectionKey = (typeof sections)[number];
-const sectionTitles: Record<SectionKey, string> = {
-  mode: 'Mode',
-  display: 'Display',
-  language: 'Language',
-  network: 'Network',
-  about: 'About',
-};
+
 const sectionIcons: Record<SectionKey, React.ReactNode> = {
   mode: (
     <svg className="w-4 h-4 text-orange-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -86,38 +85,44 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClearDebugInfo
 }) => {
   const { isPhone } = useViewport();
-  const [currentLanguage, setCurrentLanguage] = useState<SupportedLanguage>(i18nService.getLanguage());
+  const { t, language: currentLanguage, setLanguage, supportedLanguages } = useI18n();
   const [isChanging, setIsChanging] = useState(false);
   const [openSection, setOpenSection] = useState<SectionKey | null>('mode');
   const [debugStatus, setDebugStatus] = useState<'idle' | 'copied' | 'error'>('idle');
-  const languages = i18nService.getSupportedLanguages();
 
-  useEffect(() => {
-    const handleLanguageChange = () => setCurrentLanguage(i18nService.getLanguage());
-    window.addEventListener('languageChanged', handleLanguageChange);
-    return () => window.removeEventListener('languageChanged', handleLanguageChange);
-  }, []);
+  const sectionTitles = useMemo<Record<SectionKey, string>>(() => ({
+    mode: t('settingsPanel.sectionMode'),
+    display: t('settingsPanel.sectionDisplay'),
+    language: t('settingsPanel.sectionLanguage'),
+    network: t('settingsPanel.sectionNetwork'),
+    about: t('settingsPanel.sectionAbout'),
+  }), [t]);
 
-  const handleLanguageChange = async (lang: SupportedLanguage) => {
+  const handleLanguageChange = async (lang: (typeof supportedLanguages)[number]['code']) => {
     setIsChanging(true);
-    await i18nService.setLanguage(lang);
-    setCurrentLanguage(lang);
-    setIsChanging(false);
-    window.dispatchEvent(new Event('languageChanged'));
+    try {
+      await setLanguage(lang);
+    } finally {
+      setIsChanging(false);
+    }
   };
 
   const sectionSummary = (section: SectionKey) => {
     switch (section) {
       case 'mode':
-        return engineMode === 'FULL_STUDIO' ? 'FULL STUDIO' : engineMode;
+        return engineMode === 'FRIENDLY'
+          ? t('settingsPanel.friendlyModeTitle')
+          : t('settingsPanel.advancedModeTitle');
       case 'display':
-        return themeMode.toUpperCase();
-      case 'language':
-        return currentLanguage.toUpperCase();
+        return themeMode === 'dark' ? t('settingsPanel.dark') : t('settingsPanel.light');
+      case 'language': {
+        const activeLanguage = supportedLanguages.find(({ code }) => code === currentLanguage);
+        return activeLanguage?.nativeName || currentLanguage.toUpperCase();
+      }
       case 'network':
-        return networkSettings.ssid || 'Local network';
+        return networkSettings.isLocal ? t('settingsPanel.localNetwork') : (networkSettings.ssid || t('settingsPanel.localNetwork'));
       case 'about':
-        return 'Restraint > Expansion';
+        return t('settingsPanel.aboutHeadline');
       default:
         return '';
     }
@@ -148,8 +153,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
       >
         <div className={`p-5 border-b border-white/10 flex items-center justify-between ${isPhone ? 'pt-[calc(20px+var(--esl-safe-top))]' : ''}`}>
           <div>
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-500 mb-1">Settings</p>
-            <h2 className="text-2xl font-bold text-white">Studio Controls</h2>
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-500 mb-1">{t('settings.title')}</p>
+            <h2 className="text-2xl font-bold text-white">{t('settingsPanel.studioControls')}</h2>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -176,14 +181,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       <div className="text-[11px] uppercase tracking-wider text-slate-400">{sectionSummary(section)}</div>
                     </div>
                   </div>
-                  <div className="text-xs text-slate-400">{openSection === section ? 'Hide' : 'Show'}</div>
+                  <div className="text-xs text-slate-400">{openSection === section ? t('settingsPanel.hide') : t('settingsPanel.show')}</div>
                 </button>
                 {openSection === section && (
                   <div className="mt-4 space-y-3">
                     {section === 'mode' && (
                       <>
-                        <div className="grid grid-cols-3 gap-3">
-                          {(Object.keys(modeDescriptions) as EngineMode[]).map((mode) => (
+                        <div className="grid grid-cols-2 gap-3">
+                          {(Object.keys(modeDescriptionKeys) as EngineMode[]).map((mode) => (
                             <button
                               key={mode}
                               onClick={() => setEngineMode(mode)}
@@ -191,8 +196,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                 ? 'border-orange-400 bg-orange-500/10 text-white shadow-[0_10px_30px_rgba(249,115,22,0.2)]'
                                 : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/40 hover:bg-white/10'}`}
                             >
-                              <div className="font-semibold">{modeDescriptions[mode].title}</div>
-                              <p className="text-[11px] text-slate-400">{modeDescriptions[mode].subtitle}</p>
+                              <div className="font-semibold">{t(modeDescriptionKeys[mode].titleKey)}</div>
+                              <p className="text-[11px] text-slate-400">{t(modeDescriptionKeys[mode].subtitleKey)}</p>
                             </button>
                           ))}
                         </div>
@@ -201,36 +206,36 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             onClick={() => setEngineMode(engineMode === 'FRIENDLY' ? 'ADVANCED' : 'FRIENDLY')}
                             className="flex-1 px-4 py-2 rounded-xl text-xs uppercase tracking-wider font-bold bg-slate-900/60 border border-orange-500/30 text-orange-300 hover:bg-slate-900"
                           >
-                            {engineMode === 'FRIENDLY' ? 'Switch to Advanced' : 'Switch to Friendly'}
+                            {engineMode === 'FRIENDLY' ? t('settingsPanel.switchToAdvanced') : t('settingsPanel.switchToFriendly')}
                           </button>
                           <button
                             onClick={onResetToOriginal}
                             className="flex-1 px-4 py-2 rounded-xl text-xs uppercase tracking-wider font-bold bg-slate-900/60 border border-slate-700/60 text-slate-200 hover:bg-slate-800"
                           >
-                            Reset to original
+                            {t('settingsPanel.resetToOriginal')}
                           </button>
                         </div>
                       </>
                     )}
-                                        {section === 'display' && (
+                    {section === 'display' && (
                       <div className="space-y-3">
                         <div className="flex gap-3">
-                          {['dark', 'light'].map((mode) => (
+                          {(['dark', 'light'] as const).map((mode) => (
                             <button
                               key={mode}
-                              onClick={() => setThemeMode(mode as 'light' | 'dark')}
+                              onClick={() => setThemeMode(mode)}
                               className={`flex-1 py-3 rounded-2xl border text-sm font-semibold uppercase tracking-wide ${themeMode === mode
                                 ? 'bg-orange-500/10 border-orange-400 text-white'
                                 : 'bg-white/5 border-white/10 text-slate-300 hover:border-white/40 hover:bg-white/10'}`}
                             >
-                              {mode}
+                              {mode === 'dark' ? t('settingsPanel.dark') : t('settingsPanel.light')}
                             </button>
                           ))}
                         </div>
 
                         <div className="grid gap-2">
                           <label className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/40 px-3 py-2 text-sm text-slate-300">
-                            <span>Reduced motion</span>
+                            <span>{t('settingsPanel.reducedMotion')}</span>
                             <input
                               type="checkbox"
                               checked={reducedMotionEnabled}
@@ -239,7 +244,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             />
                           </label>
                           <label className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/40 px-3 py-2 text-sm text-slate-300">
-                            <span>High contrast mode</span>
+                            <span>{t('settingsPanel.highContrast')}</span>
                             <input
                               type="checkbox"
                               checked={highContrastEnabled}
@@ -248,7 +253,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             />
                           </label>
                           <label className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-900/40 px-3 py-2 text-sm text-slate-300">
-                            <span>Larger touch targets</span>
+                            <span>{t('settingsPanel.largeTouchTargets')}</span>
                             <input
                               type="checkbox"
                               checked={largeTouchTargetsEnabled}
@@ -261,7 +266,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     )}
                     {section === 'language' && (
                       <div className="grid grid-cols-2 gap-3">
-                        {languages.map(({ code, name, nativeName }) => (
+                        {supportedLanguages.map(({ code, name, nativeName }) => (
                           <button
                             key={code}
                             onClick={() => handleLanguageChange(code)}
@@ -288,7 +293,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                     {section === 'network' && (
                       <>
                         <div className="space-y-2">
-                          <label className="text-xs text-slate-500 uppercase tracking-wider">SSID</label>
+                          <label className="text-xs text-slate-500 uppercase tracking-wider">{t('settingsPanel.ssid')}</label>
                           <input
                             type="text"
                             value={networkSettings.ssid}
@@ -297,12 +302,15 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                           />
                         </div>
                         <div className="space-y-2">
-                          <label className="text-xs text-slate-500 uppercase tracking-wider">Proxy / Gateway</label>
+                          <label className="text-xs text-slate-500 uppercase tracking-wider">{t('settingsPanel.proxyGateway')}</label>
                           <input
                             type="text"
                             value={networkSettings.proxy}
+                            disabled={networkSettings.isLocal}
                             onChange={(e) => setNetworkSettings({ ...networkSettings, proxy: e.target.value })}
-                            className="w-full rounded-2xl bg-slate-900/70 border border-white/10 px-3 py-2 text-sm text-white"
+                            className={`w-full rounded-2xl border px-3 py-2 text-sm ${networkSettings.isLocal
+                              ? 'bg-slate-900/30 border-white/5 text-slate-500 cursor-not-allowed'
+                              : 'bg-slate-900/70 border-white/10 text-white'}`}
                           />
                         </div>
                         <div className="flex items-center gap-2">
@@ -314,24 +322,24 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             className="h-4 w-4 text-orange-400 bg-slate-800 border border-white/20 rounded focus:ring-orange-500"
                           />
                           <label htmlFor="local-network" className="text-xs uppercase tracking-wider text-slate-400">
-                            Use local network (no proxy)
+                            {t('settingsPanel.useLocalNetwork')}
                           </label>
                         </div>
                         <div className="text-[11px] text-slate-500 italic">
-                          These values are saved locally to help the studio analytic routing and diagnostics only.
+                          {t('settingsPanel.routingNote')}
                         </div>
                       </>
                     )}
                     {section === 'about' && (
                       <div className="text-sm text-slate-300 space-y-2">
-                        <p className="text-orange-200 font-semibold text-base">Restraint &gt; Expansion</p>
-                        <p>We protect your sound before we ever change it.</p>
-                        <p>• No audio is altered unless you ask.</p>
-                        <p>• Always let you compare your original.</p>
-                        <p>• Silence is success. Restraint is power.</p>
+                        <p className="text-orange-200 font-semibold text-base">{t('settingsPanel.aboutHeadline')}</p>
+                        <p>{t('settingsPanel.aboutLine1')}</p>
+                        <p>- {t('settingsPanel.aboutLine2')}</p>
+                        <p>- {t('settingsPanel.aboutLine3')}</p>
+                        <p>- {t('settingsPanel.aboutLine4')}</p>
 
                         <div className="pt-3 mt-3 border-t border-white/10 space-y-2">
-                          <p className="text-[11px] uppercase tracking-wider text-slate-500">Beta Tools</p>
+                          <p className="text-[11px] uppercase tracking-wider text-slate-500">{t('settingsPanel.betaTools')}</p>
                           <div className="flex flex-col sm:flex-row gap-3">
                             <button
                               type="button"
@@ -343,7 +351,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                   : 'bg-white/5 border-white/10 text-slate-600 cursor-not-allowed opacity-60'
                               }`}
                             >
-                              {debugStatus === 'copied' ? 'Copied' : debugStatus === 'error' ? 'Copy Failed' : 'Copy Debug Info'}
+                              {debugStatus === 'copied' ? t('settingsPanel.copied') : debugStatus === 'error' ? t('settingsPanel.copyFailed') : t('settingsPanel.copyDebugInfo')}
                             </button>
                             <button
                               type="button"
@@ -355,11 +363,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                                   : 'bg-white/5 border-white/10 text-slate-600 cursor-not-allowed opacity-60'
                               }`}
                             >
-                              Clear Log
+                              {t('settingsPanel.clearLog')}
                             </button>
                           </div>
                           <p className="text-[11px] text-slate-500">
-                            If something breaks, tap Copy Debug Info and paste it into your beta reply email.
+                            {t('settingsPanel.debugHint')}
                           </p>
                         </div>
                       </div>
@@ -373,7 +381,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
 
         <div className="p-6 border-t border-white/10 bg-white/5">
           <div className="flex justify-between items-center">
-            <div className="text-xs text-slate-400 uppercase tracking-widest font-bold">Version</div>
+            <div className="text-xs text-slate-400 uppercase tracking-widest font-bold">{t('settingsPanel.version')}</div>
             <div className="text-xs text-slate-400 font-mono">{appVersion}</div>
           </div>
         </div>

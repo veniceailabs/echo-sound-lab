@@ -33,7 +33,7 @@ import { storageService } from './services/storageService';
 import { runSafeAsync } from './utils/safeAsync';
 import { saveEQSettings, saveDynamicEQSettings } from './utils/eqPersistence';
 import SettingsPanel from './components/SettingsPanel';
-import { i18nService } from './services/i18nService';
+import { useI18n } from './context/I18nContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useRecorder } from './hooks/useRecorder';
 import AudioDeviceSelector from './components/AudioDeviceSelector';
@@ -114,12 +114,8 @@ const ONBOARDING_PROFILE_KEY = 'echo.onboardingProfile.v1';
 const REDUCED_MOTION_KEY = 'echo.a11y.reducedMotion.v1';
 const HIGH_CONTRAST_KEY = 'echo.a11y.highContrast.v1';
 const LARGE_TOUCH_TARGETS_KEY = 'echo.a11y.largeTouchTargets.v1';
-const MODE_LABELS: Record<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO', string> = {
-  SINGLE: 'Single Track',
-  MULTI: 'Stems',
-  AI_STUDIO: 'AI Studio',
-  VIDEO: 'SFS Video Engine',
-};
+const THEME_MODE_KEY = 'echo.themeMode.v1';
+const NETWORK_SETTINGS_KEY = 'echo.networkSettings.v1';
 const ENGINEER_TEMPLATE_PRESET_IDS = [
   'preset-engineer-rian-lewis',
   'preset-engineer-dr-dre',
@@ -214,6 +210,7 @@ const App: React.FC = () => {
     VIDEO: 0,
   });
   const { isPhone, isTablet } = useViewport();
+  const { t } = useI18n();
   const [engineMode, setEngineMode] = useState<EngineMode>(() => {
     try {
       const stored = localStorage.getItem(ENGINE_MODE_KEY);
@@ -320,9 +317,28 @@ const App: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showHistoryTimeline, setShowHistoryTimeline] = useState(false);
   const [showEchoChat, setShowEchoChat] = useState(false);
-  const [, forceUpdate] = useState({});
-  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('dark');
-  const [networkSettings, setNetworkSettings] = useState({ ssid: 'Echo WiFi', proxy: '', isLocal: true });
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    try {
+      const stored = localStorage.getItem(THEME_MODE_KEY);
+      return stored === 'light' ? 'light' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+  const [networkSettings, setNetworkSettings] = useState<{ ssid: string; proxy: string; isLocal: boolean }>(() => {
+    try {
+      const stored = localStorage.getItem(NETWORK_SETTINGS_KEY);
+      if (!stored) return { ssid: 'Echo WiFi', proxy: '', isLocal: true };
+      const parsed = JSON.parse(stored);
+      return {
+        ssid: typeof parsed?.ssid === 'string' ? parsed.ssid : 'Echo WiFi',
+        proxy: typeof parsed?.proxy === 'string' ? parsed.proxy : '',
+        isLocal: typeof parsed?.isLocal === 'boolean' ? parsed.isLocal : true,
+      };
+    } catch {
+      return { ssid: 'Echo WiFi', proxy: '', isLocal: true };
+    }
+  });
   const [showFriendlyTour, setShowFriendlyTour] = useState(false);
   const [friendlyTourStep, setFriendlyTourStep] = useState(0);
   const [onboardingProfile, setOnboardingProfile] = useState<OnboardingProfile>(() => {
@@ -474,6 +490,19 @@ const App: React.FC = () => {
   const AUTO_MIX_TARGET_SCORE = 90;
   const AUTO_MIX_MAX_ITERATIONS = 4;
   const appVersion = 'RC 1.0 (Adversarial Hardened)';
+  const modeLabels = useMemo<Record<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO', string>>(() => ({
+    SINGLE: t('modes.single'),
+    MULTI: t('modes.multi'),
+    AI_STUDIO: t('modes.ai'),
+    VIDEO: t('app.videoMode'),
+  }), [t]);
+  const networkBadgeName = networkSettings.isLocal
+    ? t('app.networkLocalShort')
+    : (networkSettings.ssid.trim() || t('app.networkLocalShort'));
+  const networkBadgeProxy = !networkSettings.isLocal && networkSettings.proxy.trim()
+    ? networkSettings.proxy.trim()
+    : '';
+
   useEffect(() => {
     debugTelemetryService.installGlobalErrorHandlers();
   }, []);
@@ -486,6 +515,11 @@ const App: React.FC = () => {
     } else {
       root.classList.remove('theme-light');
       root.classList.add('theme-dark');
+    }
+    try {
+      localStorage.setItem(THEME_MODE_KEY, themeMode);
+    } catch (error) {
+      console.warn('[App] Failed to persist theme mode', error);
     }
   }, [themeMode]);
 
@@ -645,6 +679,14 @@ const App: React.FC = () => {
   }, [reducedMotionEnabled, highContrastEnabled, largeTouchTargetsEnabled]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(NETWORK_SETTINGS_KEY, JSON.stringify(networkSettings));
+    } catch (error) {
+      console.warn('[App] Failed to persist network settings', error);
+    }
+  }, [networkSettings]);
+
+  useEffect(() => {
     if (recordingState === 'recording') {
       const startedAt = performance.now();
       setRecordingElapsedSec(0);
@@ -761,10 +803,10 @@ const App: React.FC = () => {
   const abPanelLabel = snapshotABActive
     ? `Listening to ${isAbComparing ? (snapshotALabel || 'Snapshot A') : (snapshotBLabel || 'Snapshot B')}`
     : (!hasAppliedChanges
-      ? i18nService.t('ab.noChanges')
+      ? t('ab.noChanges')
       : isAbComparing
-        ? `${i18nService.t('ab.original')}${pitchTag ? ` · ${pitchTag}` : ''}`
-        : `${i18nService.t('ab.processed')}${pitchTag ? ` · ${pitchTag}` : ''}`);
+        ? `${t('ab.original')}${pitchTag ? ` · ${pitchTag}` : ''}`
+        : `${t('ab.processed')}${pitchTag ? ` · ${pitchTag}` : ''}`);
   const abFloatingLabel = snapshotABActive
     ? (isAbComparing ? 'Snapshot A' : 'Snapshot B')
     : pitchTag ? pitchTag : (isAbComparing ? 'Original' : 'Processed');
@@ -1290,10 +1332,10 @@ const App: React.FC = () => {
   const buildSSCScan = useCallback(() => {
     const baseScan = audioEngine.getSSCScan();
     const tabs = [
-      { id: 'SINGLE', label: MODE_LABELS.SINGLE, active: activeMode === 'SINGLE', confidenceLevel: 'certain' as const },
-      { id: 'MULTI', label: MODE_LABELS.MULTI, active: activeMode === 'MULTI', confidenceLevel: 'certain' as const },
-      { id: 'AI_STUDIO', label: MODE_LABELS.AI_STUDIO, active: activeMode === 'AI_STUDIO', confidenceLevel: 'certain' as const },
-      { id: 'VIDEO', label: MODE_LABELS.VIDEO, active: activeMode === 'VIDEO', confidenceLevel: 'certain' as const },
+      { id: 'SINGLE', label: modeLabels.SINGLE, active: activeMode === 'SINGLE', confidenceLevel: 'certain' as const },
+      { id: 'MULTI', label: modeLabels.MULTI, active: activeMode === 'MULTI', confidenceLevel: 'certain' as const },
+      { id: 'AI_STUDIO', label: modeLabels.AI_STUDIO, active: activeMode === 'AI_STUDIO', confidenceLevel: 'certain' as const },
+      { id: 'VIDEO', label: modeLabels.VIDEO, active: activeMode === 'VIDEO', confidenceLevel: 'certain' as const },
     ];
     const activeLabel = tabs.find((tab) => tab.active)?.label || activeMode;
     const scan: SSCScan = {
@@ -1305,7 +1347,7 @@ const App: React.FC = () => {
     };
     setSscScan(scan);
     return scan;
-  }, [activeMode]);
+  }, [activeMode, modeLabels]);
 
   const handleOpenSSC = useCallback(() => {
     buildSSCScan();
@@ -1398,14 +1440,6 @@ const App: React.FC = () => {
     setRestoreTargetMode(pendingSession.activeMode);
   }, [pendingSession, showRestoreDialog]);
 
-  // Language change listener - force re-render when language changes
-  useEffect(() => {
-    const handleLanguageChange = () => {
-      forceUpdate({});
-    };
-    window.addEventListener('languageChanged', handleLanguageChange);
-    return () => window.removeEventListener('languageChanged', handleLanguageChange);
-  }, []);
 
   // Keyboard shortcuts for media player controls
   useEffect(() => {
@@ -4210,7 +4244,7 @@ const App: React.FC = () => {
             <button
               onClick={handleLogoClick}
               className="group relative w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-200 hover:-translate-y-0.5 hover:rotate-[-1.5deg] active:scale-95 active:translate-y-[1px]"
-              title="Return to Echo Sound Lab"
+              title={t('app.returnToApp')}
             >
               <span className="absolute -inset-1 rounded-[18px] bg-gradient-to-br from-amber-500/15 via-orange-400/5 to-amber-700/20 blur-md opacity-60 transition-opacity duration-300 group-hover:opacity-80" />
               <span className="absolute inset-0 rounded-2xl bg-gradient-to-br from-slate-950 to-slate-900 border border-amber-300/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]" />
@@ -4268,7 +4302,7 @@ const App: React.FC = () => {
             <button
               onClick={() => setShowSettings(true)}
               className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 transition-all"
-              title="Settings"
+              title={t('app.settingsButton')}
             >
               <svg className="w-5 h-5 text-slate-400 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -4299,9 +4333,9 @@ const App: React.FC = () => {
             <div className="hidden lg:flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-[10px] uppercase tracking-[0.14em] text-slate-300">
               <span className="font-semibold text-emerald-300">RC 1.0</span>
               <span className="text-slate-600">|</span>
-              <span className="text-orange-300">Net</span>
-              <span className="text-slate-400 normal-case tracking-normal">{networkSettings.ssid}</span>
-              {networkSettings.proxy && <span className="text-slate-500 normal-case tracking-normal">({networkSettings.proxy})</span>}
+              <span className="text-orange-300">{t('app.networkShort')}</span>
+              <span className="text-slate-400 normal-case tracking-normal">{networkBadgeName}</span>
+              {networkBadgeProxy && <span className="text-slate-500 normal-case tracking-normal">({networkBadgeProxy})</span>}
             </div>
           </div>
           </div>
@@ -4317,7 +4351,7 @@ const App: React.FC = () => {
                     key={mode}
                     onClick={() => handleModeTabSelect(mode)}
                     disabled={isLocked}
-                    title={isLocked ? lockReason : `Open ${MODE_LABELS[mode]}`}
+                    title={isLocked ? lockReason : `Open ${modeLabels[mode]}`}
                     data-testid={`mode-tab-${mode.toLowerCase()}`}
                     className={`shrink-0 px-4 sm:px-5 py-2.5 sm:py-2.5 min-h-[44px] rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
                       isLocked
@@ -4327,7 +4361,7 @@ const App: React.FC = () => {
                           : 'bg-slate-900/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/70 shadow-[3px_3px_6px_#050710,-3px_-3px_6px_#0f1828] border border-slate-800/30 hover:border-slate-700/50'
                     }`}
                   >
-                    {MODE_LABELS[mode]}
+                    {modeLabels[mode]}
                   </button>
                 );
               })}
@@ -4522,8 +4556,8 @@ const App: React.FC = () => {
                 </svg>
               </div>
 
-              <h2 className="text-2xl font-bold text-white mb-2">{i18nService.t('upload.title')}</h2>
-              <p className="text-sm text-slate-500">{i18nService.t('upload.description')}</p>
+              <h2 className="text-2xl font-bold text-white mb-2">{t('upload.title')}</h2>
+              <p className="text-sm text-slate-500">{t('upload.description')}</p>
 
               {/* Supported formats */}
               <div className="mt-6 flex gap-2 justify-center flex-wrap">
@@ -4798,8 +4832,8 @@ const App: React.FC = () => {
               <div className="absolute inset-0 rounded-full border-2 border-t-amber-500 animate-spin" />
               <div className="absolute inset-2 rounded-full bg-amber-500/10" />
             </div>
-            <p className="text-white font-semibold">{i18nService.t('upload.analyzingAudio')}</p>
-            <p className="text-slate-500 text-sm mt-1">{i18nService.t('upload.extractingMetrics')}</p>
+            <p className="text-white font-semibold">{t('upload.analyzingAudio')}</p>
+            <p className="text-slate-500 text-sm mt-1">{t('upload.extractingMetrics')}</p>
           </div>
         </div>
       )}
@@ -4813,7 +4847,7 @@ const App: React.FC = () => {
             <div className="px-5 py-3 border-b border-white/5 bg-white/[0.02] flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-amber-500" />
-                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{i18nService.t('waveform')}</span>
+                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{t('waveform')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -4838,7 +4872,7 @@ const App: React.FC = () => {
                         : 'bg-white/5 text-slate-500 border border-white/5 hover:border-white/10'
                   }`}
                 >
-                  {!hasAppliedChanges ? i18nService.t('ab.noChanges') : isAbComparing ? i18nService.t('ab.original') : i18nService.t('ab.processed')}
+                  {!hasAppliedChanges ? t('ab.noChanges') : isAbComparing ? t('ab.original') : t('ab.processed')}
                 </button>
               </div>
             </div>
