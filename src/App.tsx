@@ -33,6 +33,8 @@ import { storageService } from './services/storageService';
 import { runSafeAsync } from './utils/safeAsync';
 import { saveEQSettings, saveDynamicEQSettings } from './utils/eqPersistence';
 import SettingsPanel from './components/SettingsPanel';
+import { FriendlyWizardPanel } from './components/FriendlyWizardPanel';
+import { WhatChangedPanel } from './components/WhatChangedPanel';
 import { useI18n } from './context/I18nContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useRecorder } from './hooks/useRecorder';
@@ -240,6 +242,9 @@ const App: React.FC = () => {
   const [processedMetrics, setProcessedMetrics] = useState<AudioMetrics | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [currentFileName, setCurrentFileName] = useState<string>('');
+  const [showWhatChanged, setShowWhatChanged] = useState(false);
+  const [whatChangedBefore, setWhatChangedBefore] = useState<AudioMetrics | null>(null);
+  const [whatChangedAfter, setWhatChangedAfter] = useState<AudioMetrics | null>(null);
 
   // Reference track state
   const [referenceTrack, setReferenceTrack] = useState<ReferenceTrack | null>(null);
@@ -502,6 +507,34 @@ const App: React.FC = () => {
   const networkBadgeProxy = !networkSettings.isLocal && networkSettings.proxy.trim()
     ? networkSettings.proxy.trim()
     : '';
+
+  // Friendly Wizard Step Tracking
+  const friendlyCurrentStep = useMemo<'upload' | 'analyze' | 'mix' | 'master' | 'video'>(() => {
+    if (friendlyWizardProgress.videoOpened) return 'video';
+    if (friendlyWizardProgress.mastered) return 'master';
+    if (friendlyWizardProgress.mixed) return 'mix';
+    if (friendlyWizardProgress.analyzed) return 'analyze';
+    return 'upload';
+  }, [friendlyWizardProgress]);
+
+  const friendlyStepReasons = useMemo(() => ({
+    analyze: !originalBuffer ? 'Upload or record a track first.' : null,
+    mix: !friendlyWizardProgress.analyzed ? 'Run Analyze first.' : null,
+    master: !friendlyWizardProgress.mixed ? 'Run Mix first.' : null,
+    video: !friendlyWizardProgress.mastered ? 'Run Master first.' : null,
+  }), [originalBuffer, friendlyWizardProgress]);
+
+  const handleFriendlyStepClick = useCallback((step: 'upload' | 'analyze' | 'mix' | 'master' | 'video') => {
+    if (step === 'upload') {
+      // Stay on upload, let user manage file input
+      return;
+    }
+    // Steps navigate to their respective panels
+    if (step === 'analyze' && appState === AppState.READY && !friendlyWizardProgress.analyzed) {
+      // Trigger analyze
+      handleAnalyzeAudio();
+    }
+  }, [appState, friendlyWizardProgress.analyzed]);
 
   useEffect(() => {
     debugTelemetryService.installGlobalErrorHandlers();
@@ -2548,6 +2581,13 @@ const App: React.FC = () => {
         setBlockedMixRecovery(null);
         setIsFixingBlockedMix(false);
         markFriendlyWizardStepDone('mixed');
+
+        // Show What Changed panel in Friendly mode
+        if (engineMode === 'FRIENDLY' && originalMetrics) {
+          setWhatChangedBefore(originalMetrics);
+          setWhatChangedAfter(newMetrics);
+          setShowWhatChanged(true);
+        }
 
         // Track applied suggestions
         const newAppliedIds = selectedActions.map((a: ProcessingAction) => a.id);
@@ -4841,6 +4881,23 @@ const App: React.FC = () => {
       {/* Main Workspace - Second Light OS */}
       {appState === AppState.READY && activeMode === 'SINGLE' && (
         <div className="w-full max-w-7xl space-y-4 relative z-10">
+          {/* Friendly Mode Wizard Panel */}
+          {engineMode === 'FRIENDLY' && (
+            <FriendlyWizardPanel
+              currentStep={friendlyCurrentStep}
+              progress={friendlyWizardProgress}
+              canAnalyze={!friendlyStepReasons.analyze}
+              canMix={!friendlyStepReasons.mix}
+              canMaster={!friendlyStepReasons.master}
+              canVideo={!friendlyStepReasons.video}
+              onStepClick={handleFriendlyStepClick}
+              reasonAnalyzeDisabled={friendlyStepReasons.analyze}
+              reasonMixDisabled={friendlyStepReasons.mix}
+              reasonMasterDisabled={friendlyStepReasons.master}
+              reasonVideoDisabled={friendlyStepReasons.video}
+            />
+          )}
+
           {/* Visualizer Module */}
           <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden">
             {/* Module Header */}
@@ -4853,6 +4910,7 @@ const App: React.FC = () => {
                 <button
                   onClick={handlePlayRawAudio}
                   disabled={!originalBuffer}
+                  title={!originalBuffer ? 'Upload or record a track first to play raw audio.' : 'Play original unprocessed audio'}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                     !originalBuffer
                       ? 'bg-white/5 text-slate-600 border border-white/5 cursor-not-allowed opacity-50'
@@ -4864,6 +4922,7 @@ const App: React.FC = () => {
                 <button
                   onClick={handleToggleAB}
                   disabled={!hasAppliedChanges}
+                  title={!hasAppliedChanges ? 'Run Analyze or Mix to make changes you can compare.' : 'Compare original vs. processed audio'}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                     !hasAppliedChanges
                       ? 'bg-white/5 text-slate-600 border border-white/5 cursor-not-allowed opacity-50'
@@ -5141,6 +5200,7 @@ const App: React.FC = () => {
                     type="button"
                     onClick={() => void handleRequestAIAnalysis({ autoSelectAll: true })}
                     disabled={!!friendlyAnalyzeReason}
+                    title={friendlyAnalyzeReason || 'Analyze your track to understand its characteristics'}
                     className="w-full rounded-lg px-2 py-2 text-left text-xs sm:text-sm font-semibold text-sky-200 transition-colors hover:bg-sky-500/15 disabled:cursor-not-allowed disabled:text-slate-500"
                   >
                     <span className="block text-[10px] uppercase tracking-[0.18em] text-sky-300/90">Step 1</span>
@@ -5154,6 +5214,7 @@ const App: React.FC = () => {
                     type="button"
                     onClick={() => void handleApplySuggestions()}
                     disabled={!!friendlyMixReason}
+                    title={friendlyMixReason || 'Blend and balance the sounds of your track'}
                     className="w-full rounded-lg px-2 py-2 text-left text-xs sm:text-sm font-semibold text-orange-200 transition-colors hover:bg-orange-500/15 disabled:cursor-not-allowed disabled:text-slate-500"
                   >
                     <span className="block text-[10px] uppercase tracking-[0.18em] text-orange-300/90">Step 2</span>
@@ -5167,6 +5228,7 @@ const App: React.FC = () => {
                     type="button"
                     onClick={() => void handleAutoMix()}
                     disabled={!!friendlyMasterReason}
+                    title={friendlyMasterReason || 'Add the final polish for broadcast quality'}
                     className="w-full rounded-lg px-2 py-2 text-left text-xs sm:text-sm font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/15 disabled:cursor-not-allowed disabled:text-slate-500"
                   >
                     <span className="block text-[10px] uppercase tracking-[0.18em] text-emerald-300/90">Step 3</span>
@@ -5180,6 +5242,7 @@ const App: React.FC = () => {
                     type="button"
                     onClick={handleOpenVideoWorkspace}
                     disabled={!!friendlyVideoReason}
+                    title={friendlyVideoReason || 'Create a video with your mix'}
                     className="w-full rounded-lg px-2 py-2 text-left text-xs sm:text-sm font-semibold text-fuchsia-200 transition-colors hover:bg-fuchsia-500/15 disabled:cursor-not-allowed disabled:text-slate-500"
                   >
                     <span className="block text-[10px] uppercase tracking-[0.18em] text-fuchsia-300/90">Step 4</span>
@@ -5935,6 +5998,15 @@ const App: React.FC = () => {
         onConfirm={handleAccConfirm}
         onDismiss={handleAccDismiss}
         isLoading={accIsLoading}
+      />
+
+      {/* What Changed Panel */}
+      <WhatChangedPanel
+        before={whatChangedBefore}
+        after={whatChangedAfter}
+        isVisible={showWhatChanged}
+        onDismiss={() => setShowWhatChanged(false)}
+        onToggleAB={handleToggleAB}
       />
 
       {/* Notification System */}
