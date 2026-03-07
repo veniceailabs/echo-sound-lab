@@ -35,6 +35,8 @@ import { saveEQSettings, saveDynamicEQSettings } from './utils/eqPersistence';
 import SettingsPanel from './components/SettingsPanel';
 import { FriendlyWizardPanel } from './components/FriendlyWizardPanel';
 import { WhatChangedPanel } from './components/WhatChangedPanel';
+import { ActiveChainPanel } from './components/ActiveChainPanel';
+import { DebugReportModal } from './components/DebugReportModal';
 import { useI18n } from './context/I18nContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useRecorder } from './hooks/useRecorder';
@@ -245,6 +247,8 @@ const App: React.FC = () => {
   const [showWhatChanged, setShowWhatChanged] = useState(false);
   const [whatChangedBefore, setWhatChangedBefore] = useState<AudioMetrics | null>(null);
   const [whatChangedAfter, setWhatChangedAfter] = useState<AudioMetrics | null>(null);
+  const [showDebugReport, setShowDebugReport] = useState(false);
+  const [lastActions, setLastActions] = useState<string[]>([]);
 
   // Reference track state
   const [referenceTrack, setReferenceTrack] = useState<ReferenceTrack | null>(null);
@@ -991,6 +995,10 @@ const App: React.FC = () => {
   const showNotification = useCallback((message: string, type: NotificationType = 'info', duration?: number) => {
     const id = `notification-${Date.now()}-${Math.random()}`;
     setNotifications(prev => [...prev, { id, message, type, duration }]);
+  }, []);
+
+  const trackAction = useCallback((action: string) => {
+    setLastActions(prev => [...prev.slice(-19), `${new Date().toLocaleTimeString()}: ${action}`]);
   }, []);
 
   const beginVerdictRun = useCallback(() => {
@@ -5318,19 +5326,34 @@ const App: React.FC = () => {
             </div>
           )}
 
+          {/* Active Chain Panel - Shows current processing chain */}
+          {appliedSuggestionIds.length > 0 && analysisResult?.actions && (
+            <ActiveChainPanel
+              actions={analysisResult.actions
+                .filter((action: ProcessingAction) => appliedSuggestionIds.includes(action.id))
+                .filter((action: ProcessingAction) => action?.isEnabled !== false)}
+              isVisible={true}
+              onClear={() => {
+                setAppliedSuggestionIds([]);
+                showNotification('Processing chain cleared', 'info', 2000);
+              }}
+            />
+          )}
+
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.34)] overflow-hidden p-4 sm:p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-orange-300">Active Chain</p>
-                  <h3 className="mt-1 text-base font-semibold text-slate-100">Exactly what is running now</h3>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-orange-300">Active Chain Status</p>
+                  <h3 className="mt-1 text-base font-semibold text-slate-100">Current signal flow</h3>
                 </div>
                 <button
                   type="button"
-                  onClick={() => void copyDebugInfo()}
+                  onClick={() => setShowDebugReport(true)}
                   className="rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300 transition-colors hover:border-orange-400/40 hover:text-orange-300"
+                  title="Open system debug report with device info and error logs"
                 >
-                  Copy Debug
+                  Debug Report
                 </button>
               </div>
               {activeChainView.activeProcessors.length > 0 ? (
@@ -6007,6 +6030,21 @@ const App: React.FC = () => {
         isVisible={showWhatChanged}
         onDismiss={() => setShowWhatChanged(false)}
         onToggleAB={handleToggleAB}
+      />
+
+      {/* Debug Report Modal */}
+      <DebugReportModal
+        isOpen={showDebugReport}
+        onClose={() => setShowDebugReport(false)}
+        deviceInfo={{
+          userAgent: navigator.userAgent,
+          platform: navigator.platform,
+          memory: (navigator as any).deviceMemory,
+          cores: navigator.hardwareConcurrency,
+        }}
+        appState={appState}
+        lastActions={lastActions}
+        errors={debugTelemetryService.getErrors?.() || []}
       />
 
       {/* Notification System */}
