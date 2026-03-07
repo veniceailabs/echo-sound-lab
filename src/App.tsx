@@ -4305,8 +4305,8 @@ const App: React.FC = () => {
           </article>
           <article className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5">
             <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Step 02</p>
-            <h3 className="mt-2 text-lg font-semibold text-slate-100">Feel the AI Boost</h3>
-            <p className="mt-2 text-sm text-slate-400">See your Match Score and the extra magic the engine can safely add.</p>
+            <h3 className="mt-2 text-lg font-semibold text-slate-100">Hear What Improved</h3>
+            <p className="mt-2 text-sm text-slate-400">Get a simple quality score and clear before/after changes.</p>
           </article>
           <article className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5">
             <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Step 03</p>
@@ -4319,23 +4319,23 @@ const App: React.FC = () => {
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             <div className="min-w-0">
               <p className="text-[10px] uppercase tracking-[0.24em] text-orange-400/90">Why Echo Sound Lab</p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-100">Intent-Measured Mastering</h2>
+              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-100">Mastering You Can Understand</h2>
               <p className="mt-3 text-sm leading-6 text-slate-400">
-                ESL is engineered to preserve dynamics, expose measurable change, and keep artists in control of every meaningful decision.
+                ESL keeps your song punchy, explains changes in plain language, and lets you approve every move before export.
               </p>
             </div>
-            <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+            <div className="grid min-w-0 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="min-w-0 rounded-xl border border-white/10 bg-slate-950/50 p-3.5">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Telemetry</p>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-100 break-words">Match Score + AI Boost</p>
+                <p className="mt-1.5 text-sm font-semibold leading-5 text-slate-100 break-words">Simple Quality Score</p>
               </div>
-              <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+              <div className="min-w-0 rounded-xl border border-white/10 bg-slate-950/50 p-3.5">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Safety</p>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-100 break-words">Punch Protection</p>
+                <p className="mt-1.5 text-sm font-semibold leading-5 text-slate-100 break-words">Keeps Punch Alive</p>
               </div>
-              <div className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+              <div className="min-w-0 rounded-xl border border-white/10 bg-slate-950/50 p-3.5">
                 <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Control</p>
-                <p className="mt-2 text-sm font-semibold leading-6 text-slate-100 break-words">Artist-Led Decisions</p>
+                <p className="mt-1.5 text-sm font-semibold leading-5 text-slate-100 break-words">You Approve Changes</p>
               </div>
             </div>
           </div>
