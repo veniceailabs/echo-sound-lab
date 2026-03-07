@@ -4155,7 +4155,7 @@ const App: React.FC = () => {
             <div className="mt-7 flex items-center justify-center gap-3 md:gap-4 text-[11px] md:text-xs uppercase tracking-[0.22em] text-slate-500">
               <span>Analyze your track.</span>
               <span className="text-slate-700">•</span>
-              <span>See the delta.</span>
+              <span>See what changed.</span>
               <span className="text-slate-700">•</span>
               <span>Master with intent.</span>
             </div>
