@@ -13,7 +13,7 @@ import {
   Capability,
   CapabilityGrant,
   DEFAULT_ACC_POLICY_TEMPLATE,
-  RiskTier,
+  getRiskTierForCapability,
   shouldRequireACCForRiskTier,
 } from './capabilities';
 
@@ -30,9 +30,9 @@ function createTieredGrant(
   capability: Capability,
   appId: string,
   expiresAt: number,
-  riskTier: RiskTier,
   policyTemplate: AccPolicyTemplateName
 ): CapabilityGrant {
+  const riskTier = getRiskTierForCapability(capability);
   return {
     capability,
     scope: { appId },
@@ -60,10 +60,10 @@ export function createSystemNavigationPreset(
     description: 'Browse and analyze audio. No modifications or file operations.',
     policyTemplate,
     grants: [
-      createTieredGrant(Capability.UI_NAVIGATION, appId, expiresAt, RiskTier.LOW, policyTemplate),
-      createTieredGrant(Capability.TRANSPORT_CONTROL, appId, expiresAt, RiskTier.LOW, policyTemplate),
-      createTieredGrant(Capability.FILE_READ, appId, expiresAt, RiskTier.LOW, policyTemplate),
-      createTieredGrant(Capability.TEXT_INPUT_SAFE, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.UI_NAVIGATION, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.TRANSPORT_CONTROL, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.FILE_READ, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.TEXT_INPUT_SAFE, appId, expiresAt, policyTemplate),
     ]
   };
 }
@@ -85,13 +85,13 @@ export function createCreativeMixingPreset(
     description: 'Full mixing: parameters, processing, and exports (exports require confirmation).',
     policyTemplate,
     grants: [
-      createTieredGrant(Capability.UI_NAVIGATION, appId, expiresAt, RiskTier.LOW, policyTemplate),
-      createTieredGrant(Capability.TRANSPORT_CONTROL, appId, expiresAt, RiskTier.LOW, policyTemplate),
-      createTieredGrant(Capability.PARAMETER_ADJUSTMENT, appId, expiresAt, RiskTier.LOW, policyTemplate),
-      createTieredGrant(Capability.FILE_READ, appId, expiresAt, RiskTier.LOW, policyTemplate),
-      createTieredGrant(Capability.FILE_WRITE, appId, expiresAt, RiskTier.MEDIUM, policyTemplate),
-      createTieredGrant(Capability.RENDER_EXPORT, appId, expiresAt, RiskTier.HIGH, policyTemplate),
-      createTieredGrant(Capability.TEXT_INPUT_SAFE, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.UI_NAVIGATION, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.TRANSPORT_CONTROL, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.PARAMETER_ADJUSTMENT, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.FILE_READ, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.FILE_WRITE, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.RENDER_EXPORT, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.TEXT_INPUT_SAFE, appId, expiresAt, policyTemplate),
     ]
   };
 }
@@ -113,11 +113,11 @@ export function createFileExportOnlyPreset(
     description: 'Export only: read, compare, and export. No modifications.',
     policyTemplate,
     grants: [
-      createTieredGrant(Capability.UI_NAVIGATION, appId, expiresAt, RiskTier.LOW, policyTemplate),
-      createTieredGrant(Capability.TRANSPORT_CONTROL, appId, expiresAt, RiskTier.LOW, policyTemplate),
-      createTieredGrant(Capability.FILE_READ, appId, expiresAt, RiskTier.LOW, policyTemplate),
-      createTieredGrant(Capability.RENDER_EXPORT, appId, expiresAt, RiskTier.HIGH, policyTemplate),
-      createTieredGrant(Capability.TEXT_INPUT_SAFE, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.UI_NAVIGATION, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.TRANSPORT_CONTROL, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.FILE_READ, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.RENDER_EXPORT, appId, expiresAt, policyTemplate),
+      createTieredGrant(Capability.TEXT_INPUT_SAFE, appId, expiresAt, policyTemplate),
     ]
   };
 }

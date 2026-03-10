@@ -1,17 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { i18nService, SupportedLanguage } from '../services/i18nService';
 import { EngineMode } from '../types';
+import { useViewport } from '../context/ViewportContext';
+import {
+  AccPolicyTemplateName,
+  CapabilityPolicyDecision,
+  listCapabilitiesForTemplate,
+} from '../services/capabilities';
 
 interface SettingsPanelProps {
   onClose: () => void;
   engineMode: EngineMode;
   setEngineMode: (mode: EngineMode) => void;
+  accPolicyTemplate: AccPolicyTemplateName;
+  setAccPolicyTemplate: (template: AccPolicyTemplateName) => void;
   onResetToOriginal: () => void;
   appVersion: string;
   themeMode: 'light' | 'dark';
   setThemeMode: (mode: 'light' | 'dark') => void;
   networkSettings: { ssid: string; proxy: string; isLocal: boolean };
   setNetworkSettings: (settings: { ssid: string; proxy: string; isLocal: boolean }) => void;
+  onCopyDebugInfo?: () => Promise<void>;
+  onClearDebugInfo?: () => void;
 }
 
 const modeDescriptions: Record<EngineMode, { title: string; subtitle: string }> = {
@@ -20,10 +30,26 @@ const modeDescriptions: Record<EngineMode, { title: string; subtitle: string }> 
   FULL_STUDIO: { title: 'Full Studio', subtitle: 'Auto-Mix with entire custom plug-in suite' },
 };
 
-const sections = ['mode', 'display', 'language', 'network', 'about'] as const;
+const policyTemplateDescriptions: Record<AccPolicyTemplateName, { title: string; subtitle: string }> = {
+  FULL_AUTONOMY: {
+    title: 'Full Autonomy',
+    subtitle: 'Auto-approves LOW and MEDIUM. Prompts for HIGH.',
+  },
+  CO_PILOT: {
+    title: 'Co-Pilot',
+    subtitle: 'Auto-approves LOW. Prompts for MEDIUM and HIGH.',
+  },
+  STRICT_REVIEW: {
+    title: 'Strict Review',
+    subtitle: 'Prompts for all capabilities.',
+  },
+};
+
+const sections = ['mode', 'governance', 'display', 'language', 'network', 'about'] as const;
 type SectionKey = (typeof sections)[number];
 const sectionTitles: Record<SectionKey, string> = {
   mode: 'Mode',
+  governance: 'Governance',
   display: 'Display',
   language: 'Language',
   network: 'Network',
@@ -33,6 +59,11 @@ const sectionIcons: Record<SectionKey, React.ReactNode> = {
   mode: (
     <svg className="w-4 h-4 text-orange-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  ),
+  governance: (
+    <svg className="w-4 h-4 text-orange-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
     </svg>
   ),
   display: (
@@ -57,11 +88,28 @@ const sectionIcons: Record<SectionKey, React.ReactNode> = {
   ),
 };
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, engineMode, setEngineMode, onResetToOriginal, appVersion, themeMode, setThemeMode, networkSettings, setNetworkSettings }) => {
+const SettingsPanel: React.FC<SettingsPanelProps> = ({
+  onClose,
+  engineMode,
+  setEngineMode,
+  accPolicyTemplate,
+  setAccPolicyTemplate,
+  onResetToOriginal,
+  appVersion,
+  themeMode,
+  setThemeMode,
+  networkSettings,
+  setNetworkSettings,
+  onCopyDebugInfo,
+  onClearDebugInfo
+}) => {
+  const { isPhone } = useViewport();
   const [currentLanguage, setCurrentLanguage] = useState<SupportedLanguage>(i18nService.getLanguage());
   const [isChanging, setIsChanging] = useState(false);
   const [openSection, setOpenSection] = useState<SectionKey | null>('mode');
+  const [debugStatus, setDebugStatus] = useState<'idle' | 'copied' | 'error'>('idle');
   const languages = i18nService.getSupportedLanguages();
+  const governancePolicySummary = listCapabilitiesForTemplate(accPolicyTemplate);
 
   useEffect(() => {
     const handleLanguageChange = () => setCurrentLanguage(i18nService.getLanguage());
@@ -81,6 +129,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, engineMode, setE
     switch (section) {
       case 'mode':
         return engineMode === 'FULL_STUDIO' ? 'FULL STUDIO' : engineMode;
+      case 'governance':
+        return policyTemplateDescriptions[accPolicyTemplate].title;
       case 'display':
         return themeMode.toUpperCase();
       case 'language':
@@ -94,10 +144,46 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, engineMode, setE
     }
   };
 
+  const handleCopyDebugInfo = async () => {
+    if (!onCopyDebugInfo) return;
+    setDebugStatus('idle');
+    try {
+      await onCopyDebugInfo();
+      setDebugStatus('copied');
+      window.setTimeout(() => setDebugStatus('idle'), 2500);
+    } catch (e) {
+      console.warn('[SettingsPanel] copyDebugInfo failed', e);
+      setDebugStatus('error');
+      window.setTimeout(() => setDebugStatus('idle'), 3000);
+    }
+  };
+
+  const capabilityLabel = (capability: CapabilityPolicyDecision['capability']) => capability
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+  const riskPillClass = (riskTier: CapabilityPolicyDecision['riskTier']) => {
+    switch (riskTier) {
+      case 'LOW':
+        return 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/30';
+      case 'MEDIUM':
+        return 'bg-amber-500/10 text-amber-300 border border-amber-500/30';
+      case 'HIGH':
+      default:
+        return 'bg-rose-500/10 text-rose-300 border border-rose-500/30';
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-[28px] z-50 flex items-center justify-center p-4">
-      <div className="bg-slate-950/70 backdrop-blur-3xl rounded-3xl border border-white/12 shadow-[0_30px_80px_rgba(0,0,0,0.55)] max-w-xl w-full max-h-[85vh] overflow-hidden">
-        <div className="p-5 border-b border-white/10 flex items-center justify-between">
+    <div
+      className={`fixed inset-0 bg-black/70 backdrop-blur-[28px] z-50 flex ${isPhone ? 'items-stretch justify-stretch p-0' : 'items-center justify-center p-4'}`}
+    >
+      <div
+        className={`bg-slate-950/70 backdrop-blur-3xl border border-white/12 shadow-[0_30px_80px_rgba(0,0,0,0.55)] w-full overflow-hidden flex flex-col ${
+          isPhone ? 'rounded-none max-w-none h-[100dvh] max-h-none' : 'rounded-3xl max-w-xl max-h-[85vh]'
+        }`}
+      >
+        <div className={`p-5 border-b border-white/10 flex items-center justify-between ${isPhone ? 'pt-[calc(20px+var(--esl-safe-top))]' : ''}`}>
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-slate-500 mb-1">Settings</p>
             <h2 className="text-2xl font-bold text-white">Studio Controls</h2>
@@ -109,7 +195,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, engineMode, setE
           </button>
         </div>
 
-        <div className="p-4 overflow-y-auto max-h-[calc(85vh-150px)]">
+        <div className={`p-4 overflow-y-auto flex-1 min-h-0 ${isPhone ? 'pb-[calc(16px+var(--esl-safe-bottom))]' : ''}`}>
           <div className="space-y-3">
             {sections.map((section) => (
               <div key={section} className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
@@ -162,6 +248,56 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, engineMode, setE
                           </button>
                         </div>
                       </>
+                    )}
+                    {section === 'governance' && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {(Object.keys(policyTemplateDescriptions) as AccPolicyTemplateName[]).map((template) => (
+                            <button
+                              key={template}
+                              type="button"
+                              onClick={() => setAccPolicyTemplate(template)}
+                              className={`p-3 border rounded-2xl text-left text-sm transition-all ${
+                                accPolicyTemplate === template
+                                  ? 'border-cyan-400 bg-cyan-500/10 text-white shadow-[0_10px_30px_rgba(34,211,238,0.15)]'
+                                  : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/40 hover:bg-white/10'
+                              }`}
+                            >
+                              <div className="font-semibold">{policyTemplateDescriptions[template].title}</div>
+                              <p className="text-[11px] text-slate-400">{policyTemplateDescriptions[template].subtitle}</p>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="rounded-2xl border border-white/10 bg-slate-900/40 p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs uppercase tracking-wider text-slate-400">Effective Policy Summary</p>
+                            <p className="text-[11px] text-slate-500">{policyTemplateDescriptions[accPolicyTemplate].title}</p>
+                          </div>
+                          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                            {governancePolicySummary.map((entry) => (
+                              <div
+                                key={entry.capability}
+                                className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 flex items-center justify-between gap-2"
+                              >
+                                <div className="min-w-0">
+                                  <p className="text-sm text-slate-100 truncate">{capabilityLabel(entry.capability)}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${riskPillClass(entry.riskTier)}`}>
+                                      {entry.riskTier}
+                                    </span>
+                                    <span className={`text-[10px] uppercase tracking-wider ${
+                                      entry.requiresACC ? 'text-rose-300' : 'text-emerald-300'
+                                    }`}>
+                                      {entry.requiresACC ? 'Needs Approval' : 'Auto-Executes'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     )}
                     {section === 'display' && (
                       <div className="flex gap-3">
@@ -248,6 +384,39 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, engineMode, setE
                         <p>• No audio is altered unless you ask.</p>
                         <p>• Always let you compare your original.</p>
                         <p>• Silence is success. Restraint is power.</p>
+
+                        <div className="pt-3 mt-3 border-t border-white/10 space-y-2">
+                          <p className="text-[11px] uppercase tracking-wider text-slate-500">Beta Tools</p>
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <button
+                              type="button"
+                              onClick={handleCopyDebugInfo}
+                              disabled={!onCopyDebugInfo}
+                              className={`flex-1 px-4 py-2.5 min-h-[44px] rounded-xl text-xs uppercase tracking-wider font-bold transition-all border ${
+                                onCopyDebugInfo
+                                  ? 'bg-slate-900/60 border-orange-500/30 text-orange-300 hover:bg-slate-900'
+                                  : 'bg-white/5 border-white/10 text-slate-600 cursor-not-allowed opacity-60'
+                              }`}
+                            >
+                              {debugStatus === 'copied' ? 'Copied' : debugStatus === 'error' ? 'Copy Failed' : 'Copy Debug Info'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onClearDebugInfo?.()}
+                              disabled={!onClearDebugInfo}
+                              className={`px-4 py-2.5 min-h-[44px] rounded-xl text-xs uppercase tracking-wider font-bold transition-all border ${
+                                onClearDebugInfo
+                                  ? 'bg-white/5 border-white/10 text-slate-200 hover:bg-white/10'
+                                  : 'bg-white/5 border-white/10 text-slate-600 cursor-not-allowed opacity-60'
+                              }`}
+                            >
+                              Clear Log
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-slate-500">
+                            If something breaks, tap Copy Debug Info and paste it into your beta reply email.
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>

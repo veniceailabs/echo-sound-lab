@@ -22,9 +22,9 @@ import Visualizer from './components/Visualizer';
 import ChatInterface from './components/ChatInterface';
 import { ProcessingPanel } from './components/ProcessingPanel';
 import AnalysisPanel from './components/AnalysisPanel';
-import MultiStemWorkspace from './components/MultiStemWorkspace';
-import AIStudio from './components/AIStudio';
-import VideoEngine from './components/VideoEngine';
+const MultiStemWorkspace = React.lazy(() => import('./components/MultiStemWorkspace'));
+const AIStudio = React.lazy(() => import('./components/AIStudio'));
+const VideoEngine = React.lazy(() => import('./components/VideoEngine'));
 import { EchoReportPanel } from './components/EchoReportPanel';
 import { ListeningPassCard } from './components/ListeningPassCard';
 import { FeedbackButton } from './components/SharedComponents';
@@ -33,6 +33,7 @@ import { runSafeAsync } from './utils/safeAsync';
 import { saveEQSettings, saveDynamicEQSettings } from './utils/eqPersistence';
 import SettingsPanel from './components/SettingsPanel';
 import { i18nService } from './services/i18nService';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // NEW: Import enhanced features
 import { EnhancedControlPanel } from './components/EnhancedControlPanel';
@@ -45,6 +46,10 @@ import { ProcessingOverlay } from './components/ProcessingOverlay';
 import { FloatingControls } from './components/FloatingControls';
 import { HistoryTimeline } from './components/HistoryTimeline';
 import { HistoryEntry } from './types';
+import { useViewport } from './context/ViewportContext';
+import { debugTelemetryService } from './services/debugTelemetryService';
+import { useAudioContextState } from './hooks/useAudioContextState';
+import { AudioResumeGuard } from './components/AudioResumeGuard';
 
 // V.E.N.U.M. - Viral Emergent Network Utility Matrix
 import { generateEchoReportCard, ShareableCard, GenerateEchoReportCardOptions } from './services/venumEngine';
@@ -54,11 +59,13 @@ import { ShareableCardModal, NudgeBanner } from './components/ShareableCardModal
 import { NotificationManager, NotificationType } from './components/Notification';
 
 // Capability System - Phase 2.2.4 React Integration
-import { CapabilityProvider, useCapabilityCheck, useGuardedAction } from './hooks';
+import { CapabilityProvider } from './hooks';
+import type { AccRequiredEventDetail } from './hooks/CapabilityProvider';
 import { CapabilityACCModal } from './components/CapabilityACCModal';
 import { CapabilityAuthority, type ProcessIdentity } from './services/CapabilityAuthority';
-import { Capability } from './services/capabilities';
+import { DEFAULT_ACC_POLICY_TEMPLATE, type AccPolicyTemplateName } from './services/capabilities';
 import { createCreativeMixingPreset } from './services/capabilityPresets';
+import type { ConfirmationToken } from './services/capabilityAccBridge';
 
 // Phase 2: APL ProposalPanel UI
 import { APLProposalPanel } from './components/APL/APLProposalPanel';
@@ -95,6 +102,7 @@ declare global {
 
 const ENGINE_MODE_KEY = 'echo.engineMode.v1';
 const FRIENDLY_TOUR_KEY = 'echo.friendlyTourSeen.v1';
+const ACC_POLICY_TEMPLATE_KEY = 'echo.accPolicyTemplate.v1';
 const MODE_LABELS: Record<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO', string> = {
   SINGLE: 'Single Track',
   MULTI: 'Stems',
@@ -115,10 +123,6 @@ const capabilityAuthority = new CapabilityAuthority(
   processIdentity
 );
 
-// Grant initial capabilities (CREATIVE_MIXING preset: full mixing with exports requiring ACC)
-const creativeMixingPreset = createCreativeMixingPreset('com.echo-sound-lab.app', 14400000); // 4 hours
-creativeMixingPreset.grants.forEach(grant => capabilityAuthority.grant(grant));
-
 const App: React.FC = () => {
   const defaultEqSettings: EQSettings = [
     { frequency: 60, gain: 0, type: 'lowshelf' },      // Sub bass
@@ -137,6 +141,13 @@ const App: React.FC = () => {
   // Core state
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [activeMode, setActiveMode] = useState<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO'>('SINGLE');
+  const [workspaceNonce, setWorkspaceNonce] = useState<Record<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO', number>>({
+    SINGLE: 0,
+    MULTI: 0,
+    AI_STUDIO: 0,
+    VIDEO: 0,
+  });
+  const { isPhone, isTablet } = useViewport();
   const [engineMode, setEngineMode] = useState<EngineMode>(() => {
     try {
       const stored = localStorage.getItem(ENGINE_MODE_KEY);
@@ -148,8 +159,22 @@ const App: React.FC = () => {
     }
     return 'FRIENDLY';
   }); // Stage Architecture: FRIENDLY or ADVANCED
+  const [accPolicyTemplate, setAccPolicyTemplate] = useState<AccPolicyTemplateName>(() => {
+    try {
+      const stored = localStorage.getItem(ACC_POLICY_TEMPLATE_KEY);
+      if (stored === 'FULL_AUTONOMY' || stored === 'CO_PILOT' || stored === 'STRICT_REVIEW') {
+        return stored;
+      }
+    } catch (e) {
+      console.warn('[App] Failed to read ACC template from localStorage', e);
+    }
+    return DEFAULT_ACC_POLICY_TEMPLATE;
+  });
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playIntent, setPlayIntent] = useState(false);
   const [currentPlayheadSeconds, setCurrentPlayheadSeconds] = useState(0);
+  const cornerUiOffsetPx = (isPhone || isTablet) && appState === AppState.READY && activeMode === 'SINGLE' ? 92 : 0;
+  const audioContextState = useAudioContextState(typeof window !== 'undefined' ? audioEngine.getAudioContext() : null);
 
   // Audio analysis state
   const [originalMetrics, setOriginalMetrics] = useState<AudioMetrics | null>(null);
@@ -255,9 +280,16 @@ const App: React.FC = () => {
 
   // Capability System - ACC Modal State (Phase 2.2.4)
   const [showAccModal, setShowAccModal] = useState(false);
-  const [accToken, setAccToken] = useState<any>(null);
+  const [accToken, setAccToken] = useState<ConfirmationToken | null>(null);
   const [accReason, setAccReason] = useState('');
   const [accIsLoading, setAccIsLoading] = useState(false);
+  const accHandlersRef = useRef<{
+    confirm: ((response: string) => Promise<void>) | null;
+    dismiss: (() => void) | null;
+  }>({
+    confirm: null,
+    dismiss: null,
+  });
 
   // AI Studio / Generated Song state
   const [generatedStems, setGeneratedStems] = useState<Stem[] | null>(null);
@@ -281,6 +313,8 @@ const App: React.FC = () => {
   // Phase 2: APL ProposalPanel State
   const [aplProposals, setAplProposals] = useState<APLProposal[]>([]);
   const [isAplScanning, setIsAplScanning] = useState(false);
+  const [aplDataSource, setAplDataSource] = useState<'real' | 'demo'>('real');
+  const [aplDataSourceReason, setAplDataSourceReason] = useState<string | null>(null);
 
   // ===== PHASE 5: DAILY PROVING STATE =====
   const [systemHealthStatus, setSystemHealthStatus] = useState<'HEALTHY' | 'DEGRADED' | 'CRITICAL' | 'CHECKING'>('CHECKING');
@@ -290,6 +324,9 @@ const App: React.FC = () => {
   const AUTO_MIX_TARGET_SCORE = 90;
   const AUTO_MIX_MAX_ITERATIONS = 4;
   const appVersion = 'RC 1.0 (Adversarial Hardened)';
+  useEffect(() => {
+    debugTelemetryService.installGlobalErrorHandlers();
+  }, []);
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.theme = themeMode;
@@ -541,8 +578,12 @@ const App: React.FC = () => {
   // ACC Modal Event Listener (Phase 2.2.4)
   useEffect(() => {
     const handleAccRequired = (event: Event) => {
-      const customEvent = event as CustomEvent;
+      const customEvent = event as CustomEvent<AccRequiredEventDetail>;
       const request = customEvent.detail;
+      accHandlersRef.current = {
+        confirm: request.confirm,
+        dismiss: request.dismiss,
+      };
       setAccToken(request.accToken);
       setAccReason(request.reason);
       setShowAccModal(true);
@@ -570,12 +611,14 @@ const App: React.FC = () => {
   const handleAccConfirm = useCallback(async (response: string) => {
     setAccIsLoading(true);
     try {
-      // TODO: Validate ACC response and grant capability
-      // This is where we'd call CapabilityAccBridge.validateACC()
-      console.log('[App] ACC confirmed with response:', response);
+      if (!accHandlersRef.current.confirm) {
+        throw new Error('No pending confirmation request.');
+      }
+      await accHandlersRef.current.confirm(response);
       setShowAccModal(false);
       setAccToken(null);
       setAccReason('');
+      accHandlersRef.current = { confirm: null, dismiss: null };
     } catch (err) {
       console.error('[App] ACC validation failed:', err);
       throw err;
@@ -587,6 +630,8 @@ const App: React.FC = () => {
   const handleAccDismiss = useCallback(() => {
     // User dismissed the modal. Action is halted.
     // No auto-resume. User must click button again if they want to retry.
+    accHandlersRef.current.dismiss?.();
+    accHandlersRef.current = { confirm: null, dismiss: null };
     setShowAccModal(false);
     setAccToken(null);
     setAccReason('');
@@ -654,6 +699,20 @@ const App: React.FC = () => {
       console.warn('[App] Failed to persist engine mode', e);
     }
   }, [engineMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ACC_POLICY_TEMPLATE_KEY, accPolicyTemplate);
+    } catch (e) {
+      console.warn('[App] Failed to persist ACC policy template', e);
+    }
+  }, [accPolicyTemplate]);
+
+  useEffect(() => {
+    capabilityAuthority.revokeAll();
+    const preset = createCreativeMixingPreset('com.echo-sound-lab.app', 14400000, accPolicyTemplate);
+    preset.grants.forEach((grant) => capabilityAuthority.grant(grant));
+  }, [accPolicyTemplate]);
 
   useEffect(() => {
     if (engineMode !== 'FRIENDLY' || activeMode !== 'SINGLE') {
@@ -1048,6 +1107,8 @@ const App: React.FC = () => {
 
     // Clear previous proposals before analyzing new file
     setAplProposals([]);
+    setAplDataSource('real');
+    setAplDataSourceReason(null);
 
     // Check file size upfront - CRITICAL for Google AI Studio
     const fileSizeMB = file.size / (1024 * 1024);
@@ -1204,16 +1265,22 @@ const App: React.FC = () => {
         if (aplResult.success && aplResult.proposals.length > 0) {
           console.log(`[APL] Analysis complete in ${Date.now() - aplStart}ms. Generated ${aplResult.proposals.length} proposal(s).`);
           setAplProposals(aplResult.proposals);
+          setAplDataSource('real');
+          setAplDataSourceReason(null);
           console.log('[APL] Proposals:', aplResult.proposals);
         } else {
           console.log(`[APL] No proposals generated (or analysis failed). Using mock proposals for demonstration.`);
           const mockProposals = generateMockProposals();
           setAplProposals(mockProposals);
+          setAplDataSource('demo');
+          setAplDataSourceReason('The spectral analysis pipeline returned no actionable proposals, so the feed switched to mock proposal cards for preview only.');
         }
       } catch (aplError) {
         console.error('[APL] Analysis failed, falling back to mock proposals:', aplError);
         const mockProposals = generateMockProposals();
         setAplProposals(mockProposals);
+        setAplDataSource('demo');
+        setAplDataSourceReason('Real spectral analysis failed during upload. The feed is showing demo proposals and should not be treated as live engine output.');
       }
 
       setAppState(AppState.READY);
@@ -2218,17 +2285,144 @@ const App: React.FC = () => {
   };
 
   // Playback controls
-  const handleTogglePlayback = () => {
-    setIsPlaying(!isPlaying);
-    if (isPlaying) {
+  const requestStartPlayback = useCallback(async () => {
+    setPlayIntent(true);
+    try {
+      await audioEngine.play();
+      setIsPlaying(true);
+      setPlayIntent(false);
+      startAplSession();
+    } catch (error) {
+      setIsPlaying(false);
+      // Keep intent true: user asked to play, but iOS/Safari may require a tap to resume.
+      console.warn('[App] Playback start blocked or failed', error);
+    }
+  }, [startAplSession]);
+
+  const requestStopPlayback = useCallback(() => {
+    setPlayIntent(false);
+    setIsPlaying(false);
+    audioEngine.pause();
+    pauseAplSession();
+  }, [pauseAplSession]);
+
+  const handleTogglePlayback = useCallback(() => {
+    if (isPlaying || playIntent) {
+      requestStopPlayback();
+      return;
+    }
+    void requestStartPlayback();
+  }, [isPlaying, playIntent, requestStartPlayback, requestStopPlayback]);
+
+  // iOS/mobile hardening: avoid "UI says playing but audio is dead" after backgrounding or tab switches.
+  const wasPlayingBeforeHideRef = useRef(false);
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (typeof document === 'undefined') return;
+      if (document.hidden) {
+        wasPlayingBeforeHideRef.current = isPlaying;
+        if (isPlaying || playIntent) {
+          requestStopPlayback();
+        }
+        return;
+      }
+
+      // On return: only prompt for resume if user was actually playing and the context isn't running.
+      if (wasPlayingBeforeHideRef.current) {
+        wasPlayingBeforeHideRef.current = false;
+        const state = String(audioEngine.getAudioContext().state);
+        if (state !== 'running') {
+          setPlayIntent(true);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [isPlaying, playIntent, requestStopPlayback]);
+
+  useEffect(() => {
+    const running = String(audioContextState) === 'running';
+    if (isPlaying && !running) {
+      console.warn('[App] AudioContext suspended while playing; stopping transport to keep UI truthful.');
       audioEngine.pause();
       pauseAplSession();
-    } else {
-      void audioEngine.play().then(() => {
-        startAplSession();
-      });
+      setIsPlaying(false);
+      setPlayIntent(true);
     }
-  };
+  }, [audioContextState, isPlaying, pauseAplSession]);
+
+  useEffect(() => {
+    // Persist last known AudioContext state for debug copying.
+    debugTelemetryService.setAudioContextInfo('single', {
+      state: String(audioContextState),
+      sampleRate: audioEngine.getAudioContext().sampleRate,
+    });
+  }, [audioContextState]);
+
+  const copyDebugInfo = useCallback(async () => {
+    const snapshot = {
+      ts: new Date().toISOString(),
+      appVersion,
+      href: typeof window !== 'undefined' ? window.location.href : 'n/a',
+      ua: typeof navigator !== 'undefined' ? navigator.userAgent : 'n/a',
+      viewport: typeof window !== 'undefined'
+        ? {
+            w: window.innerWidth,
+            h: window.innerHeight,
+            dpr: window.devicePixelRatio,
+          }
+        : null,
+      state: {
+        appState,
+        activeMode,
+        engineMode,
+        currentFileName,
+        hasAppliedChanges,
+        isAbComparing,
+        isPlaying,
+        playIntent,
+      },
+      audioContexts: debugTelemetryService.getAudioContextInfo(),
+      recentErrors: debugTelemetryService.getRecentErrors(),
+    };
+
+    const text = JSON.stringify(snapshot, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      showNotification('Debug info copied to clipboard', 'success', 2500);
+      return;
+    } catch (err) {
+      // Fallback for older browsers / insecure contexts.
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showNotification('Debug info copied to clipboard', 'success', 2500);
+      } catch (fallbackErr) {
+        console.warn('[App] Failed to copy debug info', err, fallbackErr);
+        showNotification('Unable to copy debug info on this device. Try a different browser.', 'warning', 3500);
+      }
+    }
+  }, [
+    activeMode,
+    appState,
+    appVersion,
+    currentFileName,
+    engineMode,
+    hasAppliedChanges,
+    isAbComparing,
+    isPlaying,
+    playIntent,
+    showNotification,
+  ]);
 
   // A/B bypass toggle - only works if changes have been applied
   const handleToggleAB = () => {
@@ -2250,16 +2444,11 @@ const App: React.FC = () => {
     if (snapshotABActive) {
       handleClearSnapshotAB();
     }
-    audioEngine.setBuffer(originalBuffer);
+    audioEngine.resetToOriginal();
     setIsPlaying(false);
+    setPlayIntent(false);
     setIsAbComparing(false);
-    // Small delay to ensure buffer is set
-    setTimeout(() => {
-      void audioEngine.play().then(() => {
-        startAplSession();
-      });
-      setIsPlaying(true);
-    }, 50);
+    void requestStartPlayback();
   };
 
   // Track Delete + Reset - returns to upload state
@@ -2522,6 +2711,8 @@ const App: React.FC = () => {
       }
       stopAplSession();
       setAplProposals([]);
+      setAplDataSource('real');
+      setAplDataSourceReason(null);
 
       setAppState(AppState.LOADING);
       setActiveMode('SINGLE');
@@ -2716,9 +2907,10 @@ const App: React.FC = () => {
 
       {/* System Bar - Second Light OS Style */}
       <header className="sticky top-0 z-50 bg-gradient-to-r from-black/90 via-slate-900/90 to-black/90 backdrop-blur-xl border-b border-white/5 shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
-        <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-          {/* Logo - Echo Sound Lab */}
-          <div className="flex items-center gap-3">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3">
+          <div className="flex items-center justify-between gap-3">
+            {/* Logo - Echo Sound Lab */}
+            <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={handleLogoClick}
               className="group relative w-10 h-10 rounded-2xl flex items-center justify-center transition-all duration-200 hover:-translate-y-0.5 hover:rotate-[-1.5deg] active:scale-95 active:translate-y-[1px]"
@@ -2747,31 +2939,14 @@ const App: React.FC = () => {
               </h1>
               <p className="text-[10px] text-orange-400 font-semibold tracking-widest uppercase mt-1">Second Light OS</p>
             </div>
-          </div>
+            </div>
 
-          {/* Mode Tabs */}
-          <div className="flex items-center gap-2 bg-slate-950/80 rounded-2xl p-1.5 border border-slate-800/50 shadow-[inset_2px_2px_4px_#000000,inset_-2px_-2px_4px_#0a0c12]">
-            {(['SINGLE', 'MULTI', 'AI_STUDIO', 'VIDEO'] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setActiveMode(mode)}
-                className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
-                  activeMode === mode
-                    ? 'bg-slate-900 text-orange-400 shadow-[inset_3px_3px_6px_#050710,inset_-3px_-3px_6px_#0f1828] border border-orange-500/30'
-                    : 'bg-slate-900/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/70 shadow-[3px_3px_6px_#050710,-3px_-3px_6px_#0f1828] border border-slate-800/30 hover:border-slate-700/50'
-                }`}
-              >
-                {MODE_LABELS[mode]}
-              </button>
-            ))}
-          </div>
-
-          {/* Status Indicators */}
-          <div className="flex items-center gap-4">
+            {/* Status Indicators */}
+            <div className="flex items-center gap-3 sm:gap-4 flex-wrap justify-end">
             {currentFileName && (
-              <div className="flex items-center gap-2 bg-white/5 rounded-lg px-3 py-1.5 border border-white/5">
+              <div className="hidden md:flex items-center gap-2 bg-white/5 rounded-lg px-3 py-1.5 border border-white/5">
                 <div className={`w-2 h-2 rounded-full ${isPlaying ? 'bg-green-500 animate-pulse' : 'bg-slate-500'}`} />
-                <span className="text-xs text-slate-400 truncate max-w-[150px]">{currentFileName}</span>
+                <span className="text-xs text-slate-400 truncate max-w-[120px] sm:max-w-[150px]">{currentFileName}</span>
                 <button
                   onClick={handleDeleteTrack}
                   className="ml-2 p-1 rounded hover:bg-red-500/20 transition-colors group"
@@ -2831,6 +3006,27 @@ const App: React.FC = () => {
               <span className="text-orange-300">Net</span>
               <span className="text-slate-400 normal-case tracking-normal">{networkSettings.ssid}</span>
               {networkSettings.proxy && <span className="text-slate-500 normal-case tracking-normal">({networkSettings.proxy})</span>}
+            </div>
+          </div>
+          </div>
+
+          {/* Mode Tabs (scrollable on mobile) */}
+          <div className="mt-3 -mx-3 px-3 sm:mx-0 sm:px-0">
+            <div className="flex items-center gap-2 bg-slate-950/80 rounded-2xl p-1.5 border border-slate-800/50 shadow-[inset_2px_2px_4px_#000000,inset_-2px_-2px_4px_#0a0c12] overflow-x-auto no-scrollbar">
+              {(['SINGLE', 'MULTI', 'AI_STUDIO', 'VIDEO'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setActiveMode(mode)}
+                  data-testid={`mode-tab-${mode.toLowerCase()}`}
+                  className={`shrink-0 px-4 sm:px-5 py-2.5 sm:py-2.5 min-h-[44px] rounded-xl text-[11px] sm:text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
+                    activeMode === mode
+                      ? 'bg-slate-900 text-orange-400 shadow-[inset_3px_3px_6px_#050710,inset_-3px_-3px_6px_#0f1828] border border-orange-500/30'
+                      : 'bg-slate-900/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/70 shadow-[3px_3px_6px_#050710,-3px_-3px_6px_#0f1828] border border-slate-800/30 hover:border-slate-700/50'
+                  }`}
+                >
+                  {MODE_LABELS[mode]}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -2900,13 +3096,13 @@ const App: React.FC = () => {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 p-6 flex flex-col items-center relative z-10">
+      <main className="flex-1 p-3 sm:p-6 flex flex-col items-center relative z-10">
 
       {/* Upload Screen - Second Light OS Glass Card */}
       {appState === AppState.IDLE && activeMode === 'SINGLE' && (
-        <div className="mt-20 w-full max-w-4xl">
+        <div className="mt-10 sm:mt-20 w-full max-w-4xl">
           <section className="mb-12 text-center">
-            <h1 className="text-5xl md:text-7xl font-semibold tracking-[-0.04em] text-slate-100 leading-[0.95]">
+            <h1 className="text-4xl sm:text-5xl md:text-7xl font-semibold tracking-[-0.04em] text-slate-100 leading-[0.95]">
               Mixes that think. Masters that feel.
             </h1>
             <p className="mt-4 text-base md:text-lg text-slate-400 font-medium">
@@ -2922,11 +3118,11 @@ const App: React.FC = () => {
           </section>
           <label className="relative cursor-pointer group block">
             {/* Glass card */}
-            <div className="relative bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-3xl p-16 border-[0.5px] border-orange-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)] hover:border-orange-500/40 hover:shadow-[inset_4px_4px_12px_rgba(0,0,0,0.6),inset_-2px_-2px_8px_rgba(255,255,255,0.02)] hover:translate-y-[2px] active:shadow-[inset_6px_6px_16px_rgba(0,0,0,0.7),inset_-2px_-2px_6px_rgba(255,255,255,0.01)] active:translate-y-[4px] transition-all duration-200">
+            <div className="relative bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-3xl p-7 sm:p-10 md:p-16 border-[0.5px] border-orange-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)] hover:border-orange-500/40 hover:shadow-[inset_4px_4px_12px_rgba(0,0,0,0.6),inset_-2px_-2px_8px_rgba(255,255,255,0.02)] hover:translate-y-[2px] active:shadow-[inset_6px_6px_16px_rgba(0,0,0,0.7),inset_-2px_-2px_6px_rgba(255,255,255,0.01)] active:translate-y-[4px] transition-all duration-200">
 
             <div className="relative z-10 text-center">
               {/* Icon */}
-              <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-slate-900 border border-orange-500/30 shadow-[inset_2px_2px_4px_#050710,inset_-2px_-2px_4px_#0f1828] flex items-center justify-center group-hover:translate-y-[2px] group-active:translate-y-[4px] transition-transform duration-200">
+              <div className="w-14 h-14 sm:w-20 sm:h-20 mx-auto mb-6 rounded-2xl bg-slate-900 border border-orange-500/30 shadow-[inset_2px_2px_4px_#050710,inset_-2px_-2px_4px_#0f1828] flex items-center justify-center group-hover:translate-y-[2px] group-active:translate-y-[4px] transition-transform duration-200">
                 <svg className="w-10 h-10 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                 </svg>
@@ -2936,14 +3132,14 @@ const App: React.FC = () => {
               <p className="text-sm text-slate-500">{i18nService.t('upload.description')}</p>
 
               {/* Supported formats */}
-              <div className="mt-6 flex gap-2 justify-center">
+              <div className="mt-6 flex gap-2 justify-center flex-wrap">
                 {['WAV', 'MP3', 'FLAC', 'AIFF'].map(fmt => (
                   <span key={fmt} className="text-[10px] px-2 py-1 bg-white/5 rounded text-slate-500 border border-white/5 hover:border-orange-500/40 hover:text-orange-400 transition-all duration-300 cursor-default">{fmt}</span>
                 ))}
               </div>
             </div>
           </div>
-          <input type="file" onChange={handleFileUpload} className="hidden" accept="audio/*" />
+          <input data-testid="single-upload-input" type="file" onChange={handleFileUpload} className="hidden" accept="audio/*" />
         </label>
 
         <div className="mt-5 flex items-center justify-center">
@@ -3068,7 +3264,7 @@ const App: React.FC = () => {
             </div>
 
             {/* Visualizer Content */}
-            <div className="p-5">
+            <div className="p-5 relative">
               <Visualizer
                 isPlaying={isPlaying}
                 currentTime={currentPlayheadSeconds}
@@ -3076,10 +3272,25 @@ const App: React.FC = () => {
                 onSeek={(time) => audioEngine.seek(time)}
                 onPlayheadUpdate={setCurrentPlayheadSeconds}
               />
+              <AudioResumeGuard
+                contextState={audioContextState}
+                playIntent={playIntent}
+                isPlaying={isPlaying}
+                onCancel={() => requestStopPlayback()}
+                onResume={async () => {
+                  // Explicit user gesture recovery (iOS/Safari).
+                  try {
+                    await audioEngine.getAudioContext().resume();
+                  } catch (error) {
+                    console.warn('[App] AudioContext.resume() failed', error);
+                  }
+                  await requestStartPlayback();
+                }}
+              />
             </div>
 
             {/* Compact LUFS Stats Bar */}
-            <div className="px-5 pb-4 flex items-center justify-between gap-4 text-xs">
+            <div className="px-5 pb-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
               <div className="flex items-center gap-1">
                 <span className="text-slate-500 font-bold uppercase">LUFS:</span>
                 <span className="font-mono font-bold text-orange-400">{originalMetrics?.lufs?.integrated.toFixed(1) || '--'}</span>
@@ -3292,24 +3503,46 @@ const App: React.FC = () => {
       {/* Multi-Stem Mode */}
       {activeMode === 'MULTI' && (
         <div className="w-full max-w-6xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden">
-          <MultiStemWorkspace initialStems={generatedStems || undefined} />
+          <ErrorBoundary
+            title="Stems workspace hit an error."
+            onReset={() => setWorkspaceNonce((p) => ({ ...p, MULTI: p.MULTI + 1 }))}
+          >
+            <React.Suspense fallback={<div className="p-6 text-slate-400 text-sm">Loading Stems…</div>}>
+              <MultiStemWorkspace key={`multi-${workspaceNonce.MULTI}`} initialStems={generatedStems || undefined} />
+            </React.Suspense>
+          </ErrorBoundary>
         </div>
       )}
 
       {/* AI Studio Mode */}
       {activeMode === 'AI_STUDIO' && (
         <div className="w-full max-w-6xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden">
-          <AIStudio
-            onSongGenerated={handleSongGenerated}
-            onSongOpenSingleTrack={handleSongOpenSingleTrack}
-          />
+          <ErrorBoundary
+            title="AI Studio hit an error."
+            onReset={() => setWorkspaceNonce((p) => ({ ...p, AI_STUDIO: p.AI_STUDIO + 1 }))}
+          >
+            <React.Suspense fallback={<div className="p-6 text-slate-400 text-sm">Loading AI Studio…</div>}>
+              <AIStudio
+                key={`ai-${workspaceNonce.AI_STUDIO}`}
+                onSongGenerated={handleSongGenerated}
+                onSongOpenSingleTrack={handleSongOpenSingleTrack}
+              />
+            </React.Suspense>
+          </ErrorBoundary>
         </div>
       )}
 
       {/* Video Engine Mode */}
       {activeMode === 'VIDEO' && (
         <div className="w-full max-w-6xl bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden">
-          <VideoEngine />
+          <ErrorBoundary
+            title="Video Engine hit an error."
+            onReset={() => setWorkspaceNonce((p) => ({ ...p, VIDEO: p.VIDEO + 1 }))}
+          >
+            <React.Suspense fallback={<div className="p-6 text-slate-400 text-sm">Loading Video Engine…</div>}>
+              <VideoEngine key={`video-${workspaceNonce.VIDEO}`} />
+            </React.Suspense>
+          </ErrorBoundary>
         </div>
       )}
 
@@ -3361,9 +3594,13 @@ const App: React.FC = () => {
       <FeedbackButton onClick={() => {}} />
 
       {/* Mode Switcher - Always Visible */}
-      <div className="fixed bottom-6 left-6 z-50 flex gap-2 items-center">
+      <div
+        className="fixed left-6 z-50 flex gap-2 items-center"
+        style={{ bottom: `calc(24px + var(--esl-safe-bottom) + ${cornerUiOffsetPx}px)` }}
+      >
         <div className="flex gap-3 items-center group/mode-switcher">
           <button
+            data-testid="engine-mode-toggle"
             onClick={() => {
               const newMode = engineMode === 'FRIENDLY' ? 'ADVANCED' : 'FRIENDLY';
               setEngineMode(newMode);
@@ -3411,6 +3648,7 @@ const App: React.FC = () => {
         {/* Advanced Tools Button (next to mode switcher on left) */}
         {appState !== AppState.IDLE && (
           <button
+            data-testid="advanced-tools-toggle"
             onClick={() => engineMode === 'ADVANCED' && setShowAdvancedTools(!showAdvancedTools)}
             disabled={engineMode === 'FRIENDLY'}
             className={`w-14 h-14 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] transition-all flex items-center justify-center group ${
@@ -3434,7 +3672,8 @@ const App: React.FC = () => {
       {appState !== AppState.IDLE && (
         <button
           onClick={() => setShowEchoChat(true)}
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-slate-900 text-orange-400 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03),_0_0_20px_rgba(251,146,60,0.03)] hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02),_0_0_25px_rgba(251,146,60,0.05)] hover:text-orange-300 active:shadow-[inset_3px_3px_8px_rgba(0,0,0,0.9)] active:translate-y-[1px] transition-all flex items-center justify-center group"
+          style={{ bottom: `calc(24px + var(--esl-safe-bottom) + ${cornerUiOffsetPx}px)` }}
+          className="fixed right-6 z-50 w-14 h-14 bg-slate-900 text-orange-400 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03),_0_0_20px_rgba(251,146,60,0.03)] hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02),_0_0_25px_rgba(251,146,60,0.05)] hover:text-orange-300 active:shadow-[inset_3px_3px_8px_rgba(0,0,0,0.9)] active:translate-y-[1px] transition-all flex items-center justify-center group"
           title="Open Echo Chat"
         >
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -3445,7 +3684,7 @@ const App: React.FC = () => {
 
       {/* Advanced Tools Modal */}
       {showAdvancedTools && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div data-testid="advanced-tools-modal" className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
           <div className="bg-slate-900 rounded-3xl border border-slate-700/50 shadow-[8px_8px_24px_#000000,-4px_-4px_12px_#0f1828] w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
               <div className="flex items-center gap-3">
@@ -3460,6 +3699,7 @@ const App: React.FC = () => {
                 </div>
               </div>
               <button
+                data-testid="advanced-tools-close"
                 onClick={() => setShowAdvancedTools(false)}
                 className="w-8 h-8 rounded-lg bg-slate-800/50 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-all flex items-center justify-center"
               >
@@ -3594,12 +3834,19 @@ const App: React.FC = () => {
           onClose={() => setShowSettings(false)}
           engineMode={engineMode}
           setEngineMode={setEngineMode}
+          accPolicyTemplate={accPolicyTemplate}
+          setAccPolicyTemplate={setAccPolicyTemplate}
           onResetToOriginal={handleResetToOriginal}
           appVersion={appVersion}
           themeMode={themeMode}
           setThemeMode={setThemeMode}
           networkSettings={networkSettings}
           setNetworkSettings={setNetworkSettings}
+          onCopyDebugInfo={copyDebugInfo}
+          onClearDebugInfo={() => {
+            debugTelemetryService.clearErrors();
+            showNotification('Debug log cleared', 'success', 2000);
+          }}
         />
       )}
 
@@ -3641,6 +3888,8 @@ const App: React.FC = () => {
         <APLProposalPanel
           proposals={aplProposals}
           isScanning={isAplScanning}
+          dataSource={aplDataSource}
+          dataSourceReason={aplDataSourceReason}
           onApplyDirect={handleAplApplyDirect}
           onAuthorizeGated={handleAplAuthorizeGated}
         />

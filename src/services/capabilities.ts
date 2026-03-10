@@ -51,12 +51,54 @@ export const ACC_POLICY_TEMPLATES: Record<AccPolicyTemplateName, AccPolicyTempla
 
 export const DEFAULT_ACC_POLICY_TEMPLATE: AccPolicyTemplateName = 'CO_PILOT';
 
+export const CAPABILITY_RISK_TIER_MAP: Readonly<Record<Capability, RiskTier>> = Object.freeze({
+  [Capability.UI_NAVIGATION]: RiskTier.LOW,
+  [Capability.TEXT_INPUT]: RiskTier.MEDIUM,
+  [Capability.TEXT_INPUT_SAFE]: RiskTier.LOW,
+  [Capability.PARAMETER_ADJUSTMENT]: RiskTier.MEDIUM,
+  [Capability.FILE_READ]: RiskTier.LOW,
+  [Capability.FILE_WRITE]: RiskTier.MEDIUM,
+  [Capability.TRANSPORT_CONTROL]: RiskTier.LOW,
+  [Capability.RENDER_EXPORT]: RiskTier.HIGH,
+});
+
 export function shouldRequireACCForRiskTier(
   riskTier: RiskTier,
   policyTemplate: AccPolicyTemplateName = DEFAULT_ACC_POLICY_TEMPLATE
 ): boolean {
   const template = ACC_POLICY_TEMPLATES[policyTemplate] || ACC_POLICY_TEMPLATES[DEFAULT_ACC_POLICY_TEMPLATE];
   return !template.autoApproveTiers.includes(riskTier);
+}
+
+export function getRiskTierForCapability(capability: Capability): RiskTier {
+  return CAPABILITY_RISK_TIER_MAP[capability] || RiskTier.HIGH;
+}
+
+export type CapabilityPolicyDecision = {
+  capability: Capability;
+  riskTier: RiskTier;
+  requiresACC: boolean;
+  policyTemplate: AccPolicyTemplateName;
+};
+
+export function getCapabilityPolicyDecision(
+  capability: Capability,
+  policyTemplate: AccPolicyTemplateName = DEFAULT_ACC_POLICY_TEMPLATE
+): CapabilityPolicyDecision {
+  const riskTier = getRiskTierForCapability(capability);
+  return {
+    capability,
+    riskTier,
+    requiresACC: shouldRequireACCForRiskTier(riskTier, policyTemplate),
+    policyTemplate,
+  };
+}
+
+export function listCapabilitiesForTemplate(
+  policyTemplate: AccPolicyTemplateName = DEFAULT_ACC_POLICY_TEMPLATE
+): CapabilityPolicyDecision[] {
+  const allCapabilities = Object.values(Capability) as Capability[];
+  return allCapabilities.map((capability) => getCapabilityPolicyDecision(capability, policyTemplate));
 }
 
 /**

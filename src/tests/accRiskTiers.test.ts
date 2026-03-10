@@ -41,14 +41,15 @@ describe('ACC Risk Tier Policy Templates', () => {
   });
 
   test('creative mixing presets map capabilities to expected risk tiers', () => {
-    expect(getGrantRequiresAcc(Capability.PARAMETER_ADJUSTMENT, 'CO_PILOT')).toBe(false); // LOW
+    expect(getGrantRequiresAcc(Capability.PARAMETER_ADJUSTMENT, 'CO_PILOT')).toBe(true); // MEDIUM
     expect(getGrantRequiresAcc(Capability.FILE_WRITE, 'CO_PILOT')).toBe(true); // MEDIUM
     expect(getGrantRequiresAcc(Capability.RENDER_EXPORT, 'CO_PILOT')).toBe(true); // HIGH
 
+    expect(getGrantRequiresAcc(Capability.PARAMETER_ADJUSTMENT, 'FULL_AUTONOMY')).toBe(false);
     expect(getGrantRequiresAcc(Capability.FILE_WRITE, 'FULL_AUTONOMY')).toBe(false);
     expect(getGrantRequiresAcc(Capability.RENDER_EXPORT, 'FULL_AUTONOMY')).toBe(true);
 
-    expect(getGrantRequiresAcc(Capability.PARAMETER_ADJUSTMENT, 'STRICT_REVIEW')).toBe(true);
+    expect(getGrantRequiresAcc(Capability.PARAMETER_ADJUSTMENT, 'STRICT_REVIEW')).toBe(true); // MEDIUM
     expect(getGrantRequiresAcc(Capability.FILE_WRITE, 'STRICT_REVIEW')).toBe(true);
     expect(getGrantRequiresAcc(Capability.RENDER_EXPORT, 'STRICT_REVIEW')).toBe(true);
   });
