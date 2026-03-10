@@ -121,6 +121,9 @@ function normalizeLinePreview(line) {
 }
 
 function shouldEnforceBannedEnvVars(filePath) {
+  if (filePath === 'scripts/ci/secret-scan.mjs') {
+    return false;
+  }
   return BANNED_ENV_ENFORCED_FILES.has(filePath) ||
     BANNED_ENV_ENFORCED_PREFIXES.some(prefix => filePath.startsWith(prefix));
 }

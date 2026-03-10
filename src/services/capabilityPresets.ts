@@ -8,14 +8,39 @@
  * All presets are mechanical, testable, and auditable.
  */
 
-import { Capability, CapabilityGrant, CapabilityScope } from './capabilities';
+import {
+  AccPolicyTemplateName,
+  Capability,
+  CapabilityGrant,
+  DEFAULT_ACC_POLICY_TEMPLATE,
+  RiskTier,
+  shouldRequireACCForRiskTier,
+} from './capabilities';
 
 export type PresetName = 'SYSTEM_NAVIGATION' | 'CREATIVE_MIXING' | 'FILE_EXPORT_ONLY' | 'CUSTOM';
 
 export interface CapabilityPreset {
   name: PresetName;
   description: string;
+  policyTemplate: AccPolicyTemplateName;
   grants: CapabilityGrant[];
+}
+
+function createTieredGrant(
+  capability: Capability,
+  appId: string,
+  expiresAt: number,
+  riskTier: RiskTier,
+  policyTemplate: AccPolicyTemplateName
+): CapabilityGrant {
+  return {
+    capability,
+    scope: { appId },
+    expiresAt,
+    riskTier,
+    policyTemplate,
+    requiresACC: shouldRequireACCForRiskTier(riskTier, policyTemplate),
+  };
 }
 
 /**
@@ -25,38 +50,20 @@ export interface CapabilityPreset {
  */
 export function createSystemNavigationPreset(
   appId: string,
-  expiryMs: number = 3600000  // 1 hour default
+  expiryMs: number = 3600000,  // 1 hour default
+  policyTemplate: AccPolicyTemplateName = DEFAULT_ACC_POLICY_TEMPLATE
 ): CapabilityPreset {
   const expiresAt = Date.now() + expiryMs;
 
   return {
     name: 'SYSTEM_NAVIGATION',
     description: 'Browse and analyze audio. No modifications or file operations.',
+    policyTemplate,
     grants: [
-      {
-        capability: Capability.UI_NAVIGATION,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      },
-      {
-        capability: Capability.TRANSPORT_CONTROL,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      },
-      {
-        capability: Capability.FILE_READ,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      },
-      {
-        capability: Capability.TEXT_INPUT_SAFE,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      }
+      createTieredGrant(Capability.UI_NAVIGATION, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.TRANSPORT_CONTROL, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.FILE_READ, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.TEXT_INPUT_SAFE, appId, expiresAt, RiskTier.LOW, policyTemplate),
     ]
   };
 }
@@ -68,56 +75,23 @@ export function createSystemNavigationPreset(
  */
 export function createCreativeMixingPreset(
   appId: string,
-  expiryMs: number = 14400000  // 4 hours default
+  expiryMs: number = 14400000,  // 4 hours default
+  policyTemplate: AccPolicyTemplateName = DEFAULT_ACC_POLICY_TEMPLATE
 ): CapabilityPreset {
   const expiresAt = Date.now() + expiryMs;
 
   return {
     name: 'CREATIVE_MIXING',
     description: 'Full mixing: parameters, processing, and exports (exports require confirmation).',
+    policyTemplate,
     grants: [
-      {
-        capability: Capability.UI_NAVIGATION,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      },
-      {
-        capability: Capability.TRANSPORT_CONTROL,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      },
-      {
-        capability: Capability.PARAMETER_ADJUSTMENT,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      },
-      {
-        capability: Capability.FILE_READ,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      },
-      {
-        capability: Capability.FILE_WRITE,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false  // Autosave is allowed
-      },
-      {
-        capability: Capability.RENDER_EXPORT,
-        scope: { appId },
-        expiresAt,
-        requiresACC: true  // Exports require explicit confirmation (Rule C4)
-      },
-      {
-        capability: Capability.TEXT_INPUT_SAFE,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      }
+      createTieredGrant(Capability.UI_NAVIGATION, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.TRANSPORT_CONTROL, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.PARAMETER_ADJUSTMENT, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.FILE_READ, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.FILE_WRITE, appId, expiresAt, RiskTier.MEDIUM, policyTemplate),
+      createTieredGrant(Capability.RENDER_EXPORT, appId, expiresAt, RiskTier.HIGH, policyTemplate),
+      createTieredGrant(Capability.TEXT_INPUT_SAFE, appId, expiresAt, RiskTier.LOW, policyTemplate),
     ]
   };
 }
@@ -129,44 +103,21 @@ export function createCreativeMixingPreset(
  */
 export function createFileExportOnlyPreset(
   appId: string,
-  expiryMs: number = 1800000  // 30 minutes default
+  expiryMs: number = 1800000,  // 30 minutes default
+  policyTemplate: AccPolicyTemplateName = DEFAULT_ACC_POLICY_TEMPLATE
 ): CapabilityPreset {
   const expiresAt = Date.now() + expiryMs;
 
   return {
     name: 'FILE_EXPORT_ONLY',
     description: 'Export only: read, compare, and export. No modifications.',
+    policyTemplate,
     grants: [
-      {
-        capability: Capability.UI_NAVIGATION,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      },
-      {
-        capability: Capability.TRANSPORT_CONTROL,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      },
-      {
-        capability: Capability.FILE_READ,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      },
-      {
-        capability: Capability.RENDER_EXPORT,
-        scope: { appId },
-        expiresAt,
-        requiresACC: true  // Exports require confirmation
-      },
-      {
-        capability: Capability.TEXT_INPUT_SAFE,
-        scope: { appId },
-        expiresAt,
-        requiresACC: false
-      }
+      createTieredGrant(Capability.UI_NAVIGATION, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.TRANSPORT_CONTROL, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.FILE_READ, appId, expiresAt, RiskTier.LOW, policyTemplate),
+      createTieredGrant(Capability.RENDER_EXPORT, appId, expiresAt, RiskTier.HIGH, policyTemplate),
+      createTieredGrant(Capability.TEXT_INPUT_SAFE, appId, expiresAt, RiskTier.LOW, policyTemplate),
     ]
   };
 }
@@ -186,15 +137,16 @@ export const CAPABILITY_PRESETS = {
 export function loadPreset(
   presetName: PresetName,
   appId: string,
-  expiryMs?: number
+  expiryMs?: number,
+  policyTemplate: AccPolicyTemplateName = DEFAULT_ACC_POLICY_TEMPLATE
 ): CapabilityPreset {
   switch (presetName) {
     case 'SYSTEM_NAVIGATION':
-      return createSystemNavigationPreset(appId, expiryMs);
+      return createSystemNavigationPreset(appId, expiryMs, policyTemplate);
     case 'CREATIVE_MIXING':
-      return createCreativeMixingPreset(appId, expiryMs);
+      return createCreativeMixingPreset(appId, expiryMs, policyTemplate);
     case 'FILE_EXPORT_ONLY':
-      return createFileExportOnlyPreset(appId, expiryMs);
+      return createFileExportOnlyPreset(appId, expiryMs, policyTemplate);
     default:
       throw new Error(`Unknown preset: ${presetName}`);
   }

@@ -9,7 +9,14 @@
  * - Process identity bound (C6: halt on PID change, app crash, reload)
  */
 
-import { Capability, CapabilityGrant, CapabilityRequest, CapabilityScope } from './capabilities';
+import {
+  Capability,
+  CapabilityGrant,
+  CapabilityRequest,
+  CapabilityScope,
+  DEFAULT_ACC_POLICY_TEMPLATE,
+  shouldRequireACCForRiskTier,
+} from './capabilities';
 
 export interface ProcessIdentity {
   appId: string;
@@ -131,6 +138,19 @@ export class CapabilityAuthority {
         `windowId=${request.scope.windowId || 'any'}, ` +
         `resourceIds=${request.scope.resourceIds?.join(',') || 'any'}`
       );
+    }
+
+    if (match.riskTier) {
+      const derivedRequiresACC = shouldRequireACCForRiskTier(
+        match.riskTier,
+        match.policyTemplate || DEFAULT_ACC_POLICY_TEMPLATE
+      );
+      if (derivedRequiresACC !== match.requiresACC) {
+        return {
+          ...match,
+          requiresACC: derivedRequiresACC,
+        };
+      }
     }
 
     return match;

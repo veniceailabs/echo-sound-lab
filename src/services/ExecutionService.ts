@@ -15,11 +15,29 @@ import { ProposalMapper } from './logic/LogicTemplates';
 import { policyEngine } from './policy/PolicyEngine';
 import { forensicLogger } from './ForensicLogger';
 import { MerkleAuditLog } from '../action-authority/audit/MerkleAuditLog';
+import { executionSessionService } from './executionSessionService';
+import { verifyExecutionPayloadSignature } from './executionSigning';
+
+export class ExecutionTamperError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ExecutionTamperError';
+  }
+}
+
+export class ExecutionReplayError extends ExecutionTamperError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ExecutionReplayError';
+  }
+}
 
 class ExecutionService {
   private static instance: ExecutionService;
   private isProcessing: boolean = false;
   private merkleAuditLog: MerkleAuditLog;
+  private readonly maxSealAgeMs = 60_000;
+  private consumedNonceKeys = new Set<string>();
 
   // Toggle this to FALSE to run real commands against Logic Pro
   // Keep TRUE for development/testing
@@ -88,7 +106,7 @@ class ExecutionService {
 
     try {
       // 2. Security Check (FSM Seal Validation)
-      this.validateSeal(payload.aaContext);
+      await this.validateSeal(payload);
 
       // 2.5. POLICY ENGINE CHECK (The Conscience)
       // This is the final gatekeeper that prevents unsafe actions
@@ -129,6 +147,9 @@ class ExecutionService {
         throw new Error(`UNKNOWN_ACTION_TYPE: ${payload.actionType}`);
       }
       const script = scriptGenerator(payload.parameters);
+      if (!AppleScriptActuator.validateScript(script, payload.actionType)) {
+        throw new Error('UNSAFE_SCRIPT_REJECTED');
+      }
 
       // 4. EXECUTE (The Crossing)
       let resultData = '';
@@ -212,11 +233,53 @@ class ExecutionService {
   /**
    * Validate FSM Seal (Security Context)
    */
-  private validateSeal(context: any): void {
+  private async validateSeal(payload: ExecutionPayload): Promise<void> {
+    const context = payload.aaContext;
     if (!context.sourceHash) throw new Error('INVALID_SEAL: Missing Source Hash');
     if (!context.contextId) throw new Error('INVALID_SEAL: Missing Context ID');
     if (!context.timestamp) throw new Error('INVALID_SEAL: Missing Timestamp');
-    // TODO: Cryptographic signature verification
+    if (!context.sessionId) throw new ExecutionTamperError('INVALID_SEAL: Missing Session ID');
+    if (!context.nonce) throw new ExecutionTamperError('INVALID_SEAL: Missing Nonce');
+    if (context.signatureVersion !== 'hmac-sha256-v1') {
+      throw new ExecutionTamperError('INVALID_SEAL: Unsupported signature version');
+    }
+    if (!context.signature) throw new ExecutionTamperError('INVALID_SEAL: Missing Signature');
+
+    const ageMs = Math.abs(Date.now() - context.timestamp);
+    if (ageMs > this.maxSealAgeMs) {
+      throw new ExecutionTamperError(`INVALID_SEAL: Stale Signature (${ageMs}ms old)`);
+    }
+
+    const session = executionSessionService.getSessionById(context.sessionId);
+    if (!session) {
+      throw new ExecutionTamperError('INVALID_SEAL: Session not found or expired');
+    }
+
+    const isValid = await verifyExecutionPayloadSignature(payload, session.sessionSecret);
+
+    if (!isValid) {
+      throw new ExecutionTamperError('INVALID_SEAL: Signature verification failed');
+    }
+
+    const nonceKey = `${context.sessionId}:${context.nonce}`;
+    if (this.consumedNonceKeys.has(nonceKey)) {
+      throw new ExecutionReplayError('INVALID_SEAL: Replay detected (local nonce cache)');
+    }
+
+    const consumed = await executionSessionService.consumeNonce(context.sessionId, context.nonce);
+    if (!consumed) {
+      throw new ExecutionReplayError('INVALID_SEAL: Replay detected (nonce already consumed)');
+    }
+
+    this.consumedNonceKeys.add(nonceKey);
+  }
+
+  /**
+   * Public strict validation hook for security tests and preflight checks.
+   * Throws typed errors on tamper/replay failures.
+   */
+  public async validatePayloadOrThrow(payload: ExecutionPayload): Promise<void> {
+    await this.validateSeal(payload);
   }
 
   /**
@@ -239,6 +302,11 @@ class ExecutionService {
    */
   public getSimulationMode(): boolean {
     return this.SIMULATION_MODE;
+  }
+
+  // Test helper: clear replay cache between isolated test cases.
+  public resetSecurityStateForTest(): void {
+    this.consumedNonceKeys.clear();
   }
 }
 

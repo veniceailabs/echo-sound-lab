@@ -9,11 +9,54 @@
 export enum Capability {
   UI_NAVIGATION = 'UI_NAVIGATION',
   TEXT_INPUT = 'TEXT_INPUT',
+  TEXT_INPUT_SAFE = 'TEXT_INPUT_SAFE',
   PARAMETER_ADJUSTMENT = 'PARAMETER_ADJUSTMENT',
   FILE_READ = 'FILE_READ',
   FILE_WRITE = 'FILE_WRITE',
   TRANSPORT_CONTROL = 'TRANSPORT_CONTROL',
   RENDER_EXPORT = 'RENDER_EXPORT',
+}
+
+export enum RiskTier {
+  LOW = 'LOW',
+  MEDIUM = 'MEDIUM',
+  HIGH = 'HIGH',
+}
+
+export type AccPolicyTemplateName = 'FULL_AUTONOMY' | 'CO_PILOT' | 'STRICT_REVIEW';
+
+export type AccPolicyTemplate = {
+  name: AccPolicyTemplateName;
+  description: string;
+  autoApproveTiers: RiskTier[];
+};
+
+export const ACC_POLICY_TEMPLATES: Record<AccPolicyTemplateName, AccPolicyTemplate> = {
+  FULL_AUTONOMY: {
+    name: 'FULL_AUTONOMY',
+    description: 'Auto-approves LOW and MEDIUM. Prompts for HIGH.',
+    autoApproveTiers: [RiskTier.LOW, RiskTier.MEDIUM],
+  },
+  CO_PILOT: {
+    name: 'CO_PILOT',
+    description: 'Auto-approves LOW. Prompts for MEDIUM and HIGH.',
+    autoApproveTiers: [RiskTier.LOW],
+  },
+  STRICT_REVIEW: {
+    name: 'STRICT_REVIEW',
+    description: 'Prompts for all actions.',
+    autoApproveTiers: [],
+  },
+};
+
+export const DEFAULT_ACC_POLICY_TEMPLATE: AccPolicyTemplateName = 'CO_PILOT';
+
+export function shouldRequireACCForRiskTier(
+  riskTier: RiskTier,
+  policyTemplate: AccPolicyTemplateName = DEFAULT_ACC_POLICY_TEMPLATE
+): boolean {
+  const template = ACC_POLICY_TEMPLATES[policyTemplate] || ACC_POLICY_TEMPLATES[DEFAULT_ACC_POLICY_TEMPLATE];
+  return !template.autoApproveTiers.includes(riskTier);
 }
 
 /**
@@ -45,6 +88,8 @@ export type CapabilityGrant = {
   scope: CapabilityScope;
   expiresAt: number;            // absolute epoch ms (monotonic)
   requiresACC: boolean;         // if true, must get active consent before each use
+  riskTier?: RiskTier;
+  policyTemplate?: AccPolicyTemplateName;
 };
 
 /**
