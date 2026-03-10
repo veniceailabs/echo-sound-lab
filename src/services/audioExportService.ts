@@ -1,4 +1,8 @@
 import { createSignedRenderManifest, SignedRenderManifest } from './provenanceManifestService';
+import {
+  buildEmbeddedProvenanceReference,
+  embedProvenanceReferenceInAudio,
+} from './provenanceMetadataService';
 
 export interface DownloadAudioWithManifestOptions {
   audioBlob: Blob;
@@ -10,6 +14,7 @@ export interface ExportWithManifestResult {
   audioFileName: string;
   manifestFileName: string;
   signedManifest: SignedRenderManifest;
+  embeddedMetadata: boolean;
 }
 
 function triggerDownload(blob: Blob, fileName: string): void {
@@ -46,13 +51,21 @@ export async function downloadAudioWithManifest(
   const manifestBlob = new Blob([JSON.stringify(signedManifest, null, 2)], {
     type: 'application/json',
   });
+  const reference = buildEmbeddedProvenanceReference(signedManifest, manifestFileName);
+  const canEmbedInAudio = parsedName.extension === 'wav' || parsedName.extension === 'mp3';
+  const embeddedAudioBlob = await embedProvenanceReferenceInAudio(
+    options.audioBlob,
+    options.audioFileName,
+    reference
+  );
 
-  triggerDownload(options.audioBlob, options.audioFileName);
+  triggerDownload(embeddedAudioBlob, options.audioFileName);
   triggerDownload(manifestBlob, manifestFileName);
 
   return {
     audioFileName: options.audioFileName,
     manifestFileName,
     signedManifest,
+    embeddedMetadata: canEmbedInAudio,
   };
 }
