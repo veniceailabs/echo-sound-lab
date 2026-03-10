@@ -11,7 +11,7 @@
 
 export interface AuditEntry {
   timestamp: string; // ISO 8601 UTC
-  eventType: 'EXECUTION_ATTEMPT' | 'EXECUTION_SUCCESS' | 'EXECUTION_FAILURE' | 'POLICY_BLOCK';
+  eventType: 'EXECUTION_ATTEMPT' | 'EXECUTION_SUCCESS' | 'EXECUTION_FAILURE' | 'POLICY_BLOCK' | 'ACCESS_BLOCK';
   proposalId: string;
   actionType: string;
   userHash?: string; // From AAContext.sourceHash
@@ -164,6 +164,29 @@ class ForensicLogger {
         reason,
         timestamp: Date.now()
       }
+    });
+  }
+
+  /**
+   * Log an access-control block (ACC/capability gate).
+   */
+  public logAccessBlock(
+    proposalId: string,
+    actionType: string,
+    reason: string,
+    reasonCode: string,
+    details: Record<string, unknown> = {}
+  ): void {
+    this.log({
+      eventType: 'ACCESS_BLOCK',
+      proposalId,
+      actionType,
+      details: {
+        reason,
+        reasonCode,
+        ...details,
+        timestamp: Date.now(),
+      },
     });
   }
 }

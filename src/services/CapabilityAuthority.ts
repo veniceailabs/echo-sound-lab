@@ -24,6 +24,22 @@ export interface ProcessIdentity {
   launchTimestamp: number;
 }
 
+export type CapabilityDenialReasonCode =
+  | 'MISSING_GRANT'
+  | 'SCOPE_MISMATCH'
+  | 'TTL_EXPIRED'
+  | 'C6_HALT';
+
+export class CapabilityDeniedError extends Error {
+  constructor(
+    public readonly reasonCode: CapabilityDenialReasonCode,
+    message: string
+  ) {
+    super(message);
+    this.name = 'CapabilityDeniedError';
+  }
+}
+
 export class CapabilityAuthority {
   private grants: CapabilityGrant[] = [];
   private processIdentity: ProcessIdentity | null = null;
@@ -116,28 +132,27 @@ export class CapabilityAuthority {
     // C6: Verify process identity hasn't changed
     if (currentProcessIdentity) {
       if (!this.verifyProcessIdentity(currentProcessIdentity)) {
-        throw new Error(
+        throw new CapabilityDeniedError(
+          'C6_HALT',
           `[C6_HALT] Process identity changed. Authority halted.\n` +
           `All capabilities revoked.`
         );
       }
     }
 
-    // Find matching grant
-    const match = this.grants.find(g =>
-      g.capability === request.capability &&
-      g.expiresAt > now &&
-      scopeMatches(g.scope, request.scope)
-    );
+    const capabilityGrants = this.grants.filter((grant) => grant.capability === request.capability);
+    if (capabilityGrants.length === 0) {
+      throw this.createCapabilityDeniedError('MISSING_GRANT', request);
+    }
 
+    const scopedGrants = capabilityGrants.filter((grant) => scopeMatches(grant.scope, request.scope));
+    if (scopedGrants.length === 0) {
+      throw this.createCapabilityDeniedError('SCOPE_MISMATCH', request);
+    }
+
+    const match = scopedGrants.find((grant) => grant.expiresAt > now);
     if (!match) {
-      throw new Error(
-        `[CAPABILITY_DENIED] ${request.capability}\n` +
-        `Reason: ${request.reason}\n` +
-        `Scope: appId=${request.scope.appId}, ` +
-        `windowId=${request.scope.windowId || 'any'}, ` +
-        `resourceIds=${request.scope.resourceIds?.join(',') || 'any'}`
-      );
+      throw this.createCapabilityDeniedError('TTL_EXPIRED', request);
     }
 
     if (match.riskTier) {
@@ -207,6 +222,20 @@ export class CapabilityAuthority {
    * Enforce scope matching.
    * App must match exactly. Window and resource are optional (if granted, narrower).
    */
+
+  private createCapabilityDeniedError(
+    reasonCode: Exclude<CapabilityDenialReasonCode, 'C6_HALT'>,
+    request: CapabilityRequest
+  ): CapabilityDeniedError {
+    return new CapabilityDeniedError(
+      reasonCode,
+      `[CAPABILITY_DENIED][${reasonCode}] ${request.capability}\n` +
+      `Reason: ${request.reason}\n` +
+      `Scope: appId=${request.scope.appId}, ` +
+      `windowId=${request.scope.windowId || 'any'}, ` +
+      `resourceIds=${request.scope.resourceIds?.join(',') || 'any'}`
+    );
+  }
 }
 
 function scopeMatches(granted: CapabilityScope, requested: CapabilityScope): boolean {

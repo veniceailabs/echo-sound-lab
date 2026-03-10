@@ -10,6 +10,15 @@ export enum ExecutionEventType {
   EXECUTION_RESULT = 'EXECUTION_RESULT',
 }
 
+export interface ACCGrantSeal {
+  grantId: string;
+  capability: string;
+  scopeActionType: string;
+  issuedAt: number;
+  expiresAt: number;
+  singleUse: boolean;
+}
+
 export interface AAContextSeal {
   contextId: string;
   sourceHash: string;
@@ -21,6 +30,7 @@ export interface AAContextSeal {
   actorId?: string;
   actorType?: 'HUMAN' | 'AI';
   generatorId?: string;
+  accGrant?: ACCGrantSeal;
 }
 
 export interface ExecutionPayload {
@@ -62,6 +72,22 @@ export function buildExecutionSealPayload(payload: ExecutionPayload): ExecutionS
       actorId: payload.aaContext.actorId,
       actorType: payload.aaContext.actorType,
       generatorId: payload.aaContext.generatorId,
+      accGrant: payload.aaContext.accGrant,
     },
   };
+}
+
+const HIGH_RISK_ACTION_MATCHERS = [
+  'RENDER_EXPORT',
+  'EXPORT',
+  'STEM_SEPARATION',
+  'SUNO',
+  'VOICE_CLONE',
+  'ANIMATE_ART',
+  'DELETE',
+];
+
+export function requiresAccGrantForAction(actionType: string): boolean {
+  const upper = String(actionType || '').toUpperCase();
+  return HIGH_RISK_ACTION_MATCHERS.some((matcher) => upper.includes(matcher));
 }

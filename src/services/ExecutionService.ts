@@ -9,7 +9,7 @@
  * - Calls Logic Pro (via AppleScriptActuator)
  */
 
-import { ExecutionPayload, ExecutionResult } from '../types/execution-contract';
+import { ExecutionPayload, ExecutionResult, requiresAccGrantForAction } from '../types/execution-contract';
 import { AppleScriptActuator } from './AppleScriptActuator';
 import { ProposalMapper } from './logic/LogicTemplates';
 import { policyEngine } from './policy/PolicyEngine';
@@ -18,6 +18,7 @@ import { MerkleAuditLog } from '../action-authority/audit/MerkleAuditLog';
 import { executionSessionService } from './executionSessionService';
 import { verifyExecutionPayloadSignature } from './executionSigning';
 import { provenanceLedger } from './ProvenanceLedger';
+import { AccessBlockReasonCode, securityLedger } from './SecurityLedger';
 
 export class ExecutionTamperError extends Error {
   constructor(message: string) {
@@ -33,12 +34,23 @@ export class ExecutionReplayError extends ExecutionTamperError {
   }
 }
 
+export class ExecutionAccessDeniedError extends ExecutionTamperError {
+  constructor(
+    public readonly reasonCode: AccessBlockReasonCode,
+    message: string
+  ) {
+    super(message);
+    this.name = 'ExecutionAccessDeniedError';
+  }
+}
+
 class ExecutionService {
   private static instance: ExecutionService;
   private isProcessing: boolean = false;
   private merkleAuditLog: MerkleAuditLog;
   private readonly maxSealAgeMs = 60_000;
   private consumedNonceKeys = new Set<string>();
+  private consumedAccGrantKeys = new Set<string>();
 
   // Toggle this to FALSE to run real commands against Logic Pro
   // Keep TRUE for development/testing
@@ -265,6 +277,8 @@ class ExecutionService {
       throw new ExecutionTamperError('INVALID_SEAL: Signature verification failed');
     }
 
+    this.validateAccGate(payload);
+
     const nonceKey = `${context.sessionId}:${context.nonce}`;
     if (this.consumedNonceKeys.has(nonceKey)) {
       throw new ExecutionReplayError('INVALID_SEAL: Replay detected (local nonce cache)');
@@ -276,6 +290,96 @@ class ExecutionService {
     }
 
     this.consumedNonceKeys.add(nonceKey);
+  }
+
+  private validateAccGate(payload: ExecutionPayload): void {
+    if (!requiresAccGrantForAction(payload.actionType)) {
+      return;
+    }
+
+    const context = payload.aaContext;
+    const capability = this.mapActionTypeToCapability(payload.actionType);
+    const deny = (reasonCode: AccessBlockReasonCode, reason: string): never => {
+      this.recordAccessBlock(payload, reasonCode, reason, capability, context.accGrant?.grantId);
+      throw new ExecutionAccessDeniedError(reasonCode, `ACC_BLOCK[${reasonCode}] ${reason}`);
+    };
+
+    try {
+      const grant = context.accGrant;
+      if (!grant) {
+        deny('MISSING_GRANT', 'ACC grant is required for high-risk action execution');
+      }
+
+      if (grant.capability !== capability || grant.scopeActionType !== payload.actionType) {
+        deny('SCOPE_MISMATCH', 'ACC grant scope does not match requested execution action');
+      }
+
+      if (grant.expiresAt <= Date.now()) {
+        deny('TTL_EXPIRED', 'ACC grant has expired');
+      }
+
+      if (grant.singleUse) {
+        const grantKey = `${context.sessionId}:${grant.grantId}`;
+        if (this.consumedAccGrantKeys.has(grantKey)) {
+          deny('REPLAY_DETECTED', 'ACC grant replay detected (single-use grant already consumed)');
+        }
+        this.consumedAccGrantKeys.add(grantKey);
+      }
+    } catch (error) {
+      if (error instanceof ExecutionAccessDeniedError) {
+        throw error;
+      }
+      const reason = error instanceof Error ? error.message : 'Unknown ACC evaluation error';
+      this.recordAccessBlock(payload, 'ACC_EVALUATION_ERROR', reason, capability, context.accGrant?.grantId);
+      throw new ExecutionAccessDeniedError('ACC_EVALUATION_ERROR', `ACC_BLOCK[ACC_EVALUATION_ERROR] ${reason}`);
+    }
+  }
+
+  private mapActionTypeToCapability(actionType: string): string {
+    const upper = String(actionType || '').toUpperCase();
+    if (upper.includes('EXPORT') || upper.includes('RENDER')) {
+      return 'RENDER_EXPORT';
+    }
+    if (upper.includes('WRITE') || upper.includes('SAVE')) {
+      return 'FILE_WRITE';
+    }
+    return 'PARAMETER_ADJUSTMENT';
+  }
+
+  private recordAccessBlock(
+    payload: ExecutionPayload,
+    reasonCode: AccessBlockReasonCode,
+    reason: string,
+    capability: string,
+    grantId?: string
+  ): void {
+    const sessionId = payload.aaContext.sessionId;
+    securityLedger.appendBlock({
+      proposalId: payload.proposalId,
+      actionType: payload.actionType,
+      sessionId,
+      reasonCode,
+      reason,
+      capability,
+      grantId,
+    });
+
+    forensicLogger.logAccessBlock(payload.proposalId, payload.actionType, reason, reasonCode, {
+      capability,
+      sessionId,
+      grantId,
+    });
+
+    this.merkleAuditLog.append('ACCESS_BLOCKED', {
+      proposalId: payload.proposalId,
+      actionType: payload.actionType,
+      reasonCode,
+      reason,
+      capability,
+      sessionId,
+      grantId,
+      timestamp: Date.now(),
+    });
   }
 
   /**
@@ -311,6 +415,7 @@ class ExecutionService {
   // Test helper: clear replay cache between isolated test cases.
   public resetSecurityStateForTest(): void {
     this.consumedNonceKeys.clear();
+    this.consumedAccGrantKeys.clear();
   }
 }
 

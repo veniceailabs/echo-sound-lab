@@ -3,7 +3,8 @@ import { APLProposal } from '../../echo-sound-lab/apl/proposal-engine';
 import { useActionAuthority, AAState } from '../../hooks/useActionAuthority';
 import { ExecutionBridge } from '../../services/ExecutionBridge';
 import {
-  ExecutionPayload
+  ExecutionPayload,
+  requiresAccGrantForAction,
 } from '../../types/execution-contract';
 import { executionSessionService } from '../../services/executionSessionService';
 import { signExecutionPayload } from '../../services/executionSigning';
@@ -71,15 +72,24 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
           const nonce = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
             ? crypto.randomUUID()
             : `nonce-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          const now = Date.now();
+          const actionType = proposal.action.type;
+          const upperAction = String(actionType).toUpperCase();
+          const capability =
+            upperAction.includes('EXPORT') || upperAction.includes('RENDER')
+              ? 'RENDER_EXPORT'
+              : upperAction.includes('WRITE') || upperAction.includes('SAVE')
+                ? 'FILE_WRITE'
+                : 'PARAMETER_ADJUSTMENT';
 
           const unsignedPayload: ExecutionPayload = {
             proposalId: proposal.proposalId,
-            actionType: proposal.action.type,
+            actionType,
             parameters: proposal.action.parameters,
             aaContext: {
               contextId: metadata.contextId,
               sourceHash: metadata.sourceHash,
-              timestamp: Date.now(),
+              timestamp: now,
               sessionId: session.sessionId,
               nonce,
               signatureVersion: session.signatureVersion,
@@ -87,6 +97,16 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
               actorId: `ai:apl-${proposal.provenance.engine.toLowerCase()}`,
               actorType: 'AI',
               generatorId: `apl-${proposal.provenance.engine.toLowerCase()}`,
+              accGrant: requiresAccGrantForAction(actionType)
+                ? {
+                    grantId: `accg-${proposal.proposalId}-${nonce}`,
+                    capability,
+                    scopeActionType: actionType,
+                    issuedAt: now,
+                    expiresAt: now + 5 * 60_000,
+                    singleUse: true,
+                  }
+                : undefined,
             }
           };
 
