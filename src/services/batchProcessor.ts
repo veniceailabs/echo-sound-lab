@@ -2,6 +2,7 @@ import { BatchProcessingJob, ProcessingConfig, ExportFormat } from '../types';
 import { audioEngine } from './audioEngine';
 import { encoderService } from './encoderService';
 import { mixAnalysisService } from './mixAnalysis';
+import { downloadAudioWithManifest } from './audioExportService';
 
 type ProgressCallback = (progress: number, currentFile: string) => void;
 type CompletionCallback = (job: BatchProcessingJob) => void;
@@ -196,24 +197,20 @@ class BatchProcessorService {
         // If only one file, download directly
         if (successfulResults.length === 1) {
             const result = successfulResults[0];
-            const url = URL.createObjectURL(result.outputBlob!);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = this.getExportFilename(result.filename);
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadAudioWithManifest({
+                audioBlob: result.outputBlob!,
+                audioFileName: this.getExportFilename(result.filename),
+            });
             return;
         }
 
         // For multiple files, download each separately
         // (ZIP creation would require additional library like JSZip)
         for (const result of successfulResults) {
-            const url = URL.createObjectURL(result.outputBlob!);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = this.getExportFilename(result.filename);
-            a.click();
-            URL.revokeObjectURL(url);
+            await downloadAudioWithManifest({
+                audioBlob: result.outputBlob!,
+                audioFileName: this.getExportFilename(result.filename),
+            });
 
             // Small delay between downloads
             await new Promise(resolve => setTimeout(resolve, 500));

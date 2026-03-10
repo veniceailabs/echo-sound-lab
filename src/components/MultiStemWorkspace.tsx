@@ -1,8 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useCallback, useMemo, useRef, useEffect, useState } from 'react';
 import { Stem } from '../types';
 import { audioEngine } from '../services/audioEngine';
 import { analyzeStemMix } from '../services/geminiService';
 import { glassCard, glowButton, secondaryButton, sectionHeader, gradientDivider, cn } from '../utils/secondLightStyles';
+import { useAudioContextState } from '../hooks/useAudioContextState';
+import { AudioResumeGuard } from './AudioResumeGuard';
+import { debugTelemetryService } from '../services/debugTelemetryService';
+import { downloadAudioWithManifest } from '../services/audioExportService';
 
 interface StemState {
     muted: boolean;
@@ -31,14 +35,20 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
     const [stemStates, setStemStates] = useState<Record<string, StemState>>({});
     const [analysis, setAnalysis] = useState<any>(null);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [playIntent, setPlayIntent] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [editingName, setEditingName] = useState<string | null>(null);
     const [editingNameValue, setEditingNameValue] = useState('');
     const [playingStemId, setPlayingStemId] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [stemMetrics, setStemMetrics] = useState<Record<string, { rms: number; peak: number }>>({});
+    const [stemAudioContext, setStemAudioContext] = useState<AudioContext | null>(null);
+    const audioContextState = useAudioContextState(stemAudioContext);
+    const pendingPlayActionRef = useRef<null | (() => void)>(null);
 
     const clampValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+    const isAnyPlaying = useMemo(() => isPlaying || !!playingStemId, [isPlaying, playingStemId]);
+    const wasPlayingBeforeHideRef = useRef(false);
 
     const Knob: React.FC<{
         label: string;
@@ -182,7 +192,9 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
 
     // Initialize audio context
     useEffect(() => {
-        audioCtxRef.current = new AudioContext();
+        const context = new (window.AudioContext || (window as any).webkitAudioContext)();
+        audioCtxRef.current = context;
+        setStemAudioContext(context);
         masterGainRef.current = audioCtxRef.current.createGain();
         masterGainRef.current.connect(audioCtxRef.current.destination);
         return () => {
@@ -191,9 +203,49 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
                 try { source.stop(); } catch {}
             });
             sourceNodesRef.current = {};
-            audioCtxRef.current?.close();
+            try { audioCtxRef.current?.close(); } catch {}
         };
     }, []);
+
+    useEffect(() => {
+        const onVisibilityChange = () => {
+            if (typeof document === 'undefined') return;
+            if (document.hidden) {
+                wasPlayingBeforeHideRef.current = isAnyPlaying;
+                cancelPlayIntent();
+                return;
+            }
+
+            if (wasPlayingBeforeHideRef.current) {
+                wasPlayingBeforeHideRef.current = false;
+                const state = String(audioCtxRef.current?.state ?? '');
+                if (state !== 'running') {
+                    setPlayIntent(true);
+                }
+            }
+        };
+
+        document.addEventListener('visibilitychange', onVisibilityChange);
+        return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+    }, [cancelPlayIntent, isAnyPlaying]);
+
+    useEffect(() => {
+        const running = String(audioContextState) === 'running';
+        if (isAnyPlaying && !running) {
+            console.warn('[MultiStem] AudioContext suspended while playing; stopping transport to keep UI truthful.');
+            stopEverything();
+            // Leave pendingPlayActionRef intact so "Enable Audio" can replay last action.
+            setPlayIntent(true);
+        }
+    }, [audioContextState, isAnyPlaying, stopEverything]);
+
+    useEffect(() => {
+        if (!audioCtxRef.current) return;
+        debugTelemetryService.setAudioContextInfo('multistem', {
+            state: String(audioContextState),
+            sampleRate: audioCtxRef.current.sampleRate,
+        });
+    }, [audioContextState]);
 
     // Load initial stems if provided
     useEffect(() => {
@@ -326,9 +378,42 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
         });
     }, [stemStates, stems]);
 
-    const playStems = () => {
+    const stopEverything = useCallback(() => {
+        // stop "all stems" playback
+        Object.values(sourceNodesRef.current).forEach((source: AudioBufferSourceNode) => {
+            try { source.stop(); } catch {}
+        });
+        sourceNodesRef.current = {};
+        setIsPlaying(false);
+
+        // stop solo stem playback
+        setPlayingStemId((prev) => {
+            if (!prev) return prev;
+            const soloKey = `solo-${prev}`;
+            if (sourceNodesRef.current[soloKey]) {
+                try { sourceNodesRef.current[soloKey].stop(); } catch {}
+                delete sourceNodesRef.current[soloKey];
+            }
+            return null;
+        });
+    }, []);
+
+    const ensureContextRunning = useCallback(async (): Promise<boolean> => {
+        const ctx = audioCtxRef.current;
+        if (!ctx) return false;
+        // Safari/iOS requires a user gesture to resume; call inside click paths and guard UI.
+        if (ctx.state === 'running') return true;
+        try {
+            await ctx.resume();
+        } catch (e) {
+            console.warn('[MultiStem] AudioContext.resume() failed', e);
+        }
+        return ctx.state === 'running';
+    }, []);
+
+    const playStems = useCallback(() => {
         if (!audioCtxRef.current || !masterGainRef.current) return;
-        stopStems();
+        stopEverything();
 
         stems.forEach(stem => {
             const source = audioCtxRef.current!.createBufferSource();
@@ -351,15 +436,11 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
             source.start(0);
         });
         setIsPlaying(true);
-    };
+    }, [stems, stemStates, stopEverything]);
 
-    const stopStems = () => {
-        Object.values(sourceNodesRef.current).forEach((source: AudioBufferSourceNode) => {
-            try { source.stop(); } catch {}
-        });
-        sourceNodesRef.current = {};
-        setIsPlaying(false);
-    };
+    const stopStems = useCallback(() => {
+        stopEverything();
+    }, [stopEverything]);
 
     const exportMix = async (format: 'wav' | 'mp3') => {
         if (stems.length === 0) return;
@@ -402,12 +483,10 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
                 : await encodeToMp3(renderedBuffer);
 
             if (result.success && result.blob) {
-                const url = URL.createObjectURL(result.blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `stem-mix-${Date.now()}.${format}`;
-                a.click();
-                URL.revokeObjectURL(url);
+                await downloadAudioWithManifest({
+                    audioBlob: result.blob,
+                    audioFileName: `stem-mix-${Date.now()}.${format}`,
+                });
             }
         } catch (error) {
             console.error('Export failed:', error);
@@ -434,9 +513,30 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
         setEditingName(null);
     };
 
-    const playSingleStem = (stemId: string) => {
+    const stopSingleStem = useCallback(() => {
+        if (playingStemId) {
+            const soloKey = `solo-${playingStemId}`;
+            if (sourceNodesRef.current[soloKey]) {
+                try {
+                    sourceNodesRef.current[soloKey].stop();
+                } catch {}
+                delete sourceNodesRef.current[soloKey];
+            }
+        }
+        setPlayingStemId(null);
+    }, [playingStemId]);
+
+    const playSingleStem = useCallback((stemId: string) => {
         if (!audioCtxRef.current) return;
-        stopSingleStem(); // Stop any currently playing single stem
+        // Internal stop (do not touch playIntent): we are about to start a new stem.
+        if (playingStemId) {
+            const soloKey = `solo-${playingStemId}`;
+            if (sourceNodesRef.current[soloKey]) {
+                try { sourceNodesRef.current[soloKey].stop(); } catch {}
+                delete sourceNodesRef.current[soloKey];
+            }
+        }
+        setPlayingStemId(null);
 
         const stem = stems.find(s => s.id === stemId);
         if (!stem) return;
@@ -465,20 +565,37 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
 
         source.start(0);
         setPlayingStemId(stemId);
-    };
+    }, [playingStemId, stems, stemStates, stopSingleStem]);
 
-    const stopSingleStem = () => {
-        if (playingStemId) {
-            const soloKey = `solo-${playingStemId}`;
-            if (sourceNodesRef.current[soloKey]) {
-                try {
-                    sourceNodesRef.current[soloKey].stop();
-                } catch {}
-                delete sourceNodesRef.current[soloKey];
-            }
+    const requestPlayAll = useCallback(async () => {
+        pendingPlayActionRef.current = () => playStems();
+        const running = await ensureContextRunning();
+        if (!running) {
+            setPlayIntent(true); // show guard (no nag unless user attempted play)
+            return;
         }
-        setPlayingStemId(null);
-    };
+
+        setPlayIntent(false);
+        playStems();
+    }, [ensureContextRunning, playStems]);
+
+    const requestPlayStemSolo = useCallback(async (stemId: string) => {
+        pendingPlayActionRef.current = () => playSingleStem(stemId);
+        const running = await ensureContextRunning();
+        if (!running) {
+            setPlayIntent(true);
+            return;
+        }
+
+        setPlayIntent(false);
+        playSingleStem(stemId);
+    }, [ensureContextRunning, playSingleStem]);
+
+    const cancelPlayIntent = useCallback(() => {
+        pendingPlayActionRef.current = null;
+        setPlayIntent(false);
+        stopEverything();
+    }, [stopEverything]);
 
     const runAnalysis = async () => {
         console.log('[MultiStem] Running analysis on', stems.length, 'stems');
@@ -524,9 +641,23 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
     }, 0);
 
     return (
-        <div className={cn(glassCard, 'p-8 shadow-2xl space-y-8')}>
+        <div className={cn(glassCard, 'relative p-4 sm:p-8 shadow-2xl space-y-8')}>
+            <AudioResumeGuard
+                contextState={audioContextState}
+                playIntent={playIntent}
+                isPlaying={isAnyPlaying}
+                onCancel={cancelPlayIntent}
+                onResume={async () => {
+                    const running = await ensureContextRunning();
+                    if (!running) return;
+                    const action = pendingPlayActionRef.current;
+                    pendingPlayActionRef.current = null;
+                    setPlayIntent(false);
+                    action?.();
+                }}
+            />
             {/* Header */}
-            <div className="flex justify-between items-end">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
                 <div>
                     <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500 mb-2">Multi‑Stem</p>
                     <h2 className="text-2xl font-semibold text-slate-100">Stem Workspace</h2>
@@ -618,9 +749,9 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
                                 'group bg-gradient-to-br from-slate-900/70 to-slate-900/40 backdrop-blur-md rounded-2xl p-6 transition-all duration-300 border',
                                 isActive ? 'border-slate-700/40 shadow-lg' : 'border-slate-800/30 opacity-50'
                             )}>
-                                <div className="flex items-start gap-6">
+                                <div className="flex flex-col md:flex-row md:items-start gap-4 md:gap-6">
                                     {/* Stem Name with Rename */}
-                                    <div className="flex-1 min-w-[220px]">
+                                    <div className="w-full md:flex-1 md:min-w-[220px]">
                                         {editingName === stem.id ? (
                                             <div className="relative">
                                                 <input
@@ -660,7 +791,7 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
                                     <div className="flex flex-col lg:flex-row lg:items-center gap-4 flex-[2] min-w-0">
                                         <div className="flex items-center gap-2">
                                             <button
-                                                onClick={() => playingStemId === stem.id ? stopSingleStem() : playSingleStem(stem.id)}
+                                                onClick={() => playingStemId === stem.id ? cancelPlayIntent() : void requestPlayStemSolo(stem.id)}
                                                 className={cn(
                                                     'relative w-10 h-10 rounded-full border border-slate-700/60 bg-slate-900/80 shadow-[inset_2px_2px_4px_#050710,inset_-2px_-2px_4px_#0f1828] transition-all duration-200 hover:border-orange-400/40 hover:bg-slate-900/90 active:border-slate-500/50 active:bg-slate-950/90 active:shadow-[inset_4px_4px_8px_#04060d]',
                                                     playingStemId === stem.id
@@ -730,7 +861,7 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
                                             </button>
                                         </div>
 
-                                        <div className="flex-1 flex flex-wrap gap-6">
+                                        <div className="flex-1 flex flex-wrap gap-4 sm:gap-6">
                                             <Knob
                                                 label="Volume"
                                                 value={state.gain}
@@ -807,15 +938,15 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
 
             {/* Transport & Export Controls */}
             {stems.length > 0 && (
-                <div className="flex flex-wrap gap-3 border-t border-slate-700 pt-4">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 border-t border-slate-700 pt-4">
                     <button
-                        onClick={isPlaying ? stopStems : playStems}
+                        onClick={() => isAnyPlaying ? cancelPlayIntent() : void requestPlayAll()}
                         className="relative w-14 h-14 flex items-center justify-center group"
-                        title={isPlaying ? "Stop playback" : "Play all stems"}
+                        title={isAnyPlaying ? "Stop playback" : "Play all stems"}
                     >
                         {/* Halo Ring - Blinks when playing */}
                         <div className={`absolute inset-0 rounded-full border border-[#FB923C]/30 shadow-[inset_0_1px_2px_rgba(0,0,0,0.3),inset_0_-1px_1px_rgba(255,255,255,0.08)] transition-all duration-500 ${
-                            isPlaying
+                            isAnyPlaying
                                 ? 'animate-[blink_5s_infinite]'
                                 : ''
                         }`} />
@@ -824,7 +955,7 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
                         <div className="absolute inset-2 rounded-full bg-[#FB923C] shadow-[0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_2px_rgba(255,255,255,0.2)] group-hover:bg-[#FFA855] group-hover:shadow-[0_2px_6px_rgba(0,0,0,0.4),inset_0_1px_3px_rgba(0,0,0,0.15),inset_0_-1px_2px_rgba(255,255,255,0.1)] group-hover:scale-[0.98] group-active:shadow-[inset_0_2px_6px_rgba(0,0,0,0.25)] group-active:scale-95 transition-all duration-150 ease-out" />
 
                         {/* Icon - Morphs between play and pause */}
-                        {isPlaying ? (
+                        {isAnyPlaying ? (
                             <svg className="w-5 h-5 fill-slate-900/90 relative z-10 transition-all duration-300" viewBox="0 0 24 24">
                                 <rect x="7" y="5" width="3" height="14" rx="1.5" />
                                 <rect x="14" y="5" width="3" height="14" rx="1.5" />
@@ -838,23 +969,23 @@ const MultiStemWorkspace: React.FC<MultiStemWorkspaceProps> = ({ initialStems })
 
                     <button
                         onClick={runAnalysis}
-                        className="px-4 py-2 rounded-xl bg-slate-900 text-orange-400 font-bold shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6),_2px_2px_4px_rgba(255,255,255,0.04)] hover:text-orange-300 active:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02)] active:translate-y-[1px] transition-all"
+                        className="w-full sm:w-auto px-4 py-2 rounded-xl bg-slate-900 text-orange-400 font-bold shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6),_2px_2px_4px_rgba(255,255,255,0.04)] hover:text-orange-300 active:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02)] active:translate-y-[1px] transition-all"
                     >
                         Analyze Mix
                     </button>
 
-                    <div className="flex gap-2 ml-auto">
+                    <div className="flex gap-2 sm:ml-auto w-full sm:w-auto">
                         <button
                             onClick={() => exportMix('wav')}
                             disabled={isExporting}
-                            className="px-4 py-2 rounded-xl bg-slate-900 text-slate-300 font-medium shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6),_2px_2px_4px_rgba(255,255,255,0.04)] hover:text-slate-100 active:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02)] active:translate-y-[1px] transition-all disabled:opacity-50"
+                            className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-slate-900 text-slate-300 font-medium shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6),_2px_2px_4px_rgba(255,255,255,0.04)] hover:text-slate-100 active:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02)] active:translate-y-[1px] transition-all disabled:opacity-50"
                         >
                             {isExporting ? '...' : 'Export WAV'}
                         </button>
                         <button
                             onClick={() => exportMix('mp3')}
                             disabled={isExporting}
-                            className="px-4 py-2 rounded-xl bg-slate-900 text-slate-300 font-medium shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6),_2px_2px_4px_rgba(255,255,255,0.04)] hover:text-slate-100 active:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02)] active:translate-y-[1px] transition-all disabled:opacity-50"
+                            className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-slate-900 text-slate-300 font-medium shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6),_2px_2px_4px_rgba(255,255,255,0.04)] hover:text-slate-100 active:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02)] active:translate-y-[1px] transition-all disabled:opacity-50"
                         >
                             {isExporting ? '...' : 'Export MP3'}
                         </button>

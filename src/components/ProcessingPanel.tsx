@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AudioMetrics, ProcessingConfig, LiveProcessingConfig, ExportFormat, ReverbConfig, SaturationConfig, StereoImagerConfig, DynamicEQConfig, EQSettings, CompressionPreset, TransientShaperConfig, DeEsserConfig } from '../types';
 import { audioEngine } from '../services/audioEngine';
 import { encoderService } from '../services/encoderService';
+import { downloadAudioWithManifest } from '../services/audioExportService';
 import { glassCard, glowButton, secondaryButton, metricCard, gradientDivider, sectionHeader, cn } from '../utils/secondLightStyles';
 
 interface ProcessingPanelProps {
@@ -133,12 +134,11 @@ export const ProcessingPanel: React.FC<ProcessingPanelProps> = ({
         throw new Error('Export produced an empty file');
       }
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `mastered-${Date.now()}.${format}`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const audioFileName = `mastered-${Date.now()}.${format}`;
+      await downloadAudioWithManifest({
+        audioBlob: blob,
+        audioFileName,
+      });
 
       console.log(`[Export] ${format.toUpperCase()} export successful (${(blob.size / 1024 / 1024).toFixed(2)}MB)`);
 

@@ -17,6 +17,7 @@ import { forensicLogger } from './ForensicLogger';
 import { MerkleAuditLog } from '../action-authority/audit/MerkleAuditLog';
 import { executionSessionService } from './executionSessionService';
 import { verifyExecutionPayloadSignature } from './executionSigning';
+import { provenanceLedger } from './ProvenanceLedger';
 
 export class ExecutionTamperError extends Error {
   constructor(message: string) {
@@ -176,6 +177,9 @@ class ExecutionService {
       // 5. State Drift Mitigation
       // TODO: Call invalidateContextAfterAPLExecution() here
       // This prevents stale context exploitation
+
+      // 5.5 Provenance ledger append (append-only, signed actions only)
+      provenanceLedger.appendFromExecutionPayload(payload, Date.now());
 
       const workOrderId = `WO-${Date.now()}`;
 

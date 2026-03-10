@@ -1,8 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { APLProposal } from '../../echo-sound-lab/apl/proposal-engine';
 import { useActionAuthority, AAState } from '../../hooks/useActionAuthority';
 import { ExecutionBridge } from '../../services/ExecutionBridge';
-import { ExecutionPayload } from '../../types/execution-contract';
+import {
+  ExecutionPayload
+} from '../../types/execution-contract';
+import { executionSessionService } from '../../services/executionSessionService';
+import { signExecutionPayload } from '../../services/executionSigning';
 
 interface ProposalCardProps {
   proposal: APLProposal;
@@ -14,17 +18,31 @@ interface ProposalCardProps {
 
 export const ProposalCard: React.FC<ProposalCardProps> = ({
   proposal,
-  onApplyDirect,
+  onApplyDirect: _onApplyDirect,
   onAuthorizeGated,
   contextId = `proposal_${proposal.proposalId}`,
-  sourceHash = `hash_${Date.now()}`
+  sourceHash
 }) => {
   const isQuantum = proposal.provenance.engine !== 'CLASSICAL';
+  const effectiveSourceHash = useMemo(() => {
+    if (sourceHash) return sourceHash;
+    const raw = JSON.stringify({
+      proposalId: proposal.proposalId,
+      actionType: proposal.action.type,
+      parameters: proposal.action.parameters,
+      evidenceMetric: proposal.evidence.metric,
+    });
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) {
+      hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
+    }
+    return `apl-${Math.abs(hash).toString(16)}`;
+  }, [proposal.action.parameters, proposal.action.type, proposal.evidence.metric, proposal.proposalId, sourceHash]);
 
   // Initialize the Law (useActionAuthority hook)
   const { status, holdProgress, actions, metadata } = useActionAuthority(
     contextId,
-    sourceHash,
+    effectiveSourceHash,
     // Optional state change callback
     (newState) => {
       console.log(`[ProposalCard] FSM state changed to: ${newState}`);
@@ -34,38 +52,74 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
   // Keyboard listener ref for cleanup
   const keyListenerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
 
+  useEffect(() => {
+    void executionSessionService.getSession().catch((error) => {
+      console.error('[ProposalCard] Failed to prefetch execution session:', error);
+    });
+  }, []);
+
   // Watch for FSM EXECUTED state → dispatch to ExecutionBridge
   useEffect(() => {
     if (status === AAState.EXECUTED) {
       console.log(`[ProposalCard] FSM EXECUTED, dispatching to ExecutionBridge`);
 
-      // Construct ExecutionPayload (the contract)
-      const payload: ExecutionPayload = {
-        proposalId: proposal.proposalId,
-        actionType: proposal.action.type,
-        parameters: proposal.action.parameters,
-        aaContext: {
-          contextId: metadata.contextId,
-          sourceHash: metadata.sourceHash,
-          timestamp: Date.now(),
-          signature: 'fsm-sealed' // Placeholder for cryptographic signature
-        }
-      };
+      let cancelled = false;
 
-      // Dispatch across the boundary
-      ExecutionBridge.dispatch(payload)
-        .then(result => {
+      const dispatchSignedExecution = async () => {
+        try {
+          const session = await executionSessionService.getSession();
+          const nonce = (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+            ? crypto.randomUUID()
+            : `nonce-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+          const unsignedPayload: ExecutionPayload = {
+            proposalId: proposal.proposalId,
+            actionType: proposal.action.type,
+            parameters: proposal.action.parameters,
+            aaContext: {
+              contextId: metadata.contextId,
+              sourceHash: metadata.sourceHash,
+              timestamp: Date.now(),
+              sessionId: session.sessionId,
+              nonce,
+              signatureVersion: session.signatureVersion,
+              signature: '',
+              actorId: `ai:apl-${proposal.provenance.engine.toLowerCase()}`,
+              actorType: 'AI',
+              generatorId: `apl-${proposal.provenance.engine.toLowerCase()}`,
+            }
+          };
+
+          const signature = await signExecutionPayload(unsignedPayload, session.sessionSecret);
+          const payload: ExecutionPayload = {
+            ...unsignedPayload,
+            aaContext: {
+              ...unsignedPayload.aaContext,
+              signature,
+            },
+          };
+
+          const result = await ExecutionBridge.dispatch(payload);
+          if (cancelled) return;
+
           if (result.success) {
             console.log(`[ProposalCard] Execution successful: ${result.workOrderId}`);
-            // Remove proposal from list (handled by parent via callback)
             onAuthorizeGated(proposal.proposalId);
           } else {
             console.error(`[ProposalCard] Execution failed: ${result.error}`);
           }
-        })
-        .catch(error => {
-          console.error(`[ProposalCard] Bridge dispatch error:`, error);
-        });
+        } catch (error) {
+          if (!cancelled) {
+            console.error(`[ProposalCard] Bridge dispatch error:`, error);
+          }
+        }
+      };
+
+      void dispatchSignedExecution();
+
+      return () => {
+        cancelled = true;
+      };
     }
   }, [status, proposal.proposalId, proposal.action.type, proposal.action.parameters, metadata.contextId, metadata.sourceHash, onAuthorizeGated]);
 
@@ -202,44 +256,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
 
       {/* ACTIONS SECTION */}
       <div className="flex gap-2">
-        {/* PATH A: Direct Execution (Fast, no FSM) */}
-        <button
-          onClick={() => {
-            console.log('[ProposalCard] Direct execution requested:', proposal.proposalId);
-
-            // Construct ExecutionPayload for direct execution
-            const payload: ExecutionPayload = {
-              proposalId: proposal.proposalId,
-              actionType: proposal.action.type,
-              parameters: proposal.action.parameters,
-              aaContext: {
-                contextId: metadata.contextId,
-                sourceHash: metadata.sourceHash,
-                timestamp: Date.now(),
-                signature: 'direct-approved' // No FSM hold
-              }
-            };
-
-            // Dispatch directly
-            ExecutionBridge.dispatch(payload)
-              .then(result => {
-                if (result.success) {
-                  console.log(`[ProposalCard] Direct execution successful: ${result.workOrderId}`);
-                  onApplyDirect(proposal.proposalId);
-                } else {
-                  console.error(`[ProposalCard] Direct execution failed: ${result.error}`);
-                }
-              })
-              .catch(error => {
-                console.error(`[ProposalCard] Bridge dispatch error:`, error);
-              });
-          }}
-          disabled={status !== AAState.GENERATED && status !== AAState.VISIBLE_GHOST}
-          className="flex-1 bg-slate-800 hover:bg-slate-700 disabled:bg-slate-900/50 disabled:opacity-50 text-white text-[10px] font-bold py-2 rounded border border-white/10 transition-colors uppercase">
-          Apply Direct
-        </button>
-
-        {/* PATH B: Gated Execution (FSM, secure) */}
+        {/* Gated Execution (FSM, secure) */}
         <button
           onMouseDown={() => {
             if (status === AAState.VISIBLE_GHOST || status === AAState.GENERATED) {
@@ -267,7 +284,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
             e.preventDefault();
           }}
           disabled={status === AAState.EXECUTED || status === AAState.EXPIRED || status === AAState.REJECTED}
-          className={`flex-1 text-white text-[10px] font-bold py-2 rounded shadow-lg transition-all uppercase ${
+          className={`w-full text-white text-[10px] font-bold py-2 rounded shadow-lg transition-all uppercase ${
             status === AAState.EXECUTED
               ? 'bg-green-600/50 border border-green-500/50 cursor-default disabled:opacity-100'
               : status === AAState.PREVIEW_ARMED
