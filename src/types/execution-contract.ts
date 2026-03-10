@@ -17,6 +17,8 @@ export interface ACCGrantSeal {
   issuedAt: number;
   expiresAt: number;
   singleUse: boolean;
+  maxUses?: number;
+  workspaceId?: string;
 }
 
 export interface AAContextSeal {
@@ -30,6 +32,7 @@ export interface AAContextSeal {
   actorId?: string;
   actorType?: 'HUMAN' | 'AI';
   generatorId?: string;
+  workspaceId?: string;
   accGrant?: ACCGrantSeal;
 }
 
@@ -72,6 +75,7 @@ export function buildExecutionSealPayload(payload: ExecutionPayload): ExecutionS
       actorId: payload.aaContext.actorId,
       actorType: payload.aaContext.actorType,
       generatorId: payload.aaContext.generatorId,
+      workspaceId: payload.aaContext.workspaceId,
       accGrant: payload.aaContext.accGrant,
     },
   };

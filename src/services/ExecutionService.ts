@@ -50,7 +50,7 @@ class ExecutionService {
   private merkleAuditLog: MerkleAuditLog;
   private readonly maxSealAgeMs = 60_000;
   private consumedNonceKeys = new Set<string>();
-  private consumedAccGrantKeys = new Set<string>();
+  private accGrantUseCountByKey = new Map<string, number>();
 
   // Toggle this to FALSE to run real commands against Logic Pro
   // Keep TRUE for development/testing
@@ -318,13 +318,28 @@ class ExecutionService {
         deny('TTL_EXPIRED', 'ACC grant has expired');
       }
 
-      if (grant.singleUse) {
-        const grantKey = `${context.sessionId}:${grant.grantId}`;
-        if (this.consumedAccGrantKeys.has(grantKey)) {
+      const activeWorkspaceId = context.workspaceId || context.contextId;
+      if (grant.workspaceId && grant.workspaceId !== activeWorkspaceId) {
+        deny(
+          'WORKSPACE_MISMATCH',
+          `ACC grant is scoped to workspace ${grant.workspaceId}, but request was submitted from ${activeWorkspaceId}`
+        );
+      }
+
+      const grantKey = `${context.sessionId}:${grant.grantId}`;
+      const useCount = this.accGrantUseCountByKey.get(grantKey) || 0;
+      const maxUses = grant.singleUse
+        ? 1
+        : (typeof grant.maxUses === 'number' && grant.maxUses > 0 ? grant.maxUses : Number.MAX_SAFE_INTEGER);
+
+      if (useCount >= maxUses) {
+        if (maxUses === 1) {
           deny('REPLAY_DETECTED', 'ACC grant replay detected (single-use grant already consumed)');
         }
-        this.consumedAccGrantKeys.add(grantKey);
+        deny('MAX_USES_EXCEEDED', `ACC grant max uses exceeded (${maxUses})`);
       }
+
+      this.accGrantUseCountByKey.set(grantKey, useCount + 1);
     } catch (error) {
       if (error instanceof ExecutionAccessDeniedError) {
         throw error;
@@ -415,7 +430,7 @@ class ExecutionService {
   // Test helper: clear replay cache between isolated test cases.
   public resetSecurityStateForTest(): void {
     this.consumedNonceKeys.clear();
-    this.consumedAccGrantKeys.clear();
+    this.accGrantUseCountByKey.clear();
   }
 }
 

@@ -3,6 +3,8 @@ export type AccessBlockReasonCode =
   | 'SCOPE_MISMATCH'
   | 'TTL_EXPIRED'
   | 'REPLAY_DETECTED'
+  | 'MAX_USES_EXCEEDED'
+  | 'WORKSPACE_MISMATCH'
   | 'ACC_EVALUATION_ERROR';
 
 export interface SecurityLedgerEntry {

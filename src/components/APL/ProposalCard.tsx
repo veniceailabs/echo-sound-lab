@@ -94,6 +94,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
               nonce,
               signatureVersion: session.signatureVersion,
               signature: '',
+              workspaceId: metadata.contextId,
               actorId: `ai:apl-${proposal.provenance.engine.toLowerCase()}`,
               actorType: 'AI',
               generatorId: `apl-${proposal.provenance.engine.toLowerCase()}`,
@@ -105,6 +106,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
                     issuedAt: now,
                     expiresAt: now + 5 * 60_000,
                     singleUse: true,
+                    workspaceId: metadata.contextId,
                   }
                 : undefined,
             }
