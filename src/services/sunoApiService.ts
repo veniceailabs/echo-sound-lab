@@ -1,26 +1,18 @@
 import { SunoGenerationRequest, SunoGenerationResponse, RateLimitState, GenerationCache } from '../types';
+import { authFetch, postJson, requestJson } from './backendApi';
 
 const RATE_LIMIT_KEY = 'suno_rate_limit';
 const GENERATION_CACHE_KEY = 'suno_generation_cache';
 const COST_LOG_KEY = 'suno_cost_log';
 
 class SunoApiService {
-    private apiKey: string;
-    private baseUrl: string;
     private defaultLimit: number;
-    private assetUrl: string;
     private mockMode: boolean;
 
     constructor() {
-        // Use import.meta.env for Vite
-        this.apiKey = import.meta.env.VITE_SUNO_API_KEY || '';
-        this.baseUrl = import.meta.env.VITE_SUNO_API_URL || 'https://api.aimlapi.com';
         this.defaultLimit = parseInt(import.meta.env.VITE_RATE_LIMIT_PER_DAY || '10', 10);
-        this.assetUrl = import.meta.env.VITE_SUNO_ASSET_URL || `${this.baseUrl}/v2/assets`;
         this.mockMode = (import.meta.env.VITE_SUNO_API_MOCK || '').toLowerCase() === 'true';
 
-        console.log('[SunoAPI] Initialized with baseUrl:', this.baseUrl);
-        console.log('[SunoAPI] API Key present:', !!this.apiKey);
         console.log('[SunoAPI] Mock mode:', this.mockMode);
     }
 
@@ -214,19 +206,12 @@ class SunoApiService {
             return `mock://asset-${Date.now()}`;
         }
 
-        if (!this.apiKey) {
-            throw new Error('Suno API key not configured. Please add VITE_SUNO_API_KEY to your .env.local file.');
-        }
-
         const formData = new FormData();
         const filename = asset instanceof File ? asset.name : `asset-${Date.now()}.wav`;
         formData.append('file', asset, filename);
 
-        const response = await fetch(this.assetUrl, {
+        const response = await authFetch('/api/proxy/suno/asset', {
             method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${this.apiKey}`
-            },
             body: formData
         });
 
@@ -280,11 +265,6 @@ class SunoApiService {
                 audioUrl: 'mock://local-buffer', // Special URL to indicate local buffer
                 estimatedTime: 0
             };
-        }
-
-        // Check API key
-        if (!this.apiKey) {
-            throw new Error('Suno API key not configured. Please add VITE_SUNO_API_KEY to your .env.local file.');
         }
 
         // Check rate limit
@@ -374,12 +354,7 @@ class SunoApiService {
 
             console.log('[SunoAPI] Request body:', requestBody);
 
-            const response = await this.makeApiRequest('/v2/generate/audio', {
-                method: 'POST',
-                body: JSON.stringify(requestBody)
-            });
-
-            const data = await response.json();
+            const data = await postJson<any>('/api/proxy/suno/generate', requestBody);
 
             // AI/ML API returns: { id: "generation-id:model-name", status: "queued" }
             const songId = data.id || data.generation_id;
@@ -414,11 +389,7 @@ class SunoApiService {
         }
 
         try {
-            const response = await this.makeApiRequest(`/v2/generate/audio/${encodeURIComponent(songId)}`, {
-                method: 'GET'
-            });
-
-            const data = await response.json();
+            const data = await requestJson<any>(`/api/proxy/suno/generate/${encodeURIComponent(songId)}`);
             console.log('[SunoAPI] Poll response:', data);
 
             // AI/ML API response format
@@ -536,16 +507,11 @@ class SunoApiService {
         try {
             const base64 = await this.blobToBase64(userVocalsBlob);
 
-            const response = await this.makeApiRequest('/harmonies', {
-                method: 'POST',
-                body: JSON.stringify({
-                    vocals: base64,
-                    voice_model_id: voiceModelId,
-                    type
-                })
+            const data = await postJson<any>('/api/proxy/suno/harmonies', {
+                vocals: base64,
+                voice_model_id: voiceModelId,
+                type
             });
-
-            const data = await response.json();
 
             // Poll until complete
             let status = data;
@@ -567,28 +533,6 @@ class SunoApiService {
     /**
      * Helper Methods
      */
-    private async makeApiRequest(endpoint: string, options: RequestInit): Promise<Response> {
-        const url = `${this.baseUrl}${endpoint}`;
-
-        const headers = {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.apiKey}`,
-            ...options.headers
-        };
-
-        const response = await fetch(url, {
-            ...options,
-            headers
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(errorData.message || response.statusText);
-        }
-
-        return response;
-    }
-
     private async blobToBase64(blob: Blob): Promise<string> {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
