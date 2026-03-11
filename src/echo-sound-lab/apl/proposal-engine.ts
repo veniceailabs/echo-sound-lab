@@ -60,7 +60,11 @@ export interface APLProposal {
       | 'ADD_TRACK'
       | 'MOVE_REGION'
       | 'SPLIT_REGION'
-      | 'SET_AUTOMATION_POINT';
+      | 'SET_AUTOMATION_POINT'
+      | 'ADD_PLUGIN'
+      | 'REMOVE_PLUGIN'
+      | 'REORDER_PLUGIN'
+      | 'SET_PLUGIN_PARAM';
     description: string;
     parameters: Record<string, unknown>;
   };

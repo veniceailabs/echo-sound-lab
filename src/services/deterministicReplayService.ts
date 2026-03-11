@@ -1,7 +1,10 @@
 import { APLProposal } from '../echo-sound-lab/apl/proposal-engine';
 import { deterministicId, sha256Hex, stableStringify } from './deterministicJson';
+import { EchoPluginInstance } from './plugins/echoPlugin';
+import { pluginRegistry } from './plugins/pluginRegistry';
 
 export type ReplayTrackKind = 'audio' | 'bus' | 'master';
+export type ReplayPluginInstance = EchoPluginInstance;
 
 export interface ReplayTrackState {
   trackId: string;
@@ -14,6 +17,7 @@ export interface ReplayTrackState {
   limiterThresholdDb: number | null;
   normalizedTargetLUFS: number | null;
   dcRemovalHz: number | null;
+  inserts?: ReplayPluginInstance[];
   appliedProposalIds: string[];
   trackStateHash: string;
 }
@@ -116,6 +120,17 @@ function toStringValue(input: unknown, fallback: string): string {
   return fallback;
 }
 
+function toBoolean(input: unknown, fallback = false): boolean {
+  if (typeof input === 'boolean') return input;
+  if (typeof input === 'number') return input !== 0;
+  if (typeof input === 'string') {
+    const normalized = input.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1' || normalized === 'on' || normalized === 'yes') return true;
+    if (normalized === 'false' || normalized === '0' || normalized === 'off' || normalized === 'no') return false;
+  }
+  return fallback;
+}
+
 function createSeededRng(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
@@ -146,6 +161,15 @@ function compareAutomationLanes(a: ReplayAutomationLane, b: ReplayAutomationLane
 }
 
 function normalizeTrack(input: Partial<ReplayTrackState> & { trackId: string }): ReplayTrackState {
+  const rawInserts = Array.isArray(input.inserts) ? input.inserts : [];
+  const inserts = rawInserts.map((insert, index) => ({
+    instanceId: insert.instanceId || deterministicId('plugin-inst', { trackId: input.trackId, index }),
+    manifestId: insert.manifestId,
+    enabled: toBoolean(insert.enabled, true),
+    mix: round6(Math.max(0, Math.min(1, toNumber(insert.mix, 1)))),
+    parameters: { ...(insert.parameters || {}) },
+  }));
+
   return {
     trackId: input.trackId,
     trackName: input.trackName || input.trackId,
@@ -163,6 +187,7 @@ function normalizeTrack(input: Partial<ReplayTrackState> & { trackId: string }):
     dcRemovalHz: input.dcRemovalHz === null || input.dcRemovalHz === undefined
       ? null
       : round6(toNumber(input.dcRemovalHz, 20)),
+    inserts,
     appliedProposalIds: Array.isArray(input.appliedProposalIds) ? [...input.appliedProposalIds] : [],
     trackStateHash: '',
   };
@@ -271,6 +296,14 @@ function getTrackSnapshot(state: ReplayState, trackId: string): unknown {
     }))
     .sort(compareAutomationLanes);
 
+  const inserts = [...(track.inserts || [])].map((insert) => ({
+    instanceId: insert.instanceId,
+    manifestId: insert.manifestId,
+    enabled: insert.enabled,
+    mix: round6(Math.max(0, Math.min(1, toNumber(insert.mix, 1)))),
+    parameters: { ...(insert.parameters || {}) },
+  }));
+
   return {
     trackId: track.trackId,
     trackName: track.trackName,
@@ -282,6 +315,7 @@ function getTrackSnapshot(state: ReplayState, trackId: string): unknown {
     limiterThresholdDb: track.limiterThresholdDb,
     normalizedTargetLUFS: track.normalizedTargetLUFS,
     dcRemovalHz: track.dcRemovalHz,
+    inserts,
     appliedProposalIds: track.appliedProposalIds,
     regions,
     automation,
@@ -456,6 +490,90 @@ function applyProposalToState(state: ReplayState, proposal: APLProposal): string
       lane.points.sort(compareAutomationPoints);
       state.automation.sort(compareAutomationLanes);
       impactedTrackIds.add(trackId);
+      break;
+    }
+    case 'ADD_PLUGIN': {
+      const trackId = getParameterString(params as Record<string, unknown>, 'trackId', primaryTrack.trackId);
+      const track = ensureTrack(state, trackId, getParameterString(params as Record<string, unknown>, 'trackName', trackId));
+      const manifestId = getParameterString(params as Record<string, unknown>, 'manifestId', '');
+      if (!manifestId) break;
+
+      try {
+        pluginRegistry.ensureManifest(manifestId);
+      } catch {
+        break;
+      }
+
+      const instanceId = getParameterString(
+        params as Record<string, unknown>,
+        'instanceId',
+        deterministicId('plugin-inst', { proposalId: proposal.proposalId, trackId, manifestId, index: (track.inserts || []).length })
+      );
+      const enabled = toBoolean((params as Record<string, unknown>).enabled, true);
+      const mix = round6(Math.max(0, Math.min(1, toNumber((params as Record<string, unknown>).mix, 1))));
+      const rawParams = ((params as Record<string, unknown>).parameters || {}) as Record<string, unknown>;
+      const sanitizedParameters = pluginRegistry.sanitizeParameters(manifestId, rawParams);
+
+      track.inserts = (track.inserts || []).filter((entry) => entry.instanceId !== instanceId);
+      track.inserts.push({
+        instanceId,
+        manifestId,
+        enabled,
+        mix,
+        parameters: sanitizedParameters,
+      });
+      impactedTrackIds.add(trackId);
+      break;
+    }
+    case 'REMOVE_PLUGIN': {
+      const trackId = getParameterString(params as Record<string, unknown>, 'trackId', primaryTrack.trackId);
+      const instanceId = getParameterString(params as Record<string, unknown>, 'instanceId', '');
+      const track = getTrack(state, trackId);
+      if (track && instanceId) {
+        track.inserts = (track.inserts || []).filter((entry) => entry.instanceId !== instanceId);
+        impactedTrackIds.add(trackId);
+      }
+      break;
+    }
+    case 'REORDER_PLUGIN': {
+      const trackId = getParameterString(params as Record<string, unknown>, 'trackId', primaryTrack.trackId);
+      const instanceId = getParameterString(params as Record<string, unknown>, 'instanceId', '');
+      const toIndex = Math.trunc(toNumber((params as Record<string, unknown>).toIndex, 0));
+      const track = getTrack(state, trackId);
+      if (track && instanceId) {
+        const inserts = [...(track.inserts || [])];
+        const currentIndex = inserts.findIndex((entry) => entry.instanceId === instanceId);
+        if (currentIndex >= 0) {
+          const [plugin] = inserts.splice(currentIndex, 1);
+          const boundedIndex = Math.max(0, Math.min(toIndex, inserts.length));
+          inserts.splice(boundedIndex, 0, plugin);
+          track.inserts = inserts;
+          impactedTrackIds.add(trackId);
+        }
+      }
+      break;
+    }
+    case 'SET_PLUGIN_PARAM': {
+      const trackId = getParameterString(params as Record<string, unknown>, 'trackId', primaryTrack.trackId);
+      const instanceId = getParameterString(params as Record<string, unknown>, 'instanceId', '');
+      const paramId = getParameterString(params as Record<string, unknown>, 'paramId', '');
+      const rawValue = (params as Record<string, unknown>).value;
+      const track = getTrack(state, trackId);
+      if (track && instanceId && paramId) {
+        const plugin = (track.inserts || []).find((entry) => entry.instanceId === instanceId);
+        if (plugin) {
+          try {
+            const sanitized = pluginRegistry.sanitizeParamValue(plugin.manifestId, paramId, rawValue);
+            plugin.parameters = {
+              ...plugin.parameters,
+              [paramId]: sanitized,
+            };
+            impactedTrackIds.add(trackId);
+          } catch {
+            // Unknown manifest/parameter: deterministic no-op
+          }
+        }
+      }
       break;
     }
     default:
