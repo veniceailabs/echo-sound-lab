@@ -5,18 +5,24 @@ import { ReplayState, runDeterministicReplay } from '../services/deterministicRe
 const BASE_STATE: ReplayState = {
   sessionId: 'session-replay-1',
   workspaceId: 'workspace-main',
-  tracks: {
-    'track-main': {
+  tracks: [
+    {
       trackId: 'track-main',
       trackName: 'Main',
+      kind: 'audio',
       gainDb: 0,
+      pan: 0,
+      muted: false,
+      solo: false,
       limiterThresholdDb: null,
       normalizedTargetLUFS: null,
       dcRemovalHz: null,
       appliedProposalIds: [],
       trackStateHash: '',
     },
-  },
+  ],
+  regions: [],
+  automation: [],
   metadata: {
     sampleRate: 44100,
     channels: 2,
@@ -77,8 +83,9 @@ describe('Deterministic Replay Harness', () => {
     expect(runA.baseStateHash).toBe(runB.baseStateHash);
     expect(runA.aplSequenceHash).toBe(runB.aplSequenceHash);
     expect(runA.outputStateHash).toBe(runB.outputStateHash);
-    expect(runA.outputState.tracks['track-main'].gainDb).toBe(2);
-    expect(runA.outputState.tracks['track-main'].limiterThresholdDb).toBe(-0.2);
+    const track = runA.outputState.tracks.find((entry) => entry.trackId === 'track-main');
+    expect(track?.gainDb).toBe(2);
+    expect(track?.limiterThresholdDb).toBe(-0.2);
   });
 
   test('tampering with one APL parameter changes replay output hash', async () => {

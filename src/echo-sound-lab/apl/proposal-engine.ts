@@ -52,7 +52,15 @@ export interface APLProposal {
 
   // The action to apply
   action: {
-    type: 'GAIN_ADJUSTMENT' | 'LIMITING' | 'NORMALIZATION' | 'DC_REMOVAL';
+    type:
+      | 'GAIN_ADJUSTMENT'
+      | 'LIMITING'
+      | 'NORMALIZATION'
+      | 'DC_REMOVAL'
+      | 'ADD_TRACK'
+      | 'MOVE_REGION'
+      | 'SPLIT_REGION'
+      | 'SET_AUTOMATION_POINT';
     description: string;
     parameters: Record<string, unknown>;
   };
