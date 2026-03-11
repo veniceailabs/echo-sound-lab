@@ -11,7 +11,7 @@
     "test:unit": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "test:e2e": "playwright test",
-    "ci:determinism": "vitest run --config vitest.config.ts src/tests/deterministicReplayHarness.test.ts src/tests/proposalEngineDeterminism.test.ts src/tests/timelineDeterminismActions.test.ts src/tests/timeTravelReplay.test.ts src/tests/timeTravelSnapshotCache.test.ts",
+    "ci:determinism": "vitest run --config vitest.config.ts src/tests/deterministicReplayHarness.test.ts src/tests/proposalEngineDeterminism.test.ts src/tests/timelineDeterminismActions.test.ts src/tests/timeTravelReplay.test.ts src/tests/timeTravelSnapshotCache.test.ts src/tests/branchContextSwitch.test.ts",
     "typecheck:repo": "tsc --noEmit",
     "ci:secret-scan": "node scripts/ci/secret-scan.mjs"
   },
