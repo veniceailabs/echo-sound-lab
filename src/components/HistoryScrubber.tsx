@@ -12,6 +12,10 @@ interface HistoryScrubberProps {
   currentIndex: number;
   currentHash: string;
   isPreviewMode: boolean;
+  hydrationDurationMs?: number;
+  replayedActionCount?: number;
+  fromSnapshotIndex?: number;
+  frameBudgetMs?: number;
   events: HistoryScrubberEvent[];
   onChangeIndex: (index: number) => void;
   onJumpLatest: () => void;
@@ -23,6 +27,10 @@ function HistoryScrubberComponent({
   currentIndex,
   currentHash,
   isPreviewMode,
+  hydrationDurationMs,
+  replayedActionCount,
+  fromSnapshotIndex,
+  frameBudgetMs = 16,
   events,
   onChangeIndex,
   onJumpLatest,
@@ -67,6 +75,13 @@ function HistoryScrubberComponent({
         onChange={(event) => onChangeIndex(Number(event.target.value))}
         className="w-full accent-cyan-400"
       />
+
+      {typeof hydrationDurationMs === 'number' && (
+        <p className={`mt-2 text-[11px] ${hydrationDurationMs > frameBudgetMs ? 'text-amber-300' : 'text-emerald-300'}`}>
+          Hydration {hydrationDurationMs.toFixed(2)}ms • replayed {replayedActionCount ?? 0} actions
+          {typeof fromSnapshotIndex === 'number' ? ` from snapshot ${fromSnapshotIndex}` : ''}
+        </p>
+      )}
 
       {selectedEvent ? (
         <p className="mt-2 text-[11px] text-slate-400">

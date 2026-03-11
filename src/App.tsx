@@ -85,6 +85,7 @@ import { signExecutionPayload } from './services/executionSigning';
 import { deterministicId } from './services/deterministicJson';
 import { ReplayState, runDeterministicReplay } from './services/deterministicReplayService';
 import { provenanceLedger } from './services/ProvenanceLedger';
+import { TimelineHydrationMetrics, TimelineReplayCache } from './services/timelineReplayCache';
 
 // Day 3: APL Real Analysis (replaces mock proposals)
 import { aplAnalysisService } from './services/APLAnalysisService';
@@ -118,6 +119,7 @@ const MODE_LABELS: Record<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO', string> = 
   AI_STUDIO: 'AI Studio',
   VIDEO: 'SFS Video Engine',
 };
+const TIMELINE_SNAPSHOT_INTERVAL = 50;
 
 const INITIAL_TIMELINE_STATE: ReplayState = {
   sessionId: 'timeline-session-main',
@@ -362,14 +364,14 @@ const App: React.FC = () => {
   const [aplDataSource, setAplDataSource] = useState<'real' | 'demo'>('real');
   const [aplDataSourceReason, setAplDataSourceReason] = useState<string | null>(null);
   const [timelineState, setTimelineState] = useState<ReplayState>(INITIAL_TIMELINE_STATE);
-  const [timelineBaseState, setTimelineBaseState] = useState<ReplayState>(INITIAL_TIMELINE_STATE);
   const [timelineActionHistory, setTimelineActionHistory] = useState<APLProposal[]>([]);
   const [timelineHashHistory, setTimelineHashHistory] = useState<string[]>([]);
   const [timelineScrubIndex, setTimelineScrubIndex] = useState(0);
   const [timelineOutputHash, setTimelineOutputHash] = useState<string>('pending');
+  const [timelineHydrationMetrics, setTimelineHydrationMetrics] = useState<TimelineHydrationMetrics | null>(null);
   const [timelineDispatchError, setTimelineDispatchError] = useState<string | null>(null);
   const [isTimelineDispatching, setIsTimelineDispatching] = useState(false);
-  const timelineStateRef = useRef<ReplayState>(INITIAL_TIMELINE_STATE);
+  const timelineCacheRef = useRef<TimelineReplayCache | null>(null);
   const timelineActionCounterRef = useRef(0);
 
   // ===== PHASE 5: DAILY PROVING STATE =====
@@ -396,19 +398,26 @@ const App: React.FC = () => {
   }, [themeMode]);
 
   useEffect(() => {
-    timelineStateRef.current = timelineState;
-  }, [timelineState]);
-
-  useEffect(() => {
     let cancelled = false;
     void runDeterministicReplay(INITIAL_TIMELINE_STATE, []).then((result) => {
       if (cancelled) return;
-      setTimelineBaseState(result.outputState);
+      const cache = new TimelineReplayCache(result.outputState, result.outputStateHash, {
+        snapshotInterval: TIMELINE_SNAPSHOT_INTERVAL,
+        workspaceId: result.outputState.workspaceId,
+      });
+      timelineCacheRef.current = cache;
       setTimelineState(result.outputState);
       setTimelineOutputHash(result.outputStateHash);
-      setTimelineHashHistory([result.outputStateHash]);
+      setTimelineActionHistory(cache.getActions());
+      setTimelineHashHistory(cache.getHashHistory());
       setTimelineScrubIndex(0);
-      timelineStateRef.current = result.outputState;
+      setTimelineHydrationMetrics({
+        targetIndex: 0,
+        fromSnapshotIndex: 0,
+        replayedActionCount: 0,
+        durationMs: 0,
+        snapshotInterval: TIMELINE_SNAPSHOT_INTERVAL,
+      });
     }).catch((error) => {
       if (!cancelled) {
         console.error('[Timeline] Failed to initialize deterministic timeline state:', error);
@@ -422,15 +431,31 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const cache = timelineCacheRef.current;
+    if (!cache) return;
+
     let cancelled = false;
-    const prefix = timelineActionHistory.slice(0, timelineScrubIndex);
-    void runDeterministicReplay(timelineBaseState, prefix, {
-      workspaceId: timelineBaseState.workspaceId,
-    }).then((result) => {
+    const boundedIndex = Math.max(0, Math.min(timelineScrubIndex, cache.getLength()));
+    const startMs = performance.now();
+
+    void cache.hydrateToIndex(boundedIndex).then((result) => {
       if (cancelled) return;
+      const durationMs = performance.now() - startMs;
+      const metrics: TimelineHydrationMetrics = {
+        ...result.metrics,
+        durationMs,
+      };
+
+      if (durationMs > 16) {
+        console.warn(
+          `[Timeline] Scrub hydration exceeded frame budget: ${durationMs.toFixed(2)}ms (index=${boundedIndex}, replayed=${metrics.replayedActionCount}, snapshot=${metrics.fromSnapshotIndex})`
+        );
+      }
+
       startTransition(() => {
-        setTimelineState(result.outputState);
+        setTimelineState(result.state);
         setTimelineOutputHash(result.outputStateHash);
+        setTimelineHydrationMetrics(metrics);
       });
     }).catch((error) => {
       if (!cancelled) {
@@ -441,13 +466,18 @@ const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [timelineActionHistory, timelineBaseState, timelineScrubIndex]);
+  }, [timelineScrubIndex, timelineActionHistory.length]);
 
   const isTimelinePreviewMode = timelineScrubIndex < timelineActionHistory.length;
 
   const handleTimelineDispatchAction = useCallback(async (request: TimelineActionRequest) => {
+    const cache = timelineCacheRef.current;
+    if (!cache) {
+      setTimelineDispatchError('Timeline cache is not initialized yet.');
+      return;
+    }
     if (isTimelineDispatching) return;
-    if (timelineScrubIndex < timelineActionHistory.length) {
+    if (timelineScrubIndex < cache.getLength()) {
       setTimelineDispatchError('Timeline is in read-only preview mode. Jump to latest or restore before editing.');
       return;
     }
@@ -456,7 +486,7 @@ const App: React.FC = () => {
     setTimelineDispatchError(null);
 
     try {
-      const currentTimelineState = timelineStateRef.current;
+      const currentTimelineState = cache.getLatestState();
       const proposalIndex = timelineActionCounterRef.current++;
       const proposalId = deterministicId('timeline-proposal', {
         index: proposalIndex,
@@ -538,16 +568,14 @@ const App: React.FC = () => {
         throw new Error(executionResult.error || 'Execution bridge rejected timeline action.');
       }
 
-      const replayResult = await runDeterministicReplay(currentTimelineState, [proposal], {
-        workspaceId: currentTimelineState.workspaceId,
-      });
-
-      const nextHistoryLength = timelineActionHistory.length + 1;
+      const replayResult = await cache.appendProposal(proposal);
+      const nextHistoryLength = cache.getLength();
       startTransition(() => {
-        setTimelineActionHistory((prev) => [...prev, proposal]);
-        setTimelineHashHistory((prev) => [...prev, replayResult.outputStateHash]);
-        setTimelineState(replayResult.outputState);
+        setTimelineActionHistory(cache.getActions());
+        setTimelineHashHistory(cache.getHashHistory());
+        setTimelineState(replayResult.state);
         setTimelineOutputHash(replayResult.outputStateHash);
+        setTimelineHydrationMetrics(replayResult.metrics);
         setTimelineScrubIndex(nextHistoryLength);
       });
     } catch (error) {
@@ -556,24 +584,44 @@ const App: React.FC = () => {
     } finally {
       setIsTimelineDispatching(false);
     }
-  }, [isTimelineDispatching, timelineActionHistory.length, timelineScrubIndex]);
+  }, [isTimelineDispatching, timelineScrubIndex]);
 
   const handleTimelineScrubChange = useCallback((index: number) => {
-    const bounded = Math.max(0, Math.min(index, timelineActionHistory.length));
+    const cache = timelineCacheRef.current;
+    const maxIndex = cache ? cache.getLength() : timelineActionHistory.length;
+    const bounded = Math.max(0, Math.min(index, maxIndex));
     setTimelineScrubIndex(bounded);
   }, [timelineActionHistory.length]);
 
   const handleTimelineJumpLatest = useCallback(() => {
-    setTimelineScrubIndex(timelineActionHistory.length);
+    const cache = timelineCacheRef.current;
+    setTimelineScrubIndex(cache ? cache.getLength() : timelineActionHistory.length);
     setTimelineDispatchError(null);
   }, [timelineActionHistory.length]);
 
   const handleTimelineRestoreToIndex = useCallback((index: number) => {
-    const bounded = Math.max(0, Math.min(index, timelineActionHistory.length));
-    setTimelineActionHistory((prev) => prev.slice(0, bounded));
-    setTimelineHashHistory((prev) => prev.slice(0, bounded + 1));
-    setTimelineScrubIndex(bounded);
-    setTimelineDispatchError(null);
+    const cache = timelineCacheRef.current;
+    if (!cache) {
+      setTimelineDispatchError('Timeline cache is not initialized yet.');
+      return;
+    }
+    void (async () => {
+      const bounded = Math.max(0, Math.min(index, cache.getLength()));
+      try {
+        const restored = await cache.restoreToIndex(bounded);
+        startTransition(() => {
+          setTimelineActionHistory(cache.getActions());
+          setTimelineHashHistory(cache.getHashHistory());
+          setTimelineState(restored.state);
+          setTimelineOutputHash(restored.outputStateHash);
+          setTimelineHydrationMetrics(restored.metrics);
+          setTimelineScrubIndex(bounded);
+          setTimelineDispatchError(null);
+        });
+      } catch (error) {
+        setTimelineDispatchError((error as Error).message);
+      }
+    })();
   }, [timelineActionHistory.length]);
 
   const timelineProvenanceEvents = provenanceLedger
@@ -3752,6 +3800,9 @@ const App: React.FC = () => {
                   currentIndex={timelineScrubIndex}
                   currentHash={timelineHashHistory[timelineScrubIndex] || timelineOutputHash}
                   isPreviewMode={isTimelinePreviewMode}
+                  hydrationDurationMs={timelineHydrationMetrics?.durationMs}
+                  replayedActionCount={timelineHydrationMetrics?.replayedActionCount}
+                  fromSnapshotIndex={timelineHydrationMetrics?.fromSnapshotIndex}
                   events={timelineProvenanceEvents}
                   onChangeIndex={handleTimelineScrubChange}
                   onJumpLatest={handleTimelineJumpLatest}
