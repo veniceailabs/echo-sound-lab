@@ -54,6 +54,7 @@ import TimelineWorkspace, { type TimelineActionRequest } from './components/Time
 import HistoryScrubber from './components/HistoryScrubber';
 import BranchSelector from './components/BranchSelector';
 import MergeModal from './components/MergeModal';
+import TransportBar from './components/TransportBar';
 
 // V.E.N.U.M. - Viral Emergent Network Utility Matrix
 import { generateEchoReportCard, ShareableCard, GenerateEchoReportCardOptions } from './services/venumEngine';
@@ -88,6 +89,7 @@ import { deterministicId } from './services/deterministicJson';
 import { ReplayState } from './services/deterministicReplayService';
 import { provenanceLedger } from './services/ProvenanceLedger';
 import { TimelineHydrationMetrics } from './services/timelineReplayCache';
+import { audioPlaybackEngine } from './services/AudioPlaybackEngine';
 import {
   BranchEntity,
   DeterministicBranchRegistry,
@@ -382,8 +384,13 @@ const App: React.FC = () => {
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
   const [isTimelineDispatching, setIsTimelineDispatching] = useState(false);
+  const [isTimelinePlaying, setIsTimelinePlaying] = useState(false);
+  const [timelinePlayheadDisplaySec, setTimelinePlayheadDisplaySec] = useState(0);
+  const [timelineTransportTick, setTimelineTransportTick] = useState(0);
   const timelineBranchRegistryRef = useRef<DeterministicBranchRegistry | null>(null);
   const timelineActionCounterRef = useRef(0);
+  const timelinePlayheadSecondsRef = useRef(0);
+  const timelineTransportRafRef = useRef<number | null>(null);
 
   // ===== PHASE 5: DAILY PROVING STATE =====
   const [systemHealthStatus, setSystemHealthStatus] = useState<'HEALTHY' | 'DEGRADED' | 'CRITICAL' | 'CHECKING'>('CHECKING');
@@ -417,6 +424,16 @@ const App: React.FC = () => {
     setTimelineActionHistory(registry.getBranchActions(branchId));
     setTimelineHashHistory(registry.getBranchHashHistory(branchId));
   }, []);
+
+  const bindTimelineBuffers = useCallback((nextState: ReplayState) => {
+    if (!originalBuffer) return;
+    const sourceIds = new Set(nextState.regions.map((region) => region.sourceId));
+    for (const sourceId of sourceIds) {
+      audioPlaybackEngine.setRegionBuffer(sourceId, originalBuffer);
+    }
+  }, [originalBuffer]);
+
+  const getTimelinePlayheadSeconds = useCallback(() => timelinePlayheadSecondsRef.current, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -454,6 +471,91 @@ const App: React.FC = () => {
       cancelled = true;
     };
   }, [syncTimelineBranchState]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        await audioPlaybackEngine.init();
+        bindTimelineBuffers(timelineState);
+        await audioPlaybackEngine.syncState(timelineState);
+
+        const duration = audioPlaybackEngine.getDuration();
+        if (timelinePlayheadSecondsRef.current > duration) {
+          timelinePlayheadSecondsRef.current = duration;
+          setTimelinePlayheadDisplaySec(duration);
+        }
+
+        if (isTimelinePlaying) {
+          audioPlaybackEngine.playFrom(timelinePlayheadSecondsRef.current);
+        } else {
+          audioPlaybackEngine.seek(timelinePlayheadSecondsRef.current);
+        }
+
+        if (!cancelled) {
+          setTimelineTransportTick((tick) => tick + 1);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('[TimelineTransport] Failed to reconcile audio graph:', error);
+          setTimelineDispatchError((error as Error).message);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bindTimelineBuffers, isTimelinePlaying, timelineState]);
+
+  useEffect(() => {
+    if (!isTimelinePlaying) {
+      if (timelineTransportRafRef.current !== null) {
+        cancelAnimationFrame(timelineTransportRafRef.current);
+        timelineTransportRafRef.current = null;
+      }
+      return;
+    }
+
+    let lastUiUpdateMs = 0;
+    const tick = (now: number) => {
+      const current = audioPlaybackEngine.getCurrentTime();
+      const duration = audioPlaybackEngine.getDuration();
+      timelinePlayheadSecondsRef.current = current;
+
+      if (now - lastUiUpdateMs >= 80) {
+        setTimelinePlayheadDisplaySec(current);
+        setTimelineTransportTick((value) => value + 1);
+        lastUiUpdateMs = now;
+      }
+
+      if (!audioPlaybackEngine.getIsPlaying() || (duration > 0 && current >= duration)) {
+        setIsTimelinePlaying(false);
+        setTimelinePlayheadDisplaySec(current);
+        setTimelineTransportTick((value) => value + 1);
+        timelineTransportRafRef.current = null;
+        return;
+      }
+
+      timelineTransportRafRef.current = requestAnimationFrame(tick);
+    };
+
+    timelineTransportRafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (timelineTransportRafRef.current !== null) {
+        cancelAnimationFrame(timelineTransportRafRef.current);
+        timelineTransportRafRef.current = null;
+      }
+    };
+  }, [isTimelinePlaying]);
+
+  useEffect(() => {
+    return () => {
+      audioPlaybackEngine.stop();
+      audioPlaybackEngine.dispose();
+    };
+  }, []);
 
   useEffect(() => {
     const registry = timelineBranchRegistryRef.current;
@@ -751,6 +853,46 @@ const App: React.FC = () => {
       setIsTimelineDispatching(false);
     }
   }, [activeTimelineBranchId, isTimelineDispatching, syncTimelineBranchState]);
+
+  const handleTimelinePlay = useCallback(async () => {
+    try {
+      await audioPlaybackEngine.resume();
+      bindTimelineBuffers(timelineState);
+      await audioPlaybackEngine.syncState(timelineState);
+      audioPlaybackEngine.playFrom(timelinePlayheadSecondsRef.current);
+      setIsTimelinePlaying(true);
+      setTimelineTransportTick((value) => value + 1);
+    } catch (error) {
+      console.error('[TimelineTransport] Play failed:', error);
+      setTimelineDispatchError((error as Error).message);
+      setIsTimelinePlaying(false);
+    }
+  }, [bindTimelineBuffers, timelineState]);
+
+  const handleTimelinePause = useCallback(() => {
+    audioPlaybackEngine.pause();
+    const current = audioPlaybackEngine.getCurrentTime();
+    timelinePlayheadSecondsRef.current = current;
+    setTimelinePlayheadDisplaySec(current);
+    setTimelineTransportTick((value) => value + 1);
+    setIsTimelinePlaying(false);
+  }, []);
+
+  const handleTimelineStop = useCallback(() => {
+    audioPlaybackEngine.stop();
+    timelinePlayheadSecondsRef.current = 0;
+    setTimelinePlayheadDisplaySec(0);
+    setTimelineTransportTick((value) => value + 1);
+    setIsTimelinePlaying(false);
+  }, []);
+
+  const handleTimelineSeek = useCallback((timeSec: number) => {
+    audioPlaybackEngine.seek(timeSec);
+    const current = audioPlaybackEngine.getCurrentTime();
+    timelinePlayheadSecondsRef.current = current;
+    setTimelinePlayheadDisplaySec(current);
+    setTimelineTransportTick((value) => value + 1);
+  }, []);
 
   const timelineProvenanceEvents = useMemo(() => {
     const proposalMeta = new Map<string, { actorId: string; timestamp: number }>();
@@ -3945,6 +4087,20 @@ const App: React.FC = () => {
                 />
               </div>
               <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
+                <TransportBar
+                  isPlaying={isTimelinePlaying}
+                  currentTimeSec={timelinePlayheadDisplaySec}
+                  durationSec={audioPlaybackEngine.getDuration()}
+                  isBusy={isTimelineDispatching}
+                  onPlay={() => {
+                    void handleTimelinePlay();
+                  }}
+                  onPause={handleTimelinePause}
+                  onStop={handleTimelineStop}
+                  onSeek={handleTimelineSeek}
+                />
+              </div>
+              <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
                 <HistoryScrubber
                   totalSteps={timelineActionHistory.length}
                   currentIndex={timelineScrubIndex}
@@ -3970,6 +4126,9 @@ const App: React.FC = () => {
                   isReadOnly={isTimelinePreviewMode || isTimelineDispatching}
                   dispatchError={timelineDispatchError}
                   onDispatchAction={handleTimelineDispatchAction}
+                  isTransportPlaying={isTimelinePlaying}
+                  getTransportPlayheadSeconds={getTimelinePlayheadSeconds}
+                  transportTick={timelineTransportTick}
                 />
               </div>
             </>

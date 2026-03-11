@@ -195,4 +195,35 @@ describe('AudioPlaybackEngine', () => {
     expect(after!.plugins[0].gainValue).toBeCloseTo(Math.pow(10, 6 / 20), 6);
     expect(after!.plugins[0].panValue).toBeCloseTo(0.4, 6);
   });
+
+  test('maintains deterministic transport semantics for pause, seek, and stop', async () => {
+    const fakeContext = new FakeAudioContext();
+    const engine = new AudioPlaybackEngine({
+      createAudioContext: () => fakeContext,
+    });
+
+    await engine.init();
+    engine.setRegionBuffer('source-vocal-1', BUFFER);
+    await engine.syncState(makeState(0));
+
+    engine.playFrom(1.5);
+    expect(engine.getIsPlaying()).toBe(true);
+    expect(engine.getCurrentTime()).toBeCloseTo(1.5, 6);
+
+    fakeContext.currentTime = 10.75;
+    engine.pause();
+    expect(engine.getIsPlaying()).toBe(false);
+    expect(engine.getCurrentTime()).toBeCloseTo(2.25, 6);
+
+    engine.seek(4.2);
+    expect(engine.getCurrentTime()).toBeCloseTo(4.2, 6);
+
+    engine.playFrom(engine.getCurrentTime());
+    fakeContext.currentTime = 11.5;
+    expect(engine.getCurrentTime()).toBeCloseTo(4.95, 6);
+
+    engine.stop();
+    expect(engine.getIsPlaying()).toBe(false);
+    expect(engine.getCurrentTime()).toBe(0);
+  });
 });

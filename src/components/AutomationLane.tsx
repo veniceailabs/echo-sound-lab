@@ -8,6 +8,7 @@ interface AutomationLaneProps {
   laneWidth: number;
   isReadOnly?: boolean;
   onAddPoint: (trackId: string, parameter: string, timeSec: number, value: number) => void;
+  showPlayhead?: boolean;
 }
 
 function AutomationLaneComponent({
@@ -17,6 +18,7 @@ function AutomationLaneComponent({
   laneWidth,
   isReadOnly = false,
   onAddPoint,
+  showPlayhead = false,
 }: AutomationLaneProps) {
   const normalizedLanes = lanes.length > 0
     ? lanes
@@ -57,6 +59,12 @@ function AutomationLaneComponent({
               className="relative overflow-hidden rounded-lg border border-white/5 bg-slate-900/70"
               style={{ width: `${laneWidth}px`, minHeight: '32px' }}
             >
+              {showPlayhead && (
+                <div
+                  className="pointer-events-none absolute bottom-0 top-0 z-10 w-px bg-cyan-300/80"
+                  style={{ left: 'var(--timeline-playhead-left, 0px)' }}
+                />
+              )}
               {lane.points.map((point) => {
                 const left = Math.max(0, point.timeSec * pxPerSec);
                 return (

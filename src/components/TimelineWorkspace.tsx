@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { APLProposal } from '../echo-sound-lab/apl/proposal-engine';
 import type { ReplayState } from '../services/deterministicReplayService';
 import { TrackHeader } from './TrackHeader';
@@ -7,7 +7,12 @@ import { AutomationLane } from './AutomationLane';
 
 type TimelineActionType = Extract<
   APLProposal['action']['type'],
-  'ADD_TRACK' | 'MOVE_REGION' | 'SPLIT_REGION' | 'SET_AUTOMATION_POINT'
+  | 'ADD_TRACK'
+  | 'MOVE_REGION'
+  | 'SPLIT_REGION'
+  | 'SET_AUTOMATION_POINT'
+  | 'ADD_PLUGIN'
+  | 'SET_PLUGIN_PARAM'
 >;
 
 export interface TimelineActionRequest {
@@ -25,6 +30,9 @@ interface TimelineWorkspaceProps {
   isReadOnly?: boolean;
   dispatchError?: string | null;
   onDispatchAction: (action: TimelineActionRequest) => void | Promise<void>;
+  isTransportPlaying?: boolean;
+  getTransportPlayheadSeconds?: () => number;
+  transportTick?: number;
 }
 
 function TimelineWorkspaceComponent({
@@ -34,10 +42,14 @@ function TimelineWorkspaceComponent({
   isReadOnly = false,
   dispatchError = null,
   onDispatchAction,
+  isTransportPlaying = false,
+  getTransportPlayheadSeconds,
+  transportTick = 0,
 }: TimelineWorkspaceProps) {
   const [zoom, setZoom] = useState(1);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(timelineState.tracks[0]?.trackId || null);
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
+  const timelineSurfaceRef = useRef<HTMLDivElement | null>(null);
 
   const maxEndSec = useMemo(() => {
     if (timelineState.regions.length === 0) return 16;
@@ -46,6 +58,28 @@ function TimelineWorkspaceComponent({
 
   const pxPerSec = Math.min(220, Math.max(20, 42 * zoom));
   const laneWidth = Math.min(6000, Math.max(900, maxEndSec * pxPerSec + 120));
+
+  const updatePlayheadCss = useCallback(() => {
+    if (!timelineSurfaceRef.current || !getTransportPlayheadSeconds) return;
+    const sec = Math.max(0, getTransportPlayheadSeconds());
+    const left = Math.max(0, Math.min(laneWidth, sec * pxPerSec));
+    timelineSurfaceRef.current.style.setProperty('--timeline-playhead-left', `${left}px`);
+  }, [getTransportPlayheadSeconds, laneWidth, pxPerSec]);
+
+  useEffect(() => {
+    updatePlayheadCss();
+  }, [transportTick, updatePlayheadCss]);
+
+  useEffect(() => {
+    if (!isTransportPlaying || !getTransportPlayheadSeconds) return;
+    let rafId = 0;
+    const loop = () => {
+      updatePlayheadCss();
+      rafId = requestAnimationFrame(loop);
+    };
+    rafId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(rafId);
+  }, [getTransportPlayheadSeconds, isTransportPlaying, updatePlayheadCss]);
 
   return (
     <section className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
@@ -106,10 +140,13 @@ function TimelineWorkspaceComponent({
         </p>
       )}
 
-      <div className="space-y-4">
+      <div ref={timelineSurfaceRef} className="space-y-4">
         {timelineState.tracks.map((track) => {
           const trackRegions = timelineState.regions.filter((region) => region.trackId === track.trackId);
           const trackAutomation = timelineState.automation.filter((lane) => lane.trackId === track.trackId);
+          const utilityPlugin = (track.inserts || []).find((insert) => insert.manifestId === 'echo.utility.gain.v1');
+          const utilityGainDb = Number(utilityPlugin?.parameters.gainDb ?? 0);
+          const utilityPan = Number(utilityPlugin?.parameters.pan ?? 0);
 
           return (
             <div key={track.trackId} className="grid grid-cols-1 gap-3 lg:grid-cols-[240px_1fr]">
@@ -123,6 +160,91 @@ function TimelineWorkspaceComponent({
 
               <div className="overflow-x-auto rounded-xl border border-white/5 p-2">
                 <div style={{ width: `${laneWidth}px` }} className="space-y-2">
+                  <div className="rounded-xl border border-white/10 bg-slate-950/50 p-2">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Plugin Rack</p>
+                      <button
+                        type="button"
+                        disabled={isReadOnly || Boolean(utilityPlugin)}
+                        onClick={() => {
+                          const instanceId = `${track.trackId}-utility-gain`;
+                          void onDispatchAction({
+                            actionType: 'ADD_PLUGIN',
+                            trackId: track.trackId,
+                            trackName: track.trackName,
+                            description: `Insert utility gain on ${track.trackName}`,
+                            parameters: {
+                              trackId: track.trackId,
+                              instanceId,
+                              manifestId: 'echo.utility.gain.v1',
+                            },
+                          });
+                        }}
+                        className="rounded bg-slate-800 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {utilityPlugin ? 'Utility Loaded' : '+ Utility Gain'}
+                      </button>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <label className="flex items-center gap-2 text-[10px] text-slate-300">
+                        Gain ({utilityGainDb.toFixed(1)} dB)
+                        <input
+                          type="range"
+                          min={-24}
+                          max={24}
+                          step={0.1}
+                          disabled={!utilityPlugin || isReadOnly}
+                          value={utilityGainDb}
+                          onChange={(event) => {
+                            if (!utilityPlugin) return;
+                            const value = Number(event.target.value);
+                            void onDispatchAction({
+                              actionType: 'SET_PLUGIN_PARAM',
+                              trackId: track.trackId,
+                              trackName: track.trackName,
+                              description: `Set utility gain to ${value.toFixed(1)} dB`,
+                              parameters: {
+                                trackId: track.trackId,
+                                instanceId: utilityPlugin.instanceId,
+                                paramId: 'gainDb',
+                                value,
+                              },
+                            });
+                          }}
+                          className="accent-cyan-400"
+                        />
+                      </label>
+                      <label className="flex items-center gap-2 text-[10px] text-slate-300">
+                        Pan ({utilityPan.toFixed(2)})
+                        <input
+                          type="range"
+                          min={-1}
+                          max={1}
+                          step={0.01}
+                          disabled={!utilityPlugin || isReadOnly}
+                          value={utilityPan}
+                          onChange={(event) => {
+                            if (!utilityPlugin) return;
+                            const value = Number(event.target.value);
+                            void onDispatchAction({
+                              actionType: 'SET_PLUGIN_PARAM',
+                              trackId: track.trackId,
+                              trackName: track.trackName,
+                              description: `Set utility pan to ${value.toFixed(2)}`,
+                              parameters: {
+                                trackId: track.trackId,
+                                instanceId: utilityPlugin.instanceId,
+                                paramId: 'pan',
+                                value,
+                              },
+                            });
+                          }}
+                          className="accent-cyan-400"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
                   <RegionLane
                     track={track}
                     regions={trackRegions}
@@ -157,6 +279,7 @@ function TimelineWorkspaceComponent({
                         },
                       });
                     }}
+                    showPlayhead={Boolean(getTransportPlayheadSeconds)}
                   />
 
                   <AutomationLane
@@ -179,6 +302,7 @@ function TimelineWorkspaceComponent({
                         },
                       });
                     }}
+                    showPlayhead={Boolean(getTransportPlayheadSeconds)}
                   />
                 </div>
               </div>

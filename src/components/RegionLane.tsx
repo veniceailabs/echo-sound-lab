@@ -11,6 +11,7 @@ interface RegionLaneProps {
   onSelectRegion: (regionId: string) => void;
   onMoveRegion: (region: ReplayRegionState, nextStartSec: number) => void;
   onSplitRegion: (region: ReplayRegionState, splitTimeSec: number) => void;
+  showPlayhead?: boolean;
 }
 
 function RegionLaneComponent({
@@ -23,6 +24,7 @@ function RegionLaneComponent({
   onSelectRegion,
   onMoveRegion,
   onSplitRegion,
+  showPlayhead = false,
 }: RegionLaneProps) {
   return (
     <div className="rounded-xl border border-white/10 bg-slate-950/50 p-2">
@@ -34,6 +36,12 @@ function RegionLaneComponent({
         className="relative overflow-hidden rounded-lg border border-white/5 bg-slate-900/70"
         style={{ width: `${laneWidth}px`, minHeight: '54px' }}
       >
+        {showPlayhead && (
+          <div
+            className="pointer-events-none absolute bottom-0 top-0 z-10 w-px bg-cyan-300/80"
+            style={{ left: 'var(--timeline-playhead-left, 0px)' }}
+          />
+        )}
         {regions.map((region) => {
           const left = Math.max(0, region.startTimeSec * pxPerSec);
           const width = Math.max(36, region.durationSec * pxPerSec);

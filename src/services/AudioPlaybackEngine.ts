@@ -139,6 +139,9 @@ export class AudioPlaybackEngine {
   private currentState: ReplayState | null = null;
   private readonly trackRuntimes = new Map<string, TrackRuntime>();
   private readonly regionBuffers = new Map<string, AudioBufferLike>();
+  private isPlaying = false;
+  private playheadSec = 0;
+  private startedAtContextSec = 0;
 
   constructor(options: AudioPlaybackEngineOptions = {}) {
     this.createAudioContext = options.createAudioContext || getDefaultContextFactory();
@@ -201,8 +204,9 @@ export class AudioPlaybackEngine {
   playFrom(playheadSec = 0): void {
     if (!this.currentState) return;
     const context = this.requireContext();
-
-    this.stop();
+    const duration = this.getDuration();
+    const clampedStart = clamp(playheadSec, 0, duration);
+    this.stopActiveSources();
 
     for (const runtime of this.trackRuntimes.values()) {
       for (const region of runtime.regions) {
@@ -210,15 +214,15 @@ export class AudioPlaybackEngine {
         if (!buffer) continue;
 
         const regionEnd = region.startTimeSec + region.durationSec;
-        if (regionEnd <= playheadSec) continue;
+        if (regionEnd <= clampedStart) continue;
 
         const source = context.createBufferSource();
         source.buffer = buffer;
         source.onended = null;
         this.connectNodes(source, runtime.inputNode);
 
-        const startOffsetIntoRegion = Math.max(0, playheadSec - region.startTimeSec);
-        const when = context.currentTime + Math.max(0, region.startTimeSec - playheadSec);
+        const startOffsetIntoRegion = Math.max(0, clampedStart - region.startTimeSec);
+        const when = context.currentTime + Math.max(0, region.startTimeSec - clampedStart);
         const offset = Math.max(0, region.offsetSec + startOffsetIntoRegion);
         const duration = Math.max(0, region.durationSec - startOffsetIntoRegion);
         if (duration <= 0) continue;
@@ -227,20 +231,33 @@ export class AudioPlaybackEngine {
         runtime.activeSources.set(region.regionId, source);
       }
     }
+
+    this.playheadSec = clampedStart;
+    this.startedAtContextSec = context.currentTime;
+    this.isPlaying = true;
+  }
+
+  pause(): void {
+    if (!this.isPlaying) return;
+    this.playheadSec = this.getCurrentTime();
+    this.isPlaying = false;
+    this.stopActiveSources();
+  }
+
+  seek(nextPlayheadSec: number): void {
+    const duration = this.getDuration();
+    const clamped = clamp(nextPlayheadSec, 0, duration);
+    this.playheadSec = clamped;
+    if (this.isPlaying) {
+      this.playFrom(clamped);
+    }
   }
 
   stop(): void {
-    for (const runtime of this.trackRuntimes.values()) {
-      for (const source of runtime.activeSources.values()) {
-        try {
-          source.stop();
-        } catch {
-          // no-op
-        }
-        this.disconnectNode(source);
-      }
-      runtime.activeSources.clear();
-    }
+    this.isPlaying = false;
+    this.playheadSec = 0;
+    this.startedAtContextSec = 0;
+    this.stopActiveSources();
   }
 
   dispose(): void {
@@ -281,6 +298,28 @@ export class AudioPlaybackEngine {
       plugins,
       activeSources: Array.from(runtime.activeSources.entries()).map(([regionId, node]) => ({ regionId, node })),
     };
+  }
+
+  getCurrentTime(): number {
+    const duration = this.getDuration();
+    if (!this.isPlaying) {
+      return clamp(this.playheadSec, 0, duration);
+    }
+    const context = this.requireContext();
+    const elapsed = Math.max(0, context.currentTime - this.startedAtContextSec);
+    return clamp(this.playheadSec + elapsed, 0, duration);
+  }
+
+  getDuration(): number {
+    if (!this.currentState || this.currentState.regions.length === 0) return 0;
+    return this.currentState.regions.reduce(
+      (max, region) => Math.max(max, region.startTimeSec + region.durationSec),
+      0
+    );
+  }
+
+  getIsPlaying(): boolean {
+    return this.isPlaying;
   }
 
   private requireContext(): AudioContextLike {
@@ -488,6 +527,20 @@ export class AudioPlaybackEngine {
     this.disconnectNode(runtime.gainNode);
   }
 
+  private stopActiveSources(): void {
+    for (const runtime of this.trackRuntimes.values()) {
+      for (const source of runtime.activeSources.values()) {
+        try {
+          source.stop();
+        } catch {
+          // no-op
+        }
+        this.disconnectNode(source);
+      }
+      runtime.activeSources.clear();
+    }
+  }
+
   private connectNodes(source: AudioNodeLike, destination: AudioNodeLike): void {
     try {
       source.connect(destination);
@@ -507,4 +560,3 @@ export class AudioPlaybackEngine {
 }
 
 export const audioPlaybackEngine = new AudioPlaybackEngine();
-
