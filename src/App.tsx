@@ -1,4 +1,4 @@
-import React, { startTransition, useState, useEffect, useRef, useCallback } from 'react';
+import React, { startTransition, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AppState, AudioMetrics, ProcessingConfig, Suggestion, EchoReport, RevisionEntry, ReferenceTrack, MixSignature, GeneratedSong, Stem, EQSettings, DynamicEQConfig, EngineMode, ProcessingAction, SSCScan, PreservationMode, CohesionTrackReport, BatchState } from './types';
 import { audioEngine } from './services/audioEngine';
 import { audioPerceptionLayer } from './services/audioPerceptionLayer';
@@ -52,6 +52,8 @@ import { useAudioContextState } from './hooks/useAudioContextState';
 import { AudioResumeGuard } from './components/AudioResumeGuard';
 import TimelineWorkspace, { type TimelineActionRequest } from './components/TimelineWorkspace';
 import HistoryScrubber from './components/HistoryScrubber';
+import BranchSelector from './components/BranchSelector';
+import MergeModal from './components/MergeModal';
 
 // V.E.N.U.M. - Viral Emergent Network Utility Matrix
 import { generateEchoReportCard, ShareableCard, GenerateEchoReportCardOptions } from './services/venumEngine';
@@ -83,9 +85,14 @@ import { ExecutionPayload } from './types/execution-contract';
 import { executionSessionService } from './services/executionSessionService';
 import { signExecutionPayload } from './services/executionSigning';
 import { deterministicId } from './services/deterministicJson';
-import { ReplayState, runDeterministicReplay } from './services/deterministicReplayService';
+import { ReplayState } from './services/deterministicReplayService';
 import { provenanceLedger } from './services/ProvenanceLedger';
-import { TimelineHydrationMetrics, TimelineReplayCache } from './services/timelineReplayCache';
+import { TimelineHydrationMetrics } from './services/timelineReplayCache';
+import {
+  BranchEntity,
+  DeterministicBranchRegistry,
+  MergeStrategy,
+} from './services/timelineBranchingService';
 
 // Day 3: APL Real Analysis (replaces mock proposals)
 import { aplAnalysisService } from './services/APLAnalysisService';
@@ -370,8 +377,12 @@ const App: React.FC = () => {
   const [timelineOutputHash, setTimelineOutputHash] = useState<string>('pending');
   const [timelineHydrationMetrics, setTimelineHydrationMetrics] = useState<TimelineHydrationMetrics | null>(null);
   const [timelineDispatchError, setTimelineDispatchError] = useState<string | null>(null);
+  const [timelineBranches, setTimelineBranches] = useState<BranchEntity[]>([]);
+  const [activeTimelineBranchId, setActiveTimelineBranchId] = useState<string | null>(null);
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [mergeError, setMergeError] = useState<string | null>(null);
   const [isTimelineDispatching, setIsTimelineDispatching] = useState(false);
-  const timelineCacheRef = useRef<TimelineReplayCache | null>(null);
+  const timelineBranchRegistryRef = useRef<DeterministicBranchRegistry | null>(null);
   const timelineActionCounterRef = useRef(0);
 
   // ===== PHASE 5: DAILY PROVING STATE =====
@@ -397,48 +408,62 @@ const App: React.FC = () => {
     }
   }, [themeMode]);
 
+  const syncTimelineBranchState = useCallback((branchId: string) => {
+    const registry = timelineBranchRegistryRef.current;
+    if (!registry) return;
+
+    setTimelineBranches(registry.listBranches());
+    setActiveTimelineBranchId(branchId);
+    setTimelineActionHistory(registry.getBranchActions(branchId));
+    setTimelineHashHistory(registry.getBranchHashHistory(branchId));
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-    void runDeterministicReplay(INITIAL_TIMELINE_STATE, []).then((result) => {
-      if (cancelled) return;
-      const cache = new TimelineReplayCache(result.outputState, result.outputStateHash, {
-        snapshotInterval: TIMELINE_SNAPSHOT_INTERVAL,
-        workspaceId: result.outputState.workspaceId,
-      });
-      timelineCacheRef.current = cache;
-      setTimelineState(result.outputState);
-      setTimelineOutputHash(result.outputStateHash);
-      setTimelineActionHistory(cache.getActions());
-      setTimelineHashHistory(cache.getHashHistory());
-      setTimelineScrubIndex(0);
-      setTimelineHydrationMetrics({
-        targetIndex: 0,
-        fromSnapshotIndex: 0,
-        replayedActionCount: 0,
-        durationMs: 0,
-        snapshotInterval: TIMELINE_SNAPSHOT_INTERVAL,
-      });
-    }).catch((error) => {
-      if (!cancelled) {
-        console.error('[Timeline] Failed to initialize deterministic timeline state:', error);
-        setTimelineDispatchError((error as Error).message);
+    void (async () => {
+      try {
+        const registry = await DeterministicBranchRegistry.create(INITIAL_TIMELINE_STATE, {
+          snapshotInterval: TIMELINE_SNAPSHOT_INTERVAL,
+          rootBranchName: 'main',
+          workspaceId: INITIAL_TIMELINE_STATE.workspaceId,
+        });
+        if (cancelled) return;
+
+        timelineBranchRegistryRef.current = registry;
+        const activeBranch = registry.getActiveBranch();
+        const checkout = await registry.checkoutBranch(activeBranch.id);
+        if (cancelled) return;
+
+        startTransition(() => {
+          syncTimelineBranchState(activeBranch.id);
+          setTimelineState(checkout.state);
+          setTimelineOutputHash(checkout.outputStateHash);
+          setTimelineScrubIndex(activeBranch.headIndex);
+          setTimelineHydrationMetrics(checkout.metrics);
+          setTimelineDispatchError(null);
+        });
+      } catch (error) {
+        if (!cancelled) {
+          console.error('[Timeline] Failed to initialize branching registry:', error);
+          setTimelineDispatchError((error as Error).message);
+        }
       }
-    });
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [syncTimelineBranchState]);
 
   useEffect(() => {
-    const cache = timelineCacheRef.current;
-    if (!cache) return;
+    const registry = timelineBranchRegistryRef.current;
+    if (!registry || !activeTimelineBranchId) return;
 
     let cancelled = false;
-    const boundedIndex = Math.max(0, Math.min(timelineScrubIndex, cache.getLength()));
+    const boundedIndex = Math.max(0, Math.min(timelineScrubIndex, registry.getBranchLength(activeTimelineBranchId)));
     const startMs = performance.now();
 
-    void cache.hydrateToIndex(boundedIndex).then((result) => {
+    void registry.hydrateBranchToIndex(activeTimelineBranchId, boundedIndex).then((result) => {
       if (cancelled) return;
       const durationMs = performance.now() - startMs;
       const metrics: TimelineHydrationMetrics = {
@@ -448,7 +473,7 @@ const App: React.FC = () => {
 
       if (durationMs > 16) {
         console.warn(
-          `[Timeline] Scrub hydration exceeded frame budget: ${durationMs.toFixed(2)}ms (index=${boundedIndex}, replayed=${metrics.replayedActionCount}, snapshot=${metrics.fromSnapshotIndex})`
+          `[Timeline] Scrub hydration exceeded frame budget: ${durationMs.toFixed(2)}ms (branch=${activeTimelineBranchId}, index=${boundedIndex}, replayed=${metrics.replayedActionCount}, snapshot=${metrics.fromSnapshotIndex})`
         );
       }
 
@@ -466,18 +491,18 @@ const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [timelineScrubIndex, timelineActionHistory.length]);
+  }, [activeTimelineBranchId, timelineActionHistory.length, timelineScrubIndex]);
 
   const isTimelinePreviewMode = timelineScrubIndex < timelineActionHistory.length;
 
   const handleTimelineDispatchAction = useCallback(async (request: TimelineActionRequest) => {
-    const cache = timelineCacheRef.current;
-    if (!cache) {
-      setTimelineDispatchError('Timeline cache is not initialized yet.');
+    const registry = timelineBranchRegistryRef.current;
+    if (!registry || !activeTimelineBranchId) {
+      setTimelineDispatchError('Branch registry is not initialized yet.');
       return;
     }
     if (isTimelineDispatching) return;
-    if (timelineScrubIndex < cache.getLength()) {
+    if (timelineScrubIndex < registry.getBranchLength(activeTimelineBranchId)) {
       setTimelineDispatchError('Timeline is in read-only preview mode. Jump to latest or restore before editing.');
       return;
     }
@@ -486,7 +511,7 @@ const App: React.FC = () => {
     setTimelineDispatchError(null);
 
     try {
-      const currentTimelineState = cache.getLatestState();
+      const currentTimelineState = timelineState;
       const proposalIndex = timelineActionCounterRef.current++;
       const proposalId = deterministicId('timeline-proposal', {
         index: proposalIndex,
@@ -568,11 +593,10 @@ const App: React.FC = () => {
         throw new Error(executionResult.error || 'Execution bridge rejected timeline action.');
       }
 
-      const replayResult = await cache.appendProposal(proposal);
-      const nextHistoryLength = cache.getLength();
+      const replayResult = await registry.appendToActiveBranch(proposal);
+      const nextHistoryLength = registry.getBranchLength(activeTimelineBranchId);
       startTransition(() => {
-        setTimelineActionHistory(cache.getActions());
-        setTimelineHashHistory(cache.getHashHistory());
+        syncTimelineBranchState(activeTimelineBranchId);
         setTimelineState(replayResult.state);
         setTimelineOutputHash(replayResult.outputStateHash);
         setTimelineHydrationMetrics(replayResult.metrics);
@@ -584,34 +608,39 @@ const App: React.FC = () => {
     } finally {
       setIsTimelineDispatching(false);
     }
-  }, [isTimelineDispatching, timelineScrubIndex]);
+  }, [activeTimelineBranchId, isTimelineDispatching, syncTimelineBranchState, timelineScrubIndex, timelineState]);
 
   const handleTimelineScrubChange = useCallback((index: number) => {
-    const cache = timelineCacheRef.current;
-    const maxIndex = cache ? cache.getLength() : timelineActionHistory.length;
+    const registry = timelineBranchRegistryRef.current;
+    const maxIndex = (registry && activeTimelineBranchId)
+      ? registry.getBranchLength(activeTimelineBranchId)
+      : timelineActionHistory.length;
     const bounded = Math.max(0, Math.min(index, maxIndex));
     setTimelineScrubIndex(bounded);
-  }, [timelineActionHistory.length]);
+  }, [activeTimelineBranchId, timelineActionHistory.length]);
 
   const handleTimelineJumpLatest = useCallback(() => {
-    const cache = timelineCacheRef.current;
-    setTimelineScrubIndex(cache ? cache.getLength() : timelineActionHistory.length);
+    const registry = timelineBranchRegistryRef.current;
+    if (registry && activeTimelineBranchId) {
+      setTimelineScrubIndex(registry.getBranchLength(activeTimelineBranchId));
+    } else {
+      setTimelineScrubIndex(timelineActionHistory.length);
+    }
     setTimelineDispatchError(null);
-  }, [timelineActionHistory.length]);
+  }, [activeTimelineBranchId, timelineActionHistory.length]);
 
   const handleTimelineRestoreToIndex = useCallback((index: number) => {
-    const cache = timelineCacheRef.current;
-    if (!cache) {
-      setTimelineDispatchError('Timeline cache is not initialized yet.');
+    const registry = timelineBranchRegistryRef.current;
+    if (!registry || !activeTimelineBranchId) {
+      setTimelineDispatchError('Branch registry is not initialized yet.');
       return;
     }
     void (async () => {
-      const bounded = Math.max(0, Math.min(index, cache.getLength()));
+      const bounded = Math.max(0, Math.min(index, registry.getBranchLength(activeTimelineBranchId)));
       try {
-        const restored = await cache.restoreToIndex(bounded);
+        const restored = await registry.restoreBranchToIndex(activeTimelineBranchId, bounded);
         startTransition(() => {
-          setTimelineActionHistory(cache.getActions());
-          setTimelineHashHistory(cache.getHashHistory());
+          syncTimelineBranchState(activeTimelineBranchId);
           setTimelineState(restored.state);
           setTimelineOutputHash(restored.outputStateHash);
           setTimelineHydrationMetrics(restored.metrics);
@@ -622,17 +651,126 @@ const App: React.FC = () => {
         setTimelineDispatchError((error as Error).message);
       }
     })();
-  }, [timelineActionHistory.length]);
+  }, [activeTimelineBranchId, syncTimelineBranchState]);
 
-  const timelineProvenanceEvents = provenanceLedger
-    .getEntries()
-    .filter((entry) => ['ADD_TRACK', 'MOVE_REGION', 'SPLIT_REGION', 'SET_AUTOMATION_POINT'].includes(entry.actionType))
-    .map((entry) => ({
-      proposalId: entry.proposalId,
-      actionType: entry.actionType,
-      actorId: entry.actor.id,
-      timestamp: entry.timestamp,
-    }));
+  const handleTimelineCheckoutBranch = useCallback(async (branchId: string) => {
+    const registry = timelineBranchRegistryRef.current;
+    if (!registry || !branchId || isTimelineDispatching) return;
+    if (activeTimelineBranchId === branchId) return;
+
+    setIsTimelineDispatching(true);
+    setTimelineDispatchError(null);
+    setMergeError(null);
+    try {
+      const checkout = await registry.checkoutBranch(branchId);
+      startTransition(() => {
+        syncTimelineBranchState(branchId);
+        setTimelineState(checkout.state);
+        setTimelineOutputHash(checkout.outputStateHash);
+        setTimelineHydrationMetrics(checkout.metrics);
+        setTimelineScrubIndex(checkout.branch.headIndex);
+      });
+    } catch (error) {
+      setTimelineDispatchError((error as Error).message);
+    } finally {
+      setIsTimelineDispatching(false);
+    }
+  }, [activeTimelineBranchId, isTimelineDispatching, syncTimelineBranchState]);
+
+  const handleTimelineBranchFromState = useCallback(async (index: number) => {
+    const registry = timelineBranchRegistryRef.current;
+    if (!registry || !activeTimelineBranchId || isTimelineDispatching) return;
+
+    const suggested = `branch-${index}`;
+    const rawName = typeof window !== 'undefined'
+      ? window.prompt('New branch name', suggested)
+      : suggested;
+    const branchName = rawName?.trim();
+    if (!branchName) return;
+
+    setIsTimelineDispatching(true);
+    setTimelineDispatchError(null);
+    setMergeError(null);
+    try {
+      const fork = await registry.forkBranch(index, branchName);
+      const checkout = await registry.checkoutBranch(fork.id);
+      startTransition(() => {
+        syncTimelineBranchState(fork.id);
+        setTimelineState(checkout.state);
+        setTimelineOutputHash(checkout.outputStateHash);
+        setTimelineHydrationMetrics(checkout.metrics);
+        setTimelineScrubIndex(checkout.branch.headIndex);
+      });
+    } catch (error) {
+      setTimelineDispatchError((error as Error).message);
+    } finally {
+      setIsTimelineDispatching(false);
+    }
+  }, [activeTimelineBranchId, isTimelineDispatching, syncTimelineBranchState]);
+
+  const handleTimelineMergeBranches = useCallback(async (params: {
+    sourceBranchId: string;
+    targetBranchId: string;
+    strategy: MergeStrategy;
+  }) => {
+    const registry = timelineBranchRegistryRef.current;
+    if (!registry || isTimelineDispatching) return;
+
+    setIsTimelineDispatching(true);
+    setMergeError(null);
+    setTimelineDispatchError(null);
+
+    try {
+      const merged = await registry.mergeBranches(
+        params.sourceBranchId,
+        params.targetBranchId,
+        params.strategy
+      );
+
+      if (activeTimelineBranchId === params.targetBranchId) {
+        const checkout = await registry.checkoutBranch(params.targetBranchId);
+        startTransition(() => {
+          syncTimelineBranchState(params.targetBranchId);
+          setTimelineState(checkout.state);
+          setTimelineOutputHash(checkout.outputStateHash);
+          setTimelineHydrationMetrics(checkout.metrics);
+          setTimelineScrubIndex(merged.headIndex);
+          setShowMergeModal(false);
+        });
+      } else {
+        startTransition(() => {
+          setTimelineBranches(registry.listBranches());
+          setShowMergeModal(false);
+        });
+      }
+    } catch (error) {
+      const message = (error as Error).message;
+      setMergeError(message);
+      setTimelineDispatchError(message);
+    } finally {
+      setIsTimelineDispatching(false);
+    }
+  }, [activeTimelineBranchId, isTimelineDispatching, syncTimelineBranchState]);
+
+  const timelineProvenanceEvents = useMemo(() => {
+    const proposalMeta = new Map<string, { actorId: string; timestamp: number }>();
+    for (const entry of provenanceLedger.getEntries()) {
+      proposalMeta.set(entry.proposalId, {
+        actorId: entry.actor.id,
+        timestamp: entry.timestamp,
+      });
+    }
+
+    return timelineActionHistory.map((proposal, index) => {
+      const meta = proposalMeta.get(proposal.proposalId);
+      return {
+        proposalId: proposal.proposalId,
+        actionType: proposal.action.type,
+        actorId: meta?.actorId || 'human:timeline-editor',
+        timestamp: meta?.timestamp || Date.now() + index,
+      };
+    });
+  }, [timelineActionHistory]);
 
   const handleResetToOriginal = useCallback(() => {
     audioEngine.resetToOriginal();
@@ -3795,11 +3933,25 @@ const App: React.FC = () => {
           {appState === AppState.READY && (
             <>
               <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
+                <BranchSelector
+                  branches={timelineBranches}
+                  activeBranchId={activeTimelineBranchId}
+                  isBusy={isTimelineDispatching}
+                  onCheckout={handleTimelineCheckoutBranch}
+                  onOpenMerge={() => {
+                    setMergeError(null);
+                    setShowMergeModal(true);
+                  }}
+                />
+              </div>
+              <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
                 <HistoryScrubber
                   totalSteps={timelineActionHistory.length}
                   currentIndex={timelineScrubIndex}
                   currentHash={timelineHashHistory[timelineScrubIndex] || timelineOutputHash}
                   isPreviewMode={isTimelinePreviewMode}
+                  canBranchFromState={isTimelinePreviewMode}
+                  isBusy={isTimelineDispatching}
                   hydrationDurationMs={timelineHydrationMetrics?.durationMs}
                   replayedActionCount={timelineHydrationMetrics?.replayedActionCount}
                   fromSnapshotIndex={timelineHydrationMetrics?.fromSnapshotIndex}
@@ -3807,6 +3959,7 @@ const App: React.FC = () => {
                   onChangeIndex={handleTimelineScrubChange}
                   onJumpLatest={handleTimelineJumpLatest}
                   onRestoreToIndex={handleTimelineRestoreToIndex}
+                  onBranchFromState={handleTimelineBranchFromState}
                 />
               </div>
               <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
@@ -4191,6 +4344,20 @@ const App: React.FC = () => {
           onClearSnapshotAB={handleClearSnapshotAB}
         />
       )}
+
+      <MergeModal
+        isOpen={showMergeModal}
+        branches={timelineBranches}
+        defaultTargetBranchId={activeTimelineBranchId}
+        isMerging={isTimelineDispatching}
+        error={mergeError}
+        onClose={() => {
+          if (isTimelineDispatching) return;
+          setShowMergeModal(false);
+          setMergeError(null);
+        }}
+        onMerge={handleTimelineMergeBranches}
+      />
 
       {/* Capability ACC Modal (Phase 2.2.4) */}
       <CapabilityACCModal

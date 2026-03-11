@@ -12,6 +12,8 @@ interface HistoryScrubberProps {
   currentIndex: number;
   currentHash: string;
   isPreviewMode: boolean;
+  canBranchFromState?: boolean;
+  isBusy?: boolean;
   hydrationDurationMs?: number;
   replayedActionCount?: number;
   fromSnapshotIndex?: number;
@@ -20,6 +22,7 @@ interface HistoryScrubberProps {
   onChangeIndex: (index: number) => void;
   onJumpLatest: () => void;
   onRestoreToIndex: (index: number) => void;
+  onBranchFromState?: (index: number) => void;
 }
 
 function HistoryScrubberComponent({
@@ -27,6 +30,8 @@ function HistoryScrubberComponent({
   currentIndex,
   currentHash,
   isPreviewMode,
+  canBranchFromState = false,
+  isBusy = false,
   hydrationDurationMs,
   replayedActionCount,
   fromSnapshotIndex,
@@ -35,6 +40,7 @@ function HistoryScrubberComponent({
   onChangeIndex,
   onJumpLatest,
   onRestoreToIndex,
+  onBranchFromState,
 }: HistoryScrubberProps) {
   const selectedEvent = currentIndex > 0 ? events[currentIndex - 1] : null;
 
@@ -50,8 +56,16 @@ function HistoryScrubberComponent({
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => onBranchFromState?.(currentIndex)}
+            disabled={!canBranchFromState || isBusy || !onBranchFromState}
+            className="rounded border border-fuchsia-400/30 bg-fuchsia-500/10 px-2.5 py-1.5 text-[11px] uppercase tracking-[0.12em] text-fuchsia-100 hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Branch from Here
+          </button>
+          <button
+            type="button"
             onClick={onJumpLatest}
-            disabled={currentIndex === totalSteps}
+            disabled={currentIndex === totalSteps || isBusy}
             className="rounded border border-white/15 bg-slate-900 px-2.5 py-1.5 text-[11px] uppercase tracking-[0.12em] text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Latest
@@ -59,7 +73,7 @@ function HistoryScrubberComponent({
           <button
             type="button"
             onClick={() => onRestoreToIndex(currentIndex)}
-            disabled={!isPreviewMode}
+            disabled={!isPreviewMode || isBusy}
             className="rounded border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] uppercase tracking-[0.12em] text-amber-200 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Restore
@@ -72,6 +86,7 @@ function HistoryScrubberComponent({
         min={0}
         max={totalSteps}
         value={currentIndex}
+        disabled={isBusy}
         onChange={(event) => onChangeIndex(Number(event.target.value))}
         className="w-full accent-cyan-400"
       />

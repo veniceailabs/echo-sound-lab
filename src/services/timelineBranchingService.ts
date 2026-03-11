@@ -230,6 +230,18 @@ export class DeterministicBranchRegistry {
       .sort((a, b) => a.createdAt - b.createdAt);
   }
 
+  getBranchActions(branchId: string): APLProposal[] {
+    return this.getRuntime(branchId).cache.getActions();
+  }
+
+  getBranchHashHistory(branchId: string): string[] {
+    return this.getRuntime(branchId).cache.getHashHistory();
+  }
+
+  getBranchLength(branchId: string): number {
+    return this.getRuntime(branchId).cache.getLength();
+  }
+
   private commonPrefixLength(left: APLProposal[], right: APLProposal[]): number {
     const max = Math.min(left.length, right.length);
     let idx = 0;
@@ -366,6 +378,28 @@ export class DeterministicBranchRegistry {
   async hydrateBranchHead(branchId: string): Promise<TimelineHydrationResult> {
     const runtime = this.getRuntime(branchId);
     return runtime.cache.hydrateToIndex(runtime.meta.headIndex);
+  }
+
+  async hydrateBranchToIndex(branchId: string, index: number): Promise<TimelineHydrationResult> {
+    const runtime = this.getRuntime(branchId);
+    const bounded = Math.max(0, Math.min(index, runtime.cache.getLength()));
+    return runtime.cache.hydrateToIndex(bounded);
+  }
+
+  async restoreBranchToIndex(branchId: string, index: number): Promise<BranchMutationResult> {
+    const runtime = this.getRuntime(branchId);
+    const bounded = Math.max(0, Math.min(index, runtime.cache.getLength()));
+    const restored = await runtime.cache.restoreToIndex(bounded);
+    runtime.meta.headIndex = runtime.cache.getLength();
+    runtime.meta.headHash = restored.outputStateHash;
+    runtime.meta.updatedAt = Date.now();
+
+    return {
+      branch: cloneBranch(runtime.meta),
+      state: restored.state,
+      outputStateHash: restored.outputStateHash,
+      metrics: restored.metrics,
+    };
   }
 
   async mergeBranches(
