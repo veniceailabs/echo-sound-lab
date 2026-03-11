@@ -5,6 +5,12 @@
  * Each template is a function that takes parameters and returns valid AppleScript code.
  */
 
+const escapeAppleScriptString = (value: string) =>
+  value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\r?\n/g, ' ');
+
 export const LogicTemplates = {
   /**
    * Sets the volume fader of a specific track.
@@ -12,7 +18,7 @@ export const LogicTemplates = {
    */
   setTrackVolume: (trackName: string, dbValue: number) => `
     tell application "Logic Pro X"
-      set t to track "${trackName}"
+      set t to track "${escapeAppleScriptString(trackName)}"
       set automation mode of t to Read
       set volume of t to ${dbValue}
     end tell
@@ -23,7 +29,7 @@ export const LogicTemplates = {
    */
   setTrackMute: (trackName: string, muted: boolean) => `
     tell application "Logic Pro X"
-      set t to track "${trackName}"
+      set t to track "${escapeAppleScriptString(trackName)}"
       set mute of t to ${muted}
     end tell
   `,
@@ -33,10 +39,10 @@ export const LogicTemplates = {
    */
   applyLimiting: (trackName: string, threshold: number) => `
     tell application "Logic Pro X"
-      set t to track "${trackName}"
+      set t to track "${escapeAppleScriptString(trackName)}"
       -- Placeholder: In real implementation, this would insert a compressor
       -- and set threshold. For now, log the action.
-      log "Apply limiting to ${trackName} at threshold ${threshold}dB"
+      log "Apply limiting to ${escapeAppleScriptString(trackName)} at threshold ${threshold}dB"
     end tell
   `,
 
@@ -45,7 +51,7 @@ export const LogicTemplates = {
    */
   normalizeTrack: (trackName: string, targetLevel: number) => `
     tell application "Logic Pro X"
-      set t to track "${trackName}"
+      set t to track "${escapeAppleScriptString(trackName)}"
       -- Placeholder: Real normalization would analyze peak and adjust
       set volume of t to ${targetLevel}
     end tell
@@ -56,9 +62,9 @@ export const LogicTemplates = {
    */
   removeDCOffset: (trackName: string) => `
     tell application "Logic Pro X"
-      set t to track "${trackName}"
+      set t to track "${escapeAppleScriptString(trackName)}"
       -- Placeholder: Real DC removal would apply a high-pass filter
-      log "Remove DC offset from ${trackName}"
+      log "Remove DC offset from ${escapeAppleScriptString(trackName)}"
     end tell
   `,
 
@@ -67,7 +73,16 @@ export const LogicTemplates = {
    */
   renameTrack: (currentName: string, newName: string) => `
     tell application "Logic Pro X"
-      set name of track "${currentName}" to "${newName}"
+      set name of track "${escapeAppleScriptString(currentName)}" to "${escapeAppleScriptString(newName)}"
+    end tell
+  `,
+
+  /**
+   * Logs deterministic timeline actions (non-destructive routing shim).
+   */
+  logTimelineAction: (actionType: string, payload: Record<string, unknown>) => `
+    tell application "Logic Pro X"
+      log "Timeline action ${escapeAppleScriptString(actionType)}: ${escapeAppleScriptString(JSON.stringify(payload))}"
     end tell
   `
 };
@@ -82,5 +97,9 @@ export const ProposalMapper: Record<string, (params: Record<string, any>) => str
   'NORMALIZATION': (params: any) => LogicTemplates.normalizeTrack(params.track || 'Main', params.targetLevel || -14),
   'DC_REMOVAL': (params: any) => LogicTemplates.removeDCOffset(params.track || 'Main'),
   'MUTE_TOGGLE': (params: any) => LogicTemplates.setTrackMute(params.track || 'Main', params.muted || false),
-  'RENAME': (params: any) => LogicTemplates.renameTrack(params.track || 'Main', params.newName || 'Renamed')
+  'RENAME': (params: any) => LogicTemplates.renameTrack(params.track || 'Main', params.newName || 'Renamed'),
+  'ADD_TRACK': (params: any) => LogicTemplates.logTimelineAction('ADD_TRACK', params),
+  'MOVE_REGION': (params: any) => LogicTemplates.logTimelineAction('MOVE_REGION', params),
+  'SPLIT_REGION': (params: any) => LogicTemplates.logTimelineAction('SPLIT_REGION', params),
+  'SET_AUTOMATION_POINT': (params: any) => LogicTemplates.logTimelineAction('SET_AUTOMATION_POINT', params),
 };

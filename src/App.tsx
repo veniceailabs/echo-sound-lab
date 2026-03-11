@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { startTransition, useState, useEffect, useRef, useCallback } from 'react';
 import { AppState, AudioMetrics, ProcessingConfig, Suggestion, EchoReport, RevisionEntry, ReferenceTrack, MixSignature, GeneratedSong, Stem, EQSettings, DynamicEQConfig, EngineMode, ProcessingAction, SSCScan, PreservationMode, CohesionTrackReport, BatchState } from './types';
 import { audioEngine } from './services/audioEngine';
 import { audioPerceptionLayer } from './services/audioPerceptionLayer';
@@ -50,6 +50,7 @@ import { useViewport } from './context/ViewportContext';
 import { debugTelemetryService } from './services/debugTelemetryService';
 import { useAudioContextState } from './hooks/useAudioContextState';
 import { AudioResumeGuard } from './components/AudioResumeGuard';
+import TimelineWorkspace, { type TimelineActionRequest } from './components/TimelineWorkspace';
 
 // V.E.N.U.M. - Viral Emergent Network Utility Matrix
 import { generateEchoReportCard, ShareableCard, GenerateEchoReportCardOptions } from './services/venumEngine';
@@ -76,6 +77,12 @@ import { generateMockProposals } from './utils/mockAPLProposals';
 // ExecutionBridge is called directly from ProposalCard
 // ExecutionService is a singleton on the main process
 import { executionService } from './services/ExecutionService';
+import { ExecutionBridge } from './services/ExecutionBridge';
+import { ExecutionPayload } from './types/execution-contract';
+import { executionSessionService } from './services/executionSessionService';
+import { signExecutionPayload } from './services/executionSigning';
+import { deterministicId } from './services/deterministicJson';
+import { ReplayState, runDeterministicReplay } from './services/deterministicReplayService';
 
 // Day 3: APL Real Analysis (replaces mock proposals)
 import { aplAnalysisService } from './services/APLAnalysisService';
@@ -108,6 +115,43 @@ const MODE_LABELS: Record<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO', string> = 
   MULTI: 'Stems',
   AI_STUDIO: 'AI Studio',
   VIDEO: 'SFS Video Engine',
+};
+
+const INITIAL_TIMELINE_STATE: ReplayState = {
+  sessionId: 'timeline-session-main',
+  workspaceId: 'timeline-workspace-main',
+  tracks: [
+    {
+      trackId: 'track-main',
+      trackName: 'Main',
+      kind: 'audio',
+      gainDb: 0,
+      pan: 0,
+      muted: false,
+      solo: false,
+      limiterThresholdDb: null,
+      normalizedTargetLUFS: null,
+      dcRemovalHz: null,
+      appliedProposalIds: [],
+      trackStateHash: '',
+    },
+  ],
+  regions: [
+    {
+      regionId: 'region-main-1',
+      trackId: 'track-main',
+      sourceId: 'uploaded-audio',
+      startTimeSec: 0,
+      offsetSec: 0,
+      durationSec: 8,
+      gainDb: 0,
+    },
+  ],
+  automation: [],
+  metadata: {
+    sampleRate: 44100,
+    channelCount: 2,
+  },
 };
 
 // Initialize Capability Authority (Phase 2.2.4)
@@ -315,6 +359,12 @@ const App: React.FC = () => {
   const [isAplScanning, setIsAplScanning] = useState(false);
   const [aplDataSource, setAplDataSource] = useState<'real' | 'demo'>('real');
   const [aplDataSourceReason, setAplDataSourceReason] = useState<string | null>(null);
+  const [timelineState, setTimelineState] = useState<ReplayState>(INITIAL_TIMELINE_STATE);
+  const [timelineOutputHash, setTimelineOutputHash] = useState<string>('pending');
+  const [timelineDispatchError, setTimelineDispatchError] = useState<string | null>(null);
+  const [isTimelineDispatching, setIsTimelineDispatching] = useState(false);
+  const timelineStateRef = useRef<ReplayState>(INITIAL_TIMELINE_STATE);
+  const timelineActionCounterRef = useRef(0);
 
   // ===== PHASE 5: DAILY PROVING STATE =====
   const [systemHealthStatus, setSystemHealthStatus] = useState<'HEALTHY' | 'DEGRADED' | 'CRITICAL' | 'CHECKING'>('CHECKING');
@@ -338,6 +388,134 @@ const App: React.FC = () => {
       root.classList.add('theme-dark');
     }
   }, [themeMode]);
+
+  useEffect(() => {
+    timelineStateRef.current = timelineState;
+  }, [timelineState]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void runDeterministicReplay(INITIAL_TIMELINE_STATE, []).then((result) => {
+      if (cancelled) return;
+      setTimelineState(result.outputState);
+      setTimelineOutputHash(result.outputStateHash);
+      timelineStateRef.current = result.outputState;
+    }).catch((error) => {
+      if (!cancelled) {
+        console.error('[Timeline] Failed to initialize deterministic timeline state:', error);
+        setTimelineDispatchError((error as Error).message);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleTimelineDispatchAction = useCallback(async (request: TimelineActionRequest) => {
+    if (isTimelineDispatching) return;
+
+    setIsTimelineDispatching(true);
+    setTimelineDispatchError(null);
+
+    try {
+      const currentTimelineState = timelineStateRef.current;
+      const proposalIndex = timelineActionCounterRef.current++;
+      const proposalId = deterministicId('timeline-proposal', {
+        index: proposalIndex,
+        actionType: request.actionType,
+        trackId: request.trackId,
+        parameters: request.parameters,
+      });
+
+      const fallbackTrackId = request.trackId || currentTimelineState.tracks[0]?.trackId || 'track-main';
+      const fallbackTrackName = request.trackName
+        || currentTimelineState.tracks.find((track) => track.trackId === fallbackTrackId)?.trackName
+        || fallbackTrackId;
+
+      const proposal: APLProposal = {
+        proposalId,
+        trackId: fallbackTrackId,
+        trackName: fallbackTrackName,
+        action: {
+          type: request.actionType,
+          description: request.description || `${request.actionType} dispatched from timeline`,
+          parameters: request.parameters,
+        },
+        evidence: {
+          metric: 'timeline-user-intent',
+          currentValue: proposalIndex,
+          targetValue: proposalIndex + 1,
+          rationale: 'Timeline UI dispatches canonical APL actions through the execution bridge.',
+        },
+        confidence: 1,
+        provenance: {
+          engine: 'CLASSICAL',
+          confidence: 1,
+        },
+        signalIntelligence: {} as any,
+      };
+
+      const session = await executionSessionService.getSession();
+      const now = Date.now();
+      const nonce = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `timeline-nonce-${now}-${Math.random().toString(36).slice(2)}`;
+      const sourceHash = deterministicId('timeline-source', {
+        proposalId,
+        actionType: proposal.action.type,
+        parameters: proposal.action.parameters,
+      });
+      const contextId = `${currentTimelineState.workspaceId}:${proposalId}`;
+
+      const unsignedPayload: ExecutionPayload = {
+        proposalId,
+        actionType: proposal.action.type,
+        parameters: proposal.action.parameters,
+        aaContext: {
+          contextId,
+          sourceHash,
+          timestamp: now,
+          sessionId: session.sessionId,
+          nonce,
+          signatureVersion: session.signatureVersion,
+          signature: '',
+          workspaceId: currentTimelineState.workspaceId,
+          actorId: 'human:timeline-editor',
+          actorType: 'HUMAN',
+          generatorId: 'timeline-ui-v1',
+        },
+      };
+
+      const signature = await signExecutionPayload(unsignedPayload, session.sessionSecret);
+      const sealedPayload: ExecutionPayload = {
+        ...unsignedPayload,
+        aaContext: {
+          ...unsignedPayload.aaContext,
+          signature,
+        },
+      };
+
+      const executionResult = await ExecutionBridge.dispatch(sealedPayload);
+      if (!executionResult.success) {
+        throw new Error(executionResult.error || 'Execution bridge rejected timeline action.');
+      }
+
+      const replayResult = await runDeterministicReplay(currentTimelineState, [proposal], {
+        workspaceId: currentTimelineState.workspaceId,
+      });
+
+      startTransition(() => {
+        setTimelineState(replayResult.outputState);
+        setTimelineOutputHash(replayResult.outputStateHash);
+      });
+    } catch (error) {
+      console.error('[Timeline] Dispatch failed:', error);
+      setTimelineDispatchError((error as Error).message);
+    } finally {
+      setIsTimelineDispatching(false);
+    }
+  }, [isTimelineDispatching]);
 
   const handleResetToOriginal = useCallback(() => {
     audioEngine.resetToOriginal();
@@ -3493,6 +3671,18 @@ const App: React.FC = () => {
                 setEqSettings={setEqSettings}
                 dynamicEq={dynamicEq}
                 setDynamicEq={setDynamicEq}
+              />
+            </div>
+          )}
+
+          {appState === AppState.READY && (
+            <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
+              <TimelineWorkspace
+                timelineState={timelineState}
+                outputStateHash={timelineOutputHash}
+                isDispatching={isTimelineDispatching}
+                dispatchError={timelineDispatchError}
+                onDispatchAction={handleTimelineDispatchAction}
               />
             </div>
           )}
