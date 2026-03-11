@@ -22,6 +22,35 @@ export interface StereoPannerNodeLike extends AudioNodeLike {
   pan: AudioParamLike;
 }
 
+export interface DynamicsCompressorNodeLike extends AudioNodeLike {
+  threshold: AudioParamLike;
+  knee: AudioParamLike;
+  ratio: AudioParamLike;
+  attack: AudioParamLike;
+  release: AudioParamLike;
+}
+
+export type BiquadFilterTypeLike =
+  | 'lowpass'
+  | 'highpass'
+  | 'bandpass'
+  | 'lowshelf'
+  | 'highshelf'
+  | 'peaking'
+  | 'notch'
+  | 'allpass';
+
+export interface BiquadFilterNodeLike extends AudioNodeLike {
+  type: BiquadFilterTypeLike;
+  frequency: AudioParamLike;
+  gain: AudioParamLike;
+  Q: AudioParamLike;
+}
+
+export interface DelayNodeLike extends AudioNodeLike {
+  delayTime: AudioParamLike;
+}
+
 export interface AudioBufferLike {
   duration: number;
 }
@@ -40,6 +69,9 @@ export interface AudioContextLike {
   createGain(): GainNodeLike;
   createBufferSource(): AudioBufferSourceNodeLike;
   createStereoPanner?: () => StereoPannerNodeLike;
+  createDynamicsCompressor?: () => DynamicsCompressorNodeLike;
+  createBiquadFilter?: () => BiquadFilterNodeLike;
+  createDelay?: (maxDelayTime?: number) => DelayNodeLike;
   resume(): Promise<void> | void;
 }
 
@@ -55,6 +87,7 @@ export interface AudioPlaybackPluginDebug {
   outputNode: AudioNodeLike;
   gainValue: number | null;
   panValue: number | null;
+  dspSnapshot: Record<string, number | string | boolean | null>;
 }
 
 export interface AudioPlaybackTrackDebug {
@@ -78,6 +111,8 @@ interface PluginRuntime {
   nodeKind: string;
   gainNode: GainNodeLike | null;
   panNode: StereoPannerNodeLike | null;
+  rewireInternal: () => void;
+  dspSnapshot: () => Record<string, number | string | boolean | null>;
   apply(instance: ReplayPluginInstance): void;
   dispose(): void;
 }
@@ -284,6 +319,7 @@ export class AudioPlaybackEngine {
         outputNode: plugin.outputNode,
         gainValue: plugin.gainNode ? plugin.gainNode.gain.value : null,
         panValue: plugin.panNode ? plugin.panNode.pan.value : null,
+        dspSnapshot: plugin.dspSnapshot(),
       }));
 
     return {
@@ -424,6 +460,7 @@ export class AudioPlaybackEngine {
       if (plugin.outputNode !== plugin.inputNode) {
         this.disconnectNode(plugin.outputNode);
       }
+      plugin.rewireInternal();
     }
 
     const orderedPlugins = runtime.pluginOrder
@@ -446,18 +483,87 @@ export class AudioPlaybackEngine {
 
   private buildPluginRuntime(insert: ReplayPluginInstance): PluginRuntime {
     const context = this.requireContext();
+    switch (insert.manifestId) {
+      case 'echo.utility.gain.v1':
+        return this.buildUtilityGainRuntime(insert, context);
+      case 'echo.vocal.comp.fet':
+        return this.buildFetCompressorRuntime(insert, context);
+      case 'echo.vocal.comp.opto':
+        return this.buildOptoCompressorRuntime(insert, context);
+      case 'echo.vocal.eq.air':
+        return this.buildAirEqRuntime(insert, context);
+      case 'echo.space.delay.slap':
+        return this.buildSlapDelayRuntime(insert, context);
+      case 'echo.space.reverb.plate':
+        return this.buildPlatePlaceholderRuntime(insert, context);
+      case 'echo.master.limiter.brick':
+        return this.buildBrickLimiterRuntime(insert, context);
+      default:
+        return this.createPassthroughRuntime(insert, context, 'passthrough');
+    }
+  }
 
-    if (insert.manifestId === 'echo.utility.gain.v1') {
-      const gainNode = context.createGain();
-      let panNode: StereoPannerNodeLike | null = null;
-      let outputNode: AudioNodeLike = gainNode;
-      if (context.createStereoPanner) {
-        panNode = context.createStereoPanner();
-        this.connectNodes(gainNode, panNode);
-        outputNode = panNode;
-      }
+  private createPassthroughRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike,
+    nodeKind: string
+  ): PluginRuntime {
+    const passthroughGain = context.createGain();
+    passthroughGain.gain.value = 1;
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: passthroughGain,
+      outputNode: passthroughGain,
+      nodeKind,
+      gainNode: passthroughGain,
+      panNode: null,
+      rewireInternal: () => {
+        // single-node passthrough
+      },
+      dspSnapshot: () => ({
+        gain: passthroughGain.gain.value,
+      }),
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        passthroughGain.gain.value = enabled ? 1 : 0;
+      },
+      dispose: () => {
+        this.disconnectNode(passthroughGain);
+      },
+    };
+  }
 
-      const apply = (instance: ReplayPluginInstance): void => {
+  private buildUtilityGainRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike
+  ): PluginRuntime {
+    const gainNode = context.createGain();
+    let panNode: StereoPannerNodeLike | null = null;
+    let outputNode: AudioNodeLike = gainNode;
+    const rewireInternal = () => {
+      if (panNode) this.connectNodes(gainNode, panNode);
+    };
+    if (context.createStereoPanner) {
+      panNode = context.createStereoPanner();
+      rewireInternal();
+      outputNode = panNode;
+    }
+
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: gainNode,
+      outputNode,
+      nodeKind: 'utility-gain',
+      gainNode,
+      panNode,
+      rewireInternal,
+      dspSnapshot: () => ({
+        gain: gainNode.gain.value,
+        pan: panNode ? panNode.pan.value : null,
+      }),
+      apply: (instance: ReplayPluginInstance): void => {
         const gainDb = toNumber(instance.parameters.gainDb, 0);
         const pan = clamp(toNumber(instance.parameters.pan, 0), -1, 1);
         const phaseInvert = toBoolean(instance.parameters.phaseInvert, false);
@@ -471,39 +577,279 @@ export class AudioPlaybackEngine {
         if (panNode) {
           panNode.pan.value = enabled ? pan * mix : 0;
         }
-      };
+      },
+      dispose: () => {
+        this.disconnectNode(gainNode);
+        if (panNode) this.disconnectNode(panNode);
+      },
+    };
+  }
 
-      return {
-        instanceId: insert.instanceId,
-        manifestId: insert.manifestId,
-        inputNode: gainNode,
-        outputNode,
-        nodeKind: 'utility-gain',
-        gainNode,
-        panNode,
-        apply,
-        dispose: () => {
-          this.disconnectNode(gainNode);
-          if (panNode) this.disconnectNode(panNode);
-        },
-      };
+  private buildFetCompressorRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike
+  ): PluginRuntime {
+    if (!context.createDynamicsCompressor) {
+      return this.createPassthroughRuntime(insert, context, 'compressor-fallback');
     }
-
-    const passthroughGain = context.createGain();
-    passthroughGain.gain.value = 1;
+    const compressor = context.createDynamicsCompressor();
     return {
       instanceId: insert.instanceId,
       manifestId: insert.manifestId,
-      inputNode: passthroughGain,
-      outputNode: passthroughGain,
-      nodeKind: 'passthrough',
-      gainNode: passthroughGain,
+      inputNode: compressor,
+      outputNode: compressor,
+      nodeKind: 'dynamics-compressor',
+      gainNode: null,
       panNode: null,
-      apply: () => {
-        passthroughGain.gain.value = 1;
+      rewireInternal: () => {
+        // single-node plugin
+      },
+      dspSnapshot: () => ({
+        threshold: compressor.threshold.value,
+        ratio: compressor.ratio.value,
+        attack: compressor.attack.value,
+        release: compressor.release.value,
+      }),
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        const mix = clamp(toNumber(instance.mix, 1), 0, 1);
+        const threshold = clamp(toNumber(instance.parameters.threshold, -24), -60, 0);
+        const ratio = clamp(toNumber(instance.parameters.ratio, 8), 4, 20);
+        const attack = clamp(toNumber(instance.parameters.attack, 0.005), 0.001, 0.05);
+        const release = clamp(toNumber(instance.parameters.release, 0.2), 0.05, 1);
+
+        compressor.threshold.value = enabled ? threshold : 0;
+        compressor.ratio.value = enabled ? 1 + (ratio - 1) * mix : 1;
+        compressor.attack.value = attack;
+        compressor.release.value = release;
+        compressor.knee.value = 6;
       },
       dispose: () => {
-        this.disconnectNode(passthroughGain);
+        this.disconnectNode(compressor);
+      },
+    };
+  }
+
+  private buildOptoCompressorRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike
+  ): PluginRuntime {
+    if (!context.createDynamicsCompressor) {
+      return this.createPassthroughRuntime(insert, context, 'opto-fallback');
+    }
+    const compressor = context.createDynamicsCompressor();
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: compressor,
+      outputNode: compressor,
+      nodeKind: 'dynamics-compressor',
+      gainNode: null,
+      panNode: null,
+      rewireInternal: () => {
+        // single-node plugin
+      },
+      dspSnapshot: () => ({
+        threshold: compressor.threshold.value,
+        ratio: compressor.ratio.value,
+        attack: compressor.attack.value,
+        release: compressor.release.value,
+      }),
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        const peakReduction = clamp(toNumber(instance.parameters.peakReduction, 45), 0, 100);
+        const gain = clamp(toNumber(instance.parameters.gain, 0), 0, 24);
+        const mix = clamp(toNumber(instance.mix, 1), 0, 1);
+
+        const threshold = -0.6 * peakReduction + gain * 0.05;
+        const ratio = 2 + (peakReduction / 100) * 6;
+        compressor.threshold.value = enabled ? clamp(threshold, -60, 0) : 0;
+        compressor.ratio.value = enabled ? 1 + (ratio - 1) * mix : 1;
+        compressor.attack.value = 0.02;
+        compressor.release.value = 0.25;
+        compressor.knee.value = 8;
+      },
+      dispose: () => {
+        this.disconnectNode(compressor);
+      },
+    };
+  }
+
+  private buildAirEqRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike
+  ): PluginRuntime {
+    if (!context.createBiquadFilter) {
+      return this.createPassthroughRuntime(insert, context, 'eq-fallback');
+    }
+    const filter = context.createBiquadFilter();
+    filter.type = 'highshelf';
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: filter,
+      outputNode: filter,
+      nodeKind: 'biquad-highshelf',
+      gainNode: null,
+      panNode: null,
+      rewireInternal: () => {
+        // single-node plugin
+      },
+      dspSnapshot: () => ({
+        type: filter.type,
+        frequency: filter.frequency.value,
+        gain: filter.gain.value,
+      }),
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        const mix = clamp(toNumber(instance.mix, 1), 0, 1);
+        const freq = clamp(toNumber(instance.parameters.freq, 12000), 8000, 20000);
+        const boost = clamp(toNumber(instance.parameters.boost, 2.5), 0, 15);
+        filter.frequency.value = freq;
+        filter.gain.value = enabled ? boost * mix : 0;
+        filter.Q.value = 0.707;
+      },
+      dispose: () => {
+        this.disconnectNode(filter);
+      },
+    };
+  }
+
+  private buildSlapDelayRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike
+  ): PluginRuntime {
+    if (!context.createDelay) {
+      return this.createPassthroughRuntime(insert, context, 'delay-fallback');
+    }
+
+    const inputGain = context.createGain();
+    const outputGain = context.createGain();
+    const dryGain = context.createGain();
+    const wetGain = context.createGain();
+    const feedbackGain = context.createGain();
+    const delay = context.createDelay(1);
+
+    const rewireInternal = () => {
+      this.connectNodes(inputGain, dryGain);
+      this.connectNodes(dryGain, outputGain);
+
+      this.connectNodes(inputGain, delay);
+      this.connectNodes(delay, wetGain);
+      this.connectNodes(wetGain, outputGain);
+
+      this.connectNodes(delay, feedbackGain);
+      this.connectNodes(feedbackGain, delay);
+    };
+    rewireInternal();
+
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      nodeKind: 'delay-slap',
+      gainNode: outputGain,
+      panNode: null,
+      rewireInternal,
+      dspSnapshot: () => ({
+        delayTime: delay.delayTime.value,
+        feedback: feedbackGain.gain.value,
+        wet: wetGain.gain.value,
+        dry: dryGain.gain.value,
+      }),
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        const time = clamp(toNumber(instance.parameters.time, 0.09), 0.05, 0.15);
+        const feedback = clamp(toNumber(instance.parameters.feedback, 0.15), 0, 0.5);
+        const mix = clamp(toNumber(instance.parameters.mix, instance.mix), 0, 1);
+
+        delay.delayTime.value = time;
+        feedbackGain.gain.value = enabled ? feedback : 0;
+        wetGain.gain.value = enabled ? mix : 0;
+        dryGain.gain.value = 1;
+      },
+      dispose: () => {
+        this.disconnectNode(inputGain);
+        this.disconnectNode(outputGain);
+        this.disconnectNode(dryGain);
+        this.disconnectNode(wetGain);
+        this.disconnectNode(feedbackGain);
+        this.disconnectNode(delay);
+      },
+    };
+  }
+
+  private buildPlatePlaceholderRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike
+  ): PluginRuntime {
+    const plateGain = context.createGain();
+    plateGain.gain.value = 1;
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: plateGain,
+      outputNode: plateGain,
+      nodeKind: 'plate-placeholder',
+      gainNode: plateGain,
+      panNode: null,
+      rewireInternal: () => {
+        // single-node plugin
+      },
+      dspSnapshot: () => ({
+        gain: plateGain.gain.value,
+      }),
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        const mix = clamp(toNumber(instance.parameters.mix, 0.2), 0, 1);
+        const decay = clamp(toNumber(instance.parameters.decay, 1.8), 0.5, 5);
+        const contour = 1 + (decay - 1) * 0.02;
+        plateGain.gain.value = enabled ? 1 + mix * (contour - 1) : 1;
+      },
+      dispose: () => {
+        this.disconnectNode(plateGain);
+      },
+    };
+  }
+
+  private buildBrickLimiterRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike
+  ): PluginRuntime {
+    if (!context.createDynamicsCompressor) {
+      return this.createPassthroughRuntime(insert, context, 'limiter-fallback');
+    }
+    const limiter = context.createDynamicsCompressor();
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: limiter,
+      outputNode: limiter,
+      nodeKind: 'dynamics-compressor',
+      gainNode: null,
+      panNode: null,
+      rewireInternal: () => {
+        // single-node plugin
+      },
+      dspSnapshot: () => ({
+        threshold: limiter.threshold.value,
+        ratio: limiter.ratio.value,
+        attack: limiter.attack.value,
+        release: limiter.release.value,
+      }),
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        const ceiling = clamp(toNumber(instance.parameters.ceiling, -0.8), -6, 0);
+        const release = clamp(toNumber(instance.parameters.release, 0.2), 0.01, 2);
+        limiter.threshold.value = enabled ? ceiling : 0;
+        limiter.ratio.value = enabled ? 20 : 1;
+        limiter.attack.value = 0.003;
+        limiter.release.value = release;
+        limiter.knee.value = 0;
+      },
+      dispose: () => {
+        this.disconnectNode(limiter);
       },
     };
   }
