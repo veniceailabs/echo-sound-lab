@@ -7,6 +7,9 @@ import {
 
 export interface AudioParamLike {
   value: number;
+  cancelScheduledValues?: (startTime: number) => void;
+  setValueAtTime?: (value: number, startTime: number) => void;
+  linearRampToValueAtTime?: (value: number, endTime: number) => void;
 }
 
 export interface AudioNodeLike {
@@ -113,6 +116,8 @@ interface PluginRuntime {
   panNode: StereoPannerNodeLike | null;
   rewireInternal: () => void;
   dspSnapshot: () => Record<string, number | string | boolean | null>;
+  resolveAutomationParam: (paramId: string) => AudioParamLike | null;
+  mapAutomationValue: (paramId: string, value: number) => number;
   apply(instance: ReplayPluginInstance): void;
   dispose(): void;
 }
@@ -153,6 +158,31 @@ function toBoolean(value: unknown, fallback = false): boolean {
     if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') return false;
   }
   return fallback;
+}
+
+function getSortedAutomationPoints(points: Array<{ timeSec: number; value: number }>): Array<{ timeSec: number; value: number }> {
+  return [...points].sort((a, b) => (a.timeSec === b.timeSec ? a.value - b.value : a.timeSec - b.timeSec));
+}
+
+function sampleLinearValueAtTime(
+  points: Array<{ timeSec: number; value: number }>,
+  timeSec: number
+): number | null {
+  if (points.length === 0) return null;
+  if (timeSec <= points[0].timeSec) return points[0].value;
+  const last = points[points.length - 1];
+  if (timeSec >= last.timeSec) return last.value;
+
+  for (let idx = 0; idx < points.length - 1; idx += 1) {
+    const left = points[idx];
+    const right = points[idx + 1];
+    if (timeSec < left.timeSec || timeSec > right.timeSec) continue;
+    const span = right.timeSec - left.timeSec;
+    if (span <= 0) return right.value;
+    const alpha = (timeSec - left.timeSec) / span;
+    return left.value + (right.value - left.value) * alpha;
+  }
+  return last.value;
 }
 
 function getDefaultContextFactory(): () => AudioContextLike {
@@ -267,6 +297,8 @@ export class AudioPlaybackEngine {
       }
     }
 
+    this.scheduleAutomationForPlayback(clampedStart, context.currentTime);
+
     this.playheadSec = clampedStart;
     this.startedAtContextSec = context.currentTime;
     this.isPlaying = true;
@@ -356,6 +388,113 @@ export class AudioPlaybackEngine {
 
   getIsPlaying(): boolean {
     return this.isPlaying;
+  }
+
+  private scheduleAutomationForPlayback(playheadSec: number, contextStartTimeSec: number): void {
+    if (!this.currentState || this.currentState.automation.length === 0) return;
+
+    for (const lane of this.currentState.automation) {
+      const runtime = this.trackRuntimes.get(lane.trackId);
+      if (!runtime || !Array.isArray(lane.points) || lane.points.length === 0) continue;
+
+      const points = getSortedAutomationPoints(
+        lane.points.map((point) => ({
+          timeSec: toNumber(point.timeSec, 0),
+          value: toNumber(point.value, 0),
+        }))
+      );
+      if (points.length === 0) continue;
+
+      const target = this.resolveAutomationTarget(runtime, lane.parameter);
+      if (!target) continue;
+
+      const valueAtPlayhead = sampleLinearValueAtTime(points, playheadSec);
+      if (valueAtPlayhead === null) continue;
+      const mappedStartValue = target.mapValue(valueAtPlayhead);
+
+      const audioParam = target.audioParam;
+      if (!audioParam.cancelScheduledValues || !audioParam.setValueAtTime || !audioParam.linearRampToValueAtTime) {
+        audioParam.value = mappedStartValue;
+        continue;
+      }
+
+      audioParam.cancelScheduledValues(contextStartTimeSec);
+      audioParam.setValueAtTime(mappedStartValue, contextStartTimeSec);
+
+      const futurePoints = points.filter((point) => point.timeSec > playheadSec);
+      for (const point of futurePoints) {
+        const when = contextStartTimeSec + Math.max(0, point.timeSec - playheadSec);
+        audioParam.linearRampToValueAtTime(target.mapValue(point.value), when);
+      }
+    }
+  }
+
+  private resolveAutomationTarget(
+    runtime: TrackRuntime,
+    parameter: string
+  ): { audioParam: AudioParamLike; mapValue: (value: number) => number } | null {
+    if (parameter === 'volumeDb' || parameter === 'track:volumeDb') {
+      return {
+        audioParam: runtime.gainNode.gain,
+        mapValue: (value) => dbToLinear(value),
+      };
+    }
+
+    if (parameter === 'pan' || parameter === 'track:pan') {
+      if (!runtime.panNode) return null;
+      return {
+        audioParam: runtime.panNode.pan,
+        mapValue: (value) => clamp(value, -1, 1),
+      };
+    }
+
+    const pluginTarget = this.parsePluginAutomationTarget(parameter);
+    if (!pluginTarget) return null;
+    const plugin = runtime.plugins.get(pluginTarget.instanceId);
+    if (!plugin) return null;
+    const audioParam = plugin.resolveAutomationParam(pluginTarget.paramId);
+    if (!audioParam) return null;
+    return {
+      audioParam,
+      mapValue: (value) => plugin.mapAutomationValue(pluginTarget.paramId, value),
+    };
+  }
+
+  private parsePluginAutomationTarget(parameter: string): { instanceId: string; paramId: string } | null {
+    if (!parameter || typeof parameter !== 'string') return null;
+
+    if (parameter.startsWith('plugin:') || parameter.startsWith('insert:')) {
+      const parts = parameter.split(':');
+      if (parts.length >= 3 && parts[1] && parts[2]) {
+        return {
+          instanceId: parts[1],
+          paramId: parts.slice(2).join(':'),
+        };
+      }
+      return null;
+    }
+
+    if (parameter.startsWith('plugin/')) {
+      const parts = parameter.split('/');
+      if (parts.length >= 3 && parts[1] && parts[2]) {
+        return {
+          instanceId: parts[1],
+          paramId: parts.slice(2).join('/'),
+        };
+      }
+      return null;
+    }
+
+    if (parameter.includes('.') && !parameter.startsWith('track.')) {
+      const splitIndex = parameter.indexOf('.');
+      const instanceId = parameter.slice(0, splitIndex);
+      const paramId = parameter.slice(splitIndex + 1);
+      if (instanceId && paramId) {
+        return { instanceId, paramId };
+      }
+    }
+
+    return null;
   }
 
   private requireContext(): AudioContextLike {
@@ -524,6 +663,8 @@ export class AudioPlaybackEngine {
       dspSnapshot: () => ({
         gain: passthroughGain.gain.value,
       }),
+      resolveAutomationParam: () => passthroughGain.gain,
+      mapAutomationValue: (_, value) => value,
       apply: (instance: ReplayPluginInstance) => {
         const enabled = instance.enabled !== false;
         passthroughGain.gain.value = enabled ? 1 : 0;
@@ -563,6 +704,16 @@ export class AudioPlaybackEngine {
         gain: gainNode.gain.value,
         pan: panNode ? panNode.pan.value : null,
       }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'gainDb') return gainNode.gain;
+        if (paramId === 'pan' && panNode) return panNode.pan;
+        return null;
+      },
+      mapAutomationValue: (paramId: string, value: number) => {
+        if (paramId === 'gainDb') return dbToLinear(value);
+        if (paramId === 'pan') return clamp(value, -1, 1);
+        return value;
+      },
       apply: (instance: ReplayPluginInstance): void => {
         const gainDb = toNumber(instance.parameters.gainDb, 0);
         const pan = clamp(toNumber(instance.parameters.pan, 0), -1, 1);
@@ -610,6 +761,14 @@ export class AudioPlaybackEngine {
         attack: compressor.attack.value,
         release: compressor.release.value,
       }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'threshold') return compressor.threshold;
+        if (paramId === 'ratio') return compressor.ratio;
+        if (paramId === 'attack') return compressor.attack;
+        if (paramId === 'release') return compressor.release;
+        return null;
+      },
+      mapAutomationValue: (_, value) => value,
       apply: (instance: ReplayPluginInstance) => {
         const enabled = instance.enabled !== false;
         const mix = clamp(toNumber(instance.mix, 1), 0, 1);
@@ -655,6 +814,23 @@ export class AudioPlaybackEngine {
         attack: compressor.attack.value,
         release: compressor.release.value,
       }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'peakReduction') return compressor.threshold;
+        if (paramId === 'gain') return compressor.ratio;
+        if (paramId === 'threshold') return compressor.threshold;
+        if (paramId === 'ratio') return compressor.ratio;
+        return null;
+      },
+      mapAutomationValue: (paramId: string, value: number) => {
+        if (paramId === 'peakReduction') {
+          return clamp(-0.6 * clamp(value, 0, 100), -60, 0);
+        }
+        if (paramId === 'gain') {
+          const normalized = clamp(value, 0, 24) / 24;
+          return 1 + normalized * 7;
+        }
+        return value;
+      },
       apply: (instance: ReplayPluginInstance) => {
         const enabled = instance.enabled !== false;
         const peakReduction = clamp(toNumber(instance.parameters.peakReduction, 45), 0, 100);
@@ -700,6 +876,16 @@ export class AudioPlaybackEngine {
         frequency: filter.frequency.value,
         gain: filter.gain.value,
       }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'freq') return filter.frequency;
+        if (paramId === 'boost') return filter.gain;
+        return null;
+      },
+      mapAutomationValue: (paramId: string, value: number) => {
+        if (paramId === 'freq') return clamp(value, 8000, 20000);
+        if (paramId === 'boost') return clamp(value, 0, 15);
+        return value;
+      },
       apply: (instance: ReplayPluginInstance) => {
         const enabled = instance.enabled !== false;
         const mix = clamp(toNumber(instance.mix, 1), 0, 1);
@@ -758,6 +944,18 @@ export class AudioPlaybackEngine {
         wet: wetGain.gain.value,
         dry: dryGain.gain.value,
       }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'time') return delay.delayTime;
+        if (paramId === 'feedback') return feedbackGain.gain;
+        if (paramId === 'mix') return wetGain.gain;
+        return null;
+      },
+      mapAutomationValue: (paramId: string, value: number) => {
+        if (paramId === 'time') return clamp(value, 0.05, 0.15);
+        if (paramId === 'feedback') return clamp(value, 0, 0.5);
+        if (paramId === 'mix') return clamp(value, 0, 1);
+        return value;
+      },
       apply: (instance: ReplayPluginInstance) => {
         const enabled = instance.enabled !== false;
         const time = clamp(toNumber(instance.parameters.time, 0.09), 0.05, 0.15);
@@ -800,6 +998,15 @@ export class AudioPlaybackEngine {
       dspSnapshot: () => ({
         gain: plateGain.gain.value,
       }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'mix' || paramId === 'decay') return plateGain.gain;
+        return null;
+      },
+      mapAutomationValue: (paramId: string, value: number) => {
+        if (paramId === 'mix') return 1 + clamp(value, 0, 1) * 0.2;
+        if (paramId === 'decay') return 1 + clamp(value, 0.5, 5) * 0.02;
+        return value;
+      },
       apply: (instance: ReplayPluginInstance) => {
         const enabled = instance.enabled !== false;
         const mix = clamp(toNumber(instance.parameters.mix, 0.2), 0, 1);
@@ -838,6 +1045,16 @@ export class AudioPlaybackEngine {
         attack: limiter.attack.value,
         release: limiter.release.value,
       }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'ceiling') return limiter.threshold;
+        if (paramId === 'release') return limiter.release;
+        return null;
+      },
+      mapAutomationValue: (paramId: string, value: number) => {
+        if (paramId === 'ceiling') return clamp(value, -6, 0);
+        if (paramId === 'release') return clamp(value, 0.01, 2);
+        return value;
+      },
       apply: (instance: ReplayPluginInstance) => {
         const enabled = instance.enabled !== false;
         const ceiling = clamp(toNumber(instance.parameters.ceiling, -0.8), -6, 0);
