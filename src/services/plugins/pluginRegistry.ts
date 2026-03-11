@@ -41,6 +41,10 @@ export class PluginRegistry {
     return Array.from(this.manifests.values()).map(cloneManifest);
   }
 
+  getAllPlugins(): EchoPluginManifest[] {
+    return this.listManifests();
+  }
+
   ensureManifest(manifestId: string): EchoPluginManifest {
     const manifest = this.getManifest(manifestId);
     if (!manifest) {

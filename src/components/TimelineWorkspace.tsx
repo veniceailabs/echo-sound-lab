@@ -4,6 +4,7 @@ import type { ReplayState } from '../services/deterministicReplayService';
 import { TrackHeader } from './TrackHeader';
 import { RegionLane } from './RegionLane';
 import { AutomationLane } from './AutomationLane';
+import PluginRack from './PluginRack';
 
 type TimelineActionType = Extract<
   APLProposal['action']['type'],
@@ -144,9 +145,6 @@ function TimelineWorkspaceComponent({
         {timelineState.tracks.map((track) => {
           const trackRegions = timelineState.regions.filter((region) => region.trackId === track.trackId);
           const trackAutomation = timelineState.automation.filter((lane) => lane.trackId === track.trackId);
-          const utilityPlugin = (track.inserts || []).find((insert) => insert.manifestId === 'echo.utility.gain.v1');
-          const utilityGainDb = Number(utilityPlugin?.parameters.gainDb ?? 0);
-          const utilityPan = Number(utilityPlugin?.parameters.pan ?? 0);
 
           return (
             <div key={track.trackId} className="grid grid-cols-1 gap-3 lg:grid-cols-[240px_1fr]">
@@ -160,90 +158,45 @@ function TimelineWorkspaceComponent({
 
               <div className="overflow-x-auto rounded-xl border border-white/5 p-2">
                 <div style={{ width: `${laneWidth}px` }} className="space-y-2">
-                  <div className="rounded-xl border border-white/10 bg-slate-950/50 p-2">
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Plugin Rack</p>
-                      <button
-                        type="button"
-                        disabled={isReadOnly || Boolean(utilityPlugin)}
-                        onClick={() => {
-                          const instanceId = `${track.trackId}-utility-gain`;
-                          void onDispatchAction({
-                            actionType: 'ADD_PLUGIN',
-                            trackId: track.trackId,
-                            trackName: track.trackName,
-                            description: `Insert utility gain on ${track.trackName}`,
-                            parameters: {
-                              trackId: track.trackId,
-                              instanceId,
-                              manifestId: 'echo.utility.gain.v1',
-                            },
-                          });
-                        }}
-                        className="rounded bg-slate-800 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        {utilityPlugin ? 'Utility Loaded' : '+ Utility Gain'}
-                      </button>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      <label className="flex items-center gap-2 text-[10px] text-slate-300">
-                        Gain ({utilityGainDb.toFixed(1)} dB)
-                        <input
-                          type="range"
-                          min={-24}
-                          max={24}
-                          step={0.1}
-                          disabled={!utilityPlugin || isReadOnly}
-                          value={utilityGainDb}
-                          onChange={(event) => {
-                            if (!utilityPlugin) return;
-                            const value = Number(event.target.value);
-                            void onDispatchAction({
-                              actionType: 'SET_PLUGIN_PARAM',
-                              trackId: track.trackId,
-                              trackName: track.trackName,
-                              description: `Set utility gain to ${value.toFixed(1)} dB`,
-                              parameters: {
-                                trackId: track.trackId,
-                                instanceId: utilityPlugin.instanceId,
-                                paramId: 'gainDb',
-                                value,
-                              },
-                            });
-                          }}
-                          className="accent-cyan-400"
-                        />
-                      </label>
-                      <label className="flex items-center gap-2 text-[10px] text-slate-300">
-                        Pan ({utilityPan.toFixed(2)})
-                        <input
-                          type="range"
-                          min={-1}
-                          max={1}
-                          step={0.01}
-                          disabled={!utilityPlugin || isReadOnly}
-                          value={utilityPan}
-                          onChange={(event) => {
-                            if (!utilityPlugin) return;
-                            const value = Number(event.target.value);
-                            void onDispatchAction({
-                              actionType: 'SET_PLUGIN_PARAM',
-                              trackId: track.trackId,
-                              trackName: track.trackName,
-                              description: `Set utility pan to ${value.toFixed(2)}`,
-                              parameters: {
-                                trackId: track.trackId,
-                                instanceId: utilityPlugin.instanceId,
-                                paramId: 'pan',
-                                value,
-                              },
-                            });
-                          }}
-                          className="accent-cyan-400"
-                        />
-                      </label>
-                    </div>
-                  </div>
+                  <PluginRack
+                    track={track}
+                    isReadOnly={isReadOnly}
+                    onAddPlugin={(manifestId) => {
+                      const existingIds = new Set((track.inserts || []).map((insert) => insert.instanceId));
+                      const suffix = manifestId.split('.').slice(-1)[0] || 'plugin';
+                      let index = (track.inserts || []).filter((insert) => insert.manifestId === manifestId).length + 1;
+                      let instanceId = `${track.trackId}-${suffix}-${index}`;
+                      while (existingIds.has(instanceId)) {
+                        index += 1;
+                        instanceId = `${track.trackId}-${suffix}-${index}`;
+                      }
+                      void onDispatchAction({
+                        actionType: 'ADD_PLUGIN',
+                        trackId: track.trackId,
+                        trackName: track.trackName,
+                        description: `Insert ${manifestId} on ${track.trackName}`,
+                        parameters: {
+                          trackId: track.trackId,
+                          instanceId,
+                          manifestId,
+                        },
+                      });
+                    }}
+                    onSetPluginParam={({ trackId, instanceId, paramId, value }) => {
+                      void onDispatchAction({
+                        actionType: 'SET_PLUGIN_PARAM',
+                        trackId,
+                        trackName: track.trackName,
+                        description: `Set ${paramId} on ${instanceId}`,
+                        parameters: {
+                          trackId,
+                          instanceId,
+                          paramId,
+                          value,
+                        },
+                      });
+                    }}
+                  />
 
                   <RegionLane
                     track={track}
