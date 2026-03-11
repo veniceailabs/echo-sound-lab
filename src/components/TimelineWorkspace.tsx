@@ -22,6 +22,7 @@ interface TimelineWorkspaceProps {
   timelineState: ReplayState;
   outputStateHash: string;
   isDispatching?: boolean;
+  isReadOnly?: boolean;
   dispatchError?: string | null;
   onDispatchAction: (action: TimelineActionRequest) => void | Promise<void>;
 }
@@ -30,6 +31,7 @@ function TimelineWorkspaceComponent({
   timelineState,
   outputStateHash,
   isDispatching = false,
+  isReadOnly = false,
   dispatchError = null,
   onDispatchAction,
 }: TimelineWorkspaceProps) {
@@ -84,13 +86,19 @@ function TimelineWorkspaceComponent({
                 },
               });
             }}
-            disabled={isDispatching}
+            disabled={isDispatching || isReadOnly}
             className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-cyan-200 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Add Track
           </button>
         </div>
       </div>
+
+      {isReadOnly && (
+        <p className="mb-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          Read-only preview mode. Jump to latest or restore this state before editing.
+        </p>
+      )}
 
       {dispatchError && (
         <p className="mb-3 rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
@@ -120,6 +128,7 @@ function TimelineWorkspaceComponent({
                     regions={trackRegions}
                     pxPerSec={pxPerSec}
                     laneWidth={laneWidth}
+                    isReadOnly={isReadOnly}
                     selectedRegionId={selectedRegionId}
                     onSelectRegion={setSelectedRegionId}
                     onMoveRegion={(region, nextStartSec) => {
@@ -155,6 +164,7 @@ function TimelineWorkspaceComponent({
                     lanes={trackAutomation}
                     pxPerSec={pxPerSec}
                     laneWidth={laneWidth}
+                    isReadOnly={isReadOnly}
                     onAddPoint={(targetTrackId, parameter, timeSec, value) => {
                       void onDispatchAction({
                         actionType: 'SET_AUTOMATION_POINT',

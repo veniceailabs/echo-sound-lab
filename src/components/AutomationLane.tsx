@@ -6,6 +6,7 @@ interface AutomationLaneProps {
   lanes: ReplayAutomationLane[];
   pxPerSec: number;
   laneWidth: number;
+  isReadOnly?: boolean;
   onAddPoint: (trackId: string, parameter: string, timeSec: number, value: number) => void;
 }
 
@@ -14,6 +15,7 @@ function AutomationLaneComponent({
   lanes,
   pxPerSec,
   laneWidth,
+  isReadOnly = false,
   onAddPoint,
 }: AutomationLaneProps) {
   const normalizedLanes = lanes.length > 0
@@ -27,7 +29,8 @@ function AutomationLaneComponent({
         <button
           type="button"
           onClick={() => onAddPoint(track.trackId, 'volumeDb', 0, 0)}
-          className="rounded bg-slate-800 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-200 hover:bg-slate-700"
+          disabled={isReadOnly}
+          className="rounded bg-slate-800 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           + Point
         </button>
@@ -44,7 +47,8 @@ function AutomationLaneComponent({
               <button
                 type="button"
                 onClick={() => onAddPoint(track.trackId, lane.parameter, Number(nextTime.toFixed(3)), Number(nextValue.toFixed(3)))}
-                className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-200 hover:bg-slate-700"
+                disabled={isReadOnly}
+                className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Add @ {nextTime.toFixed(2)}s
               </button>

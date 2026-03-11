@@ -6,6 +6,7 @@ interface RegionLaneProps {
   regions: ReplayRegionState[];
   pxPerSec: number;
   laneWidth: number;
+  isReadOnly?: boolean;
   selectedRegionId: string | null;
   onSelectRegion: (regionId: string) => void;
   onMoveRegion: (region: ReplayRegionState, nextStartSec: number) => void;
@@ -17,6 +18,7 @@ function RegionLaneComponent({
   regions,
   pxPerSec,
   laneWidth,
+  isReadOnly = false,
   selectedRegionId,
   onSelectRegion,
   onMoveRegion,
@@ -62,14 +64,16 @@ function RegionLaneComponent({
                 <button
                   type="button"
                   onClick={() => onMoveRegion(region, Number((region.startTimeSec + 1).toFixed(3)))}
-                  className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-200 hover:bg-slate-700"
+                  disabled={isReadOnly}
+                  className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   +1s
                 </button>
                 <button
                   type="button"
                   onClick={() => onSplitRegion(region, Number(splitTimeSec.toFixed(3)))}
-                  className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-200 hover:bg-slate-700"
+                  disabled={isReadOnly}
+                  className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Split
                 </button>

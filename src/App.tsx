@@ -51,6 +51,7 @@ import { debugTelemetryService } from './services/debugTelemetryService';
 import { useAudioContextState } from './hooks/useAudioContextState';
 import { AudioResumeGuard } from './components/AudioResumeGuard';
 import TimelineWorkspace, { type TimelineActionRequest } from './components/TimelineWorkspace';
+import HistoryScrubber from './components/HistoryScrubber';
 
 // V.E.N.U.M. - Viral Emergent Network Utility Matrix
 import { generateEchoReportCard, ShareableCard, GenerateEchoReportCardOptions } from './services/venumEngine';
@@ -83,6 +84,7 @@ import { executionSessionService } from './services/executionSessionService';
 import { signExecutionPayload } from './services/executionSigning';
 import { deterministicId } from './services/deterministicJson';
 import { ReplayState, runDeterministicReplay } from './services/deterministicReplayService';
+import { provenanceLedger } from './services/ProvenanceLedger';
 
 // Day 3: APL Real Analysis (replaces mock proposals)
 import { aplAnalysisService } from './services/APLAnalysisService';
@@ -360,6 +362,10 @@ const App: React.FC = () => {
   const [aplDataSource, setAplDataSource] = useState<'real' | 'demo'>('real');
   const [aplDataSourceReason, setAplDataSourceReason] = useState<string | null>(null);
   const [timelineState, setTimelineState] = useState<ReplayState>(INITIAL_TIMELINE_STATE);
+  const [timelineBaseState, setTimelineBaseState] = useState<ReplayState>(INITIAL_TIMELINE_STATE);
+  const [timelineActionHistory, setTimelineActionHistory] = useState<APLProposal[]>([]);
+  const [timelineHashHistory, setTimelineHashHistory] = useState<string[]>([]);
+  const [timelineScrubIndex, setTimelineScrubIndex] = useState(0);
   const [timelineOutputHash, setTimelineOutputHash] = useState<string>('pending');
   const [timelineDispatchError, setTimelineDispatchError] = useState<string | null>(null);
   const [isTimelineDispatching, setIsTimelineDispatching] = useState(false);
@@ -397,8 +403,11 @@ const App: React.FC = () => {
     let cancelled = false;
     void runDeterministicReplay(INITIAL_TIMELINE_STATE, []).then((result) => {
       if (cancelled) return;
+      setTimelineBaseState(result.outputState);
       setTimelineState(result.outputState);
       setTimelineOutputHash(result.outputStateHash);
+      setTimelineHashHistory([result.outputStateHash]);
+      setTimelineScrubIndex(0);
       timelineStateRef.current = result.outputState;
     }).catch((error) => {
       if (!cancelled) {
@@ -412,8 +421,36 @@ const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const prefix = timelineActionHistory.slice(0, timelineScrubIndex);
+    void runDeterministicReplay(timelineBaseState, prefix, {
+      workspaceId: timelineBaseState.workspaceId,
+    }).then((result) => {
+      if (cancelled) return;
+      startTransition(() => {
+        setTimelineState(result.outputState);
+        setTimelineOutputHash(result.outputStateHash);
+      });
+    }).catch((error) => {
+      if (!cancelled) {
+        console.error('[Timeline] Failed to hydrate scrubbed state:', error);
+        setTimelineDispatchError((error as Error).message);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [timelineActionHistory, timelineBaseState, timelineScrubIndex]);
+
+  const isTimelinePreviewMode = timelineScrubIndex < timelineActionHistory.length;
+
   const handleTimelineDispatchAction = useCallback(async (request: TimelineActionRequest) => {
     if (isTimelineDispatching) return;
+    if (timelineScrubIndex < timelineActionHistory.length) {
+      setTimelineDispatchError('Timeline is in read-only preview mode. Jump to latest or restore before editing.');
+      return;
+    }
 
     setIsTimelineDispatching(true);
     setTimelineDispatchError(null);
@@ -505,9 +542,13 @@ const App: React.FC = () => {
         workspaceId: currentTimelineState.workspaceId,
       });
 
+      const nextHistoryLength = timelineActionHistory.length + 1;
       startTransition(() => {
+        setTimelineActionHistory((prev) => [...prev, proposal]);
+        setTimelineHashHistory((prev) => [...prev, replayResult.outputStateHash]);
         setTimelineState(replayResult.outputState);
         setTimelineOutputHash(replayResult.outputStateHash);
+        setTimelineScrubIndex(nextHistoryLength);
       });
     } catch (error) {
       console.error('[Timeline] Dispatch failed:', error);
@@ -515,7 +556,35 @@ const App: React.FC = () => {
     } finally {
       setIsTimelineDispatching(false);
     }
-  }, [isTimelineDispatching]);
+  }, [isTimelineDispatching, timelineActionHistory.length, timelineScrubIndex]);
+
+  const handleTimelineScrubChange = useCallback((index: number) => {
+    const bounded = Math.max(0, Math.min(index, timelineActionHistory.length));
+    setTimelineScrubIndex(bounded);
+  }, [timelineActionHistory.length]);
+
+  const handleTimelineJumpLatest = useCallback(() => {
+    setTimelineScrubIndex(timelineActionHistory.length);
+    setTimelineDispatchError(null);
+  }, [timelineActionHistory.length]);
+
+  const handleTimelineRestoreToIndex = useCallback((index: number) => {
+    const bounded = Math.max(0, Math.min(index, timelineActionHistory.length));
+    setTimelineActionHistory((prev) => prev.slice(0, bounded));
+    setTimelineHashHistory((prev) => prev.slice(0, bounded + 1));
+    setTimelineScrubIndex(bounded);
+    setTimelineDispatchError(null);
+  }, [timelineActionHistory.length]);
+
+  const timelineProvenanceEvents = provenanceLedger
+    .getEntries()
+    .filter((entry) => ['ADD_TRACK', 'MOVE_REGION', 'SPLIT_REGION', 'SET_AUTOMATION_POINT'].includes(entry.actionType))
+    .map((entry) => ({
+      proposalId: entry.proposalId,
+      actionType: entry.actionType,
+      actorId: entry.actor.id,
+      timestamp: entry.timestamp,
+    }));
 
   const handleResetToOriginal = useCallback(() => {
     audioEngine.resetToOriginal();
@@ -3676,15 +3745,30 @@ const App: React.FC = () => {
           )}
 
           {appState === AppState.READY && (
-            <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
-              <TimelineWorkspace
-                timelineState={timelineState}
-                outputStateHash={timelineOutputHash}
-                isDispatching={isTimelineDispatching}
-                dispatchError={timelineDispatchError}
-                onDispatchAction={handleTimelineDispatchAction}
-              />
-            </div>
+            <>
+              <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
+                <HistoryScrubber
+                  totalSteps={timelineActionHistory.length}
+                  currentIndex={timelineScrubIndex}
+                  currentHash={timelineHashHistory[timelineScrubIndex] || timelineOutputHash}
+                  isPreviewMode={isTimelinePreviewMode}
+                  events={timelineProvenanceEvents}
+                  onChangeIndex={handleTimelineScrubChange}
+                  onJumpLatest={handleTimelineJumpLatest}
+                  onRestoreToIndex={handleTimelineRestoreToIndex}
+                />
+              </div>
+              <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
+                <TimelineWorkspace
+                  timelineState={timelineState}
+                  outputStateHash={timelineOutputHash}
+                  isDispatching={isTimelineDispatching}
+                  isReadOnly={isTimelinePreviewMode || isTimelineDispatching}
+                  dispatchError={timelineDispatchError}
+                  onDispatchAction={handleTimelineDispatchAction}
+                />
+              </div>
+            </>
           )}
 
         </div>
