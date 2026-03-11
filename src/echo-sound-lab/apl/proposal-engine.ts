@@ -26,6 +26,7 @@ import {
   getGainAdjustmentNeeded,
   getLimiterThresholdNeeded,
 } from './signal-intelligence';
+import { deterministicId } from '../../services/deterministicJson';
 
 /**
  * APLProposal: Complete, Self-Contained Recommendation
@@ -86,6 +87,24 @@ export interface APLProposal {
  * Generates proposals from signal intelligence
  */
 export class APLProposalEngine {
+  private buildProposalId(
+    actionType: APLProposal['action']['type'],
+    intel: APLSignalIntelligence,
+    extra: Record<string, unknown>
+  ): string {
+    return deterministicId(`prop-${actionType.toLowerCase()}`, {
+      actionType,
+      trackId: intel.trackId,
+      trackName: intel.trackName,
+      metrics: {
+        loudnessLUFS: Number(intel.metrics.loudnessLUFS.toFixed(4)),
+        truePeakDB: Number(intel.metrics.truePeakDB.toFixed(4)),
+        crestFactor: Number(intel.metrics.crestFactor.toFixed(4)),
+      },
+      extra,
+    });
+  }
+
   /**
    * Generate proposals from signal intelligence
    * May return 0, 1, or multiple proposals
@@ -125,17 +144,22 @@ export class APLProposalEngine {
     anomaly: any,
   ): APLProposal {
     const limiterThreshold = getLimiterThresholdNeeded(intel.metrics);
+    const targetThreshold = limiterThreshold || -0.1;
 
     return {
-      proposalId: `prop_limiter_${Date.now()}`,
+      proposalId: this.buildProposalId('LIMITING', intel, {
+        threshold: targetThreshold,
+        anomalyStartMs: anomaly?.startMs ?? 0,
+        anomalyEndMs: anomaly?.endMs ?? 0,
+      }),
       trackId: intel.trackId,
       trackName: intel.trackName,
       action: {
         type: 'LIMITING',
-        description: `Apply Limiter at ${(limiterThreshold || -0.1).toFixed(1)} dBFS to prevent clipping`,
+        description: `Apply Limiter at ${targetThreshold.toFixed(1)} dBFS to prevent clipping`,
         parameters: {
           plugin: 'Logic Pro Limiter',
-          threshold: limiterThreshold || -0.1,
+          threshold: targetThreshold,
           release: 50,
           lookahead: 5,
         },
@@ -163,7 +187,10 @@ export class APLProposalEngine {
     const gainAdjustment = getGainAdjustmentNeeded(intel.metrics, targetLUFS);
 
     return {
-      proposalId: `prop_gain_${Date.now()}`,
+      proposalId: this.buildProposalId('NORMALIZATION', intel, {
+        targetLUFS,
+        gainAdjustment: Number(gainAdjustment.toFixed(4)),
+      }),
       trackId: intel.trackId,
       trackName: intel.trackName,
       action: {
@@ -194,8 +221,13 @@ export class APLProposalEngine {
    * Create a DC removal proposal
    */
   private createDCRemovalProposal(intel: APLSignalIntelligence, anomaly: any): APLProposal {
+    const cornerFrequency = 20;
     return {
-      proposalId: `prop_dc_${Date.now()}`,
+      proposalId: this.buildProposalId('DC_REMOVAL', intel, {
+        cornerFrequency,
+        anomalyStartMs: anomaly?.startMs ?? 0,
+        anomalyEndMs: anomaly?.endMs ?? 0,
+      }),
       trackId: intel.trackId,
       trackName: intel.trackName,
       action: {
@@ -203,7 +235,7 @@ export class APLProposalEngine {
         description: 'Apply highpass filter to remove DC offset',
         parameters: {
           plugin: 'Logic Pro Highpass EQ',
-          frequency: 20,
+          frequency: cornerFrequency,
           slope: 12,
         },
       },

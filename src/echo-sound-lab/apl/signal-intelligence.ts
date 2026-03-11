@@ -93,6 +93,7 @@ export function createSignalIntelligence(params: {
   sessionId: string;
   metrics: APLSignalMetrics;
   anomalies?: APLAnomaly[];
+  analyzedAt?: number;
 }): APLSignalIntelligence {
   const anomalies = params.anomalies || [];
 
@@ -132,7 +133,7 @@ export function createSignalIntelligence(params: {
     trackId: params.trackId,
     trackName: params.trackName,
     sessionId: params.sessionId,
-    analyzedAt: Date.now(),
+    analyzedAt: params.analyzedAt ?? Date.now(),
     metrics: params.metrics,
     anomalies,
     verdict: {

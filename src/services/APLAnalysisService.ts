@@ -33,6 +33,14 @@ export interface AnalysisResult {
  * APL Analysis Service
  */
 export class APLAnalysisService {
+  private static buildDeterministicTrackId(file: File): string {
+    const baseName = file.name.replace(/\.[^/.]+$/, '') || 'track';
+    const safe = baseName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const sizePart = file.size.toString(36);
+    const modPart = (file.lastModified || 0).toString(36);
+    return `track_${safe || 'untitled'}_${sizePart}_${modPart}`;
+  }
+
   /**
    * Main entry point: Analyze a file and generate proposals
    */
@@ -51,16 +59,18 @@ export class APLAnalysisService {
       const anomalies = this.detectAnomalies(spectralProfile, metrics);
 
       // 5. Create signal intelligence
-      const trackId = request.trackId || `track_${Date.now()}`;
+      const trackId = request.trackId || this.buildDeterministicTrackId(request.file);
       const trackName = request.trackName || request.file.name.replace(/\.[^/.]+$/, '');
-      const sessionId = request.sessionId || `session_${Date.now()}`;
+      const sessionId = request.sessionId || `session_${trackId}`;
+      const analyzedAt = request.file.lastModified || Date.now();
 
       const signalIntelligence = createSignalIntelligence({
         trackId,
         trackName,
         sessionId,
         metrics,
-        anomalies
+        anomalies,
+        analyzedAt,
       });
 
       // 6. Generate proposals
