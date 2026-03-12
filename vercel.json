@@ -4,7 +4,7 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ],
@@ -35,8 +35,5 @@
         }
       ]
     }
-  ],
-  "env": {
-    "VITE_SUNO_API_URL": "https://api.aimlapi.com"
-  }
+  ]
 }
