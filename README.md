@@ -15,6 +15,15 @@ The system guarantees that:
 - unauthorized or tampered actions fail closed
 - every exported artifact can be tied to an auditable action history
 
+## Threat Model
+
+Tamper-evident history, replay-protected execution, and cryptographically verified output.
+
+Operationally:
+- proposal and execution payload tampering is rejected before state mutation
+- replayed ACC grants/nonces are rejected
+- export provenance is signed and embedded for downstream verification
+
 ## Architecture Pillars
 
 1. **Provenance (Phase 1)**
@@ -96,6 +105,32 @@ npm run test:e2e -- --project="Desktop Chrome" tests/e2e/golden-master.spec.ts
 
 The golden workflow is automated in:
 - `tests/e2e/golden-master.spec.ts`
+
+## Operator Guide
+
+### Deploy
+
+```bash
+npm run build
+```
+
+Deploy `dist/` to your hosting target (Vercel/Pages/static server).
+
+### Verify Exported Provenance Marker
+
+```bash
+node -e "const fs=require('fs');const b=fs.readFileSync(process.argv[1]);console.log(b.includes(Buffer.from('ESL_PROVENANCE_REF'))?'marker-present':'marker-missing')" ./exported-track.wav
+```
+
+Expected output: `marker-present`
+
+### Scale the Plugin Factory
+
+For each new plugin:
+1. Add manifest schema in `src/services/plugins/pluginRegistry.ts`.
+2. Add node-routing/parameter mapping in `src/services/AudioPlaybackEngine.ts`.
+3. Ensure deterministic insert/param action coverage in tests (`pluginInsertDeterminism`, routing, automation).
+4. Validate with `npm test` + `npm run ci:determinism`.
 
 ## Release Commands (v2.5.0)
 
