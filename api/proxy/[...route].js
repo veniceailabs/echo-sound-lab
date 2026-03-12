@@ -37,8 +37,18 @@ function isValidManifest(manifest) {
 
 function getRouteSegments(req) {
   const value = req.query?.route;
-  if (Array.isArray(value)) return value;
-  if (typeof value === 'string' && value) return [value];
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((segment) => String(segment).split('/'))
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+  }
+  if (typeof value === 'string' && value) {
+    return value
+      .split('/')
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+  }
   return [];
 }
 
