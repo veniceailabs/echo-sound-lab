@@ -1,4 +1,4 @@
-import React, { startTransition, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { Suspense, startTransition, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AppState, AudioMetrics, ProcessingConfig, Suggestion, EchoReport, RevisionEntry, ReferenceTrack, MixSignature, GeneratedSong, Stem, EQSettings, DynamicEQConfig, EngineMode, ProcessingAction, SSCScan, PreservationMode, CohesionTrackReport, BatchState } from './types';
 import { audioEngine } from './services/audioEngine';
 import { audioPerceptionLayer } from './services/audioPerceptionLayer';
@@ -32,8 +32,8 @@ import { storageService } from './services/storageService';
 import { runSafeAsync } from './utils/safeAsync';
 import { saveEQSettings, saveDynamicEQSettings } from './utils/eqPersistence';
 import SettingsPanel from './components/SettingsPanel';
-import { i18nService } from './services/i18nService';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { useTranslation } from 'react-i18next';
 
 // NEW: Import enhanced features
 import { EnhancedControlPanel } from './components/EnhancedControlPanel';
@@ -50,15 +50,8 @@ import { useViewport } from './context/ViewportContext';
 import { debugTelemetryService } from './services/debugTelemetryService';
 import { useAudioContextState } from './hooks/useAudioContextState';
 import { AudioResumeGuard } from './components/AudioResumeGuard';
-import TimelineWorkspace, { type TimelineActionRequest } from './components/TimelineWorkspace';
-import HistoryScrubber from './components/HistoryScrubber';
-import BranchSelector from './components/BranchSelector';
-import MergeModal from './components/MergeModal';
-import TransportBar from './components/TransportBar';
-
 // V.E.N.U.M. - Viral Emergent Network Utility Matrix
 import { generateEchoReportCard, ShareableCard, GenerateEchoReportCardOptions } from './services/venumEngine';
-import { ShareableCardModal, NudgeBanner } from './components/ShareableCardModal';
 
 // Notification System
 import { NotificationManager, NotificationType } from './components/Notification';
@@ -66,16 +59,18 @@ import { NotificationManager, NotificationType } from './components/Notification
 // Capability System - Phase 2.2.4 React Integration
 import { CapabilityProvider } from './hooks';
 import type { AccRequiredEventDetail } from './hooks/CapabilityProvider';
-import { CapabilityACCModal } from './components/CapabilityACCModal';
 import { CapabilityAuthority, type ProcessIdentity } from './services/CapabilityAuthority';
 import { DEFAULT_ACC_POLICY_TEMPLATE, type AccPolicyTemplateName } from './services/capabilities';
 import { createCreativeMixingPreset } from './services/capabilityPresets';
 import type { ConfirmationToken } from './services/capabilityAccBridge';
 
-// Phase 2: APL ProposalPanel UI
-import { APLProposalPanel } from './components/APL/APLProposalPanel';
 import { APLProposal } from './echo-sound-lab/apl/proposal-engine';
 import { generateMockProposals } from './utils/mockAPLProposals';
+import type { TimelineActionRequest } from './components/TimelineWorkspace';
+import SessionShell from './shells/SessionShell';
+import ExportShell from './shells/ExportShell';
+const TimelineShell = React.lazy(() => import('./shells/TimelineShell'));
+const OrchestrationShell = React.lazy(() => import('./shells/OrchestrationShell'));
 
 // Phase 4: ExecutionService (Main Process Integration)
 // ExecutionBridge is called directly from ProposalCard
@@ -132,6 +127,11 @@ const MODE_LABELS: Record<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO', string> = 
   VIDEO: 'SFS Video Engine',
 };
 const TIMELINE_SNAPSHOT_INTERVAL = 50;
+const shellFallback = (
+  <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-4 text-xs uppercase tracking-[0.18em] text-slate-500">
+    Loading shell…
+  </div>
+);
 
 const INITIAL_TIMELINE_STATE: ReplayState = {
   sessionId: 'timeline-session-main',
@@ -184,6 +184,7 @@ const capabilityAuthority = new CapabilityAuthority(
 );
 
 const App: React.FC = () => {
+  const { t } = useTranslation();
   const defaultEqSettings: EQSettings = [
     { frequency: 60, gain: 0, type: 'lowshelf' },      // Sub bass
     { frequency: 250, gain: 0, type: 'peaking' },      // Low-mid
@@ -936,10 +937,10 @@ const App: React.FC = () => {
   const abPanelLabel = snapshotABActive
     ? `Listening to ${isAbComparing ? (snapshotALabel || 'Snapshot A') : (snapshotBLabel || 'Snapshot B')}`
     : (!hasAppliedChanges
-      ? i18nService.t('ab.noChanges')
+      ? t('ab.noChanges')
       : isAbComparing
-        ? `${i18nService.t('ab.original')}${pitchTag ? ` · ${pitchTag}` : ''}`
-        : `${i18nService.t('ab.processed')}${pitchTag ? ` · ${pitchTag}` : ''}`);
+        ? `${t('ab.original')}${pitchTag ? ` · ${pitchTag}` : ''}`
+        : `${t('ab.processed')}${pitchTag ? ` · ${pitchTag}` : ''}`);
   const abFloatingLabel = snapshotABActive
     ? (isAbComparing ? 'Snapshot A' : 'Snapshot B')
     : pitchTag ? pitchTag : (isAbComparing ? 'Original' : 'Processed');
@@ -3781,8 +3782,8 @@ const App: React.FC = () => {
                 </svg>
               </div>
 
-              <h2 className="text-2xl font-bold text-white mb-2">{i18nService.t('upload.title')}</h2>
-              <p className="text-sm text-slate-500">{i18nService.t('upload.description')}</p>
+              <h2 className="text-2xl font-bold text-white mb-2">{t('upload.title')}</h2>
+              <p className="text-sm text-slate-500">{t('upload.description')}</p>
 
               {/* Supported formats */}
               <div className="mt-6 flex gap-2 justify-center flex-wrap">
@@ -3871,22 +3872,24 @@ const App: React.FC = () => {
               <div className="absolute inset-0 rounded-full border-2 border-t-amber-500 animate-spin" />
               <div className="absolute inset-2 rounded-full bg-amber-500/10" />
             </div>
-            <p className="text-white font-semibold">{i18nService.t('upload.analyzingAudio')}</p>
-            <p className="text-slate-500 text-sm mt-1">{i18nService.t('upload.extractingMetrics')}</p>
+            <p className="text-white font-semibold">{t('upload.analyzingAudio')}</p>
+            <p className="text-slate-500 text-sm mt-1">{t('upload.extractingMetrics')}</p>
           </div>
         </div>
       )}
 
       {/* Main Workspace - Second Light OS */}
       {appState === AppState.READY && activeMode === 'SINGLE' && (
-        <div className="w-full max-w-7xl space-y-4 relative z-10">
+        <SessionShell
+          workspace={
+            <>
           {/* Visualizer Module */}
           <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden">
             {/* Module Header */}
             <div className="px-5 py-3 border-b border-white/5 bg-white/[0.02] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-amber-500" />
-                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{i18nService.t('waveform')}</span>
+                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{t('waveform')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
@@ -3911,7 +3914,7 @@ const App: React.FC = () => {
                         : 'bg-white/5 text-slate-500 border border-white/5 hover:border-white/10'
                   }`}
                 >
-                  {!hasAppliedChanges ? i18nService.t('ab.noChanges') : isAbComparing ? i18nService.t('ab.original') : i18nService.t('ab.processed')}
+                  {!hasAppliedChanges ? t('ab.noChanges') : isAbComparing ? t('ab.original') : t('ab.processed')}
                 </button>
               </div>
             </div>
@@ -4150,75 +4153,72 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {appState === AppState.READY && (
-            <>
-              <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
-                <BranchSelector
-                  branches={timelineBranches}
-                  activeBranchId={activeTimelineBranchId}
-                  isBusy={isTimelineDispatching}
-                  onCheckout={handleTimelineCheckoutBranch}
-                  onOpenMerge={() => {
-                    setMergeError(null);
-                    setShowMergeModal(true);
-                  }}
-                />
-              </div>
-              <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
-                <TransportBar
-                  isPlaying={isTimelinePlaying}
-                  currentTimeSec={timelinePlayheadDisplaySec}
-                  durationSec={audioPlaybackEngine.getDuration()}
-                  isBusy={isTimelineDispatching}
-                  isExporting={isTimelineExporting}
-                  onPlay={() => {
-                    void handleTimelinePlay();
-                  }}
-                  onPause={handleTimelinePause}
-                  onStop={handleTimelineStop}
-                  onSeek={handleTimelineSeek}
-                  onExportWav={() => {
-                    void handleTimelineExportOffline();
-                  }}
-                />
-              </div>
-              <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
-                <HistoryScrubber
-                  totalSteps={timelineActionHistory.length}
-                  currentIndex={timelineScrubIndex}
-                  currentHash={timelineHashHistory[timelineScrubIndex] || timelineOutputHash}
-                  isPreviewMode={isTimelinePreviewMode}
-                  canBranchFromState={isTimelinePreviewMode}
-                  isBusy={isTimelineDispatching}
-                  hydrationDurationMs={timelineHydrationMetrics?.durationMs}
-                  replayedActionCount={timelineHydrationMetrics?.replayedActionCount}
-                  fromSnapshotIndex={timelineHydrationMetrics?.fromSnapshotIndex}
-                  events={timelineProvenanceEvents}
-                  onChangeIndex={handleTimelineScrubChange}
-                  onJumpLatest={handleTimelineJumpLatest}
-                  onRestoreToIndex={handleTimelineRestoreToIndex}
-                  onBranchFromState={handleTimelineBranchFromState}
-                />
-              </div>
-              <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
-                <TimelineWorkspace
-                  timelineState={timelineState}
-                  outputStateHash={timelineOutputHash}
-                  isDispatching={isTimelineDispatching}
-                  isReadOnly={isTimelinePreviewMode || isTimelineDispatching}
-                  dispatchError={timelineDispatchError}
-                  onDispatchAction={handleTimelineDispatchAction}
-                  isGeneratingIntent={isTimelineIntentGenerating}
-                  onGenerateIntent={handleTimelineGenerateIntent}
-                  isTransportPlaying={isTimelinePlaying}
-                  getTransportPlayheadSeconds={getTimelinePlayheadSeconds}
-                  transportTick={timelineTransportTick}
-                />
-              </div>
             </>
-          )}
-
-        </div>
+          }
+          timelineShell={
+            appState === AppState.READY ? (
+              <Suspense fallback={shellFallback}>
+                <TimelineShell
+                  branchSelectorProps={{
+                    branches: timelineBranches,
+                    activeBranchId: activeTimelineBranchId,
+                    isBusy: isTimelineDispatching,
+                    onCheckout: handleTimelineCheckoutBranch,
+                    onOpenMerge: () => {
+                      setMergeError(null);
+                      setShowMergeModal(true);
+                    },
+                  }}
+                  transportBarProps={{
+                    isPlaying: isTimelinePlaying,
+                    currentTimeSec: timelinePlayheadDisplaySec,
+                    durationSec: audioPlaybackEngine.getDuration(),
+                    isBusy: isTimelineDispatching,
+                    isExporting: isTimelineExporting,
+                    onPlay: () => {
+                      void handleTimelinePlay();
+                    },
+                    onPause: handleTimelinePause,
+                    onStop: handleTimelineStop,
+                    onSeek: handleTimelineSeek,
+                    onExportWav: () => {
+                      void handleTimelineExportOffline();
+                    },
+                  }}
+                  historyScrubberProps={{
+                    totalSteps: timelineActionHistory.length,
+                    currentIndex: timelineScrubIndex,
+                    currentHash: timelineHashHistory[timelineScrubIndex] || timelineOutputHash,
+                    isPreviewMode: isTimelinePreviewMode,
+                    canBranchFromState: isTimelinePreviewMode,
+                    isBusy: isTimelineDispatching,
+                    hydrationDurationMs: timelineHydrationMetrics?.durationMs,
+                    replayedActionCount: timelineHydrationMetrics?.replayedActionCount,
+                    fromSnapshotIndex: timelineHydrationMetrics?.fromSnapshotIndex,
+                    events: timelineProvenanceEvents,
+                    onChangeIndex: handleTimelineScrubChange,
+                    onJumpLatest: handleTimelineJumpLatest,
+                    onRestoreToIndex: handleTimelineRestoreToIndex,
+                    onBranchFromState: handleTimelineBranchFromState,
+                  }}
+                  timelineWorkspaceProps={{
+                    timelineState,
+                    outputStateHash: timelineOutputHash,
+                    isDispatching: isTimelineDispatching,
+                    isReadOnly: isTimelinePreviewMode || isTimelineDispatching,
+                    dispatchError: timelineDispatchError,
+                    onDispatchAction: handleTimelineDispatchAction,
+                    isGeneratingIntent: isTimelineIntentGenerating,
+                    onGenerateIntent: handleTimelineGenerateIntent,
+                    isTransportPlaying: isTimelinePlaying,
+                    getTransportPlayheadSeconds: getTimelinePlayheadSeconds,
+                    transportTick: timelineTransportTick,
+                  }}
+                />
+              </Suspense>
+            ) : null
+          }
+        />
       )}
 
       {/* Multi-Stem Mode */}
@@ -4501,53 +4501,46 @@ const App: React.FC = () => {
         Second Light OS
       </div>
 
-      {/* V.E.N.U.M. Export Share Prompt */}
-      {showExportSharePrompt && (
-        <div className="fixed bottom-20 right-4 z-50 max-w-sm animate-in slide-in-from-right">
-          <NudgeBanner
-            text="Master exported! Create a share card to flex your work?"
-            actionLabel="Create Card"
-            onAction={async () => {
-              setShowExportSharePrompt(false);
-              if (processedMetrics) {
-                try {
-                  const options: GenerateEchoReportCardOptions = {
-                    trackName: currentFileName || 'Mastered Track',
-                    report: echoReport || undefined,
-                    beforeMetrics: originalMetrics || undefined,
-                    afterMetrics: processedMetrics,
-                    lufs: processedMetrics.lufs?.integrated,
-                    dynamicRange: processedMetrics.crestFactor,
-                    verdict: echoReport?.verdict,
-                    improvementPercent: originalMetrics && processedMetrics
-                      ? Math.round(Math.abs((processedMetrics.lufs?.integrated || -14) - (originalMetrics.lufs?.integrated || -20)) * 10)
-                      : undefined,
-                    processedConfig: currentConfig, // Pass currentConfig here
-                  };
-                  const card = await generateEchoReportCard(options);
-                  setExportShareCard(card);
-                  setShowExportShareModal(true);
-                } catch (err) {
-                  console.error('Failed to generate share card:', err);
-                }
+      <ExportShell
+        nudgeBannerProps={showExportSharePrompt ? {
+          text: 'Master exported! Create a share card to flex your work?',
+          actionLabel: 'Create Card',
+          onAction: async () => {
+            setShowExportSharePrompt(false);
+            if (processedMetrics) {
+              try {
+                const options: GenerateEchoReportCardOptions = {
+                  trackName: currentFileName || 'Mastered Track',
+                  report: echoReport || undefined,
+                  beforeMetrics: originalMetrics || undefined,
+                  afterMetrics: processedMetrics,
+                  lufs: processedMetrics.lufs?.integrated,
+                  dynamicRange: processedMetrics.crestFactor,
+                  verdict: echoReport?.verdict,
+                  improvementPercent: originalMetrics && processedMetrics
+                    ? Math.round(Math.abs((processedMetrics.lufs?.integrated || -14) - (originalMetrics.lufs?.integrated || -20)) * 10)
+                    : undefined,
+                  processedConfig: currentConfig,
+                };
+                const card = await generateEchoReportCard(options);
+                setExportShareCard(card);
+                setShowExportShareModal(true);
+              } catch (err) {
+                console.error('Failed to generate share card:', err);
               }
-            }}
-            onDismiss={() => setShowExportSharePrompt(false)}
-          />
-        </div>
-      )}
-
-      {/* V.E.N.U.M. Export Share Modal */}
-      {showExportShareModal && exportShareCard && (
-        <ShareableCardModal
-          card={exportShareCard}
-          onClose={() => {
-            setShowExportShareModal(false); // Corrected: was setShowShareModal
+            }
+          },
+          onDismiss: () => setShowExportSharePrompt(false),
+        } : null}
+        shareableCardModalProps={showExportShareModal && exportShareCard ? {
+          card: exportShareCard,
+          onClose: () => {
+            setShowExportShareModal(false);
             setExportShareCard(null);
-          }}
-          nudgeText="Show off those stats!"
-        />
-      )}
+          },
+          nudgeText: 'Show off those stats!',
+        } : null}
+      />
 
       {/* Settings Panel */}
       {showSettings && (
@@ -4588,47 +4581,45 @@ const App: React.FC = () => {
         />
       )}
 
-      <MergeModal
-        isOpen={showMergeModal}
-        branches={timelineBranches}
-        defaultTargetBranchId={activeTimelineBranchId}
-        isMerging={isTimelineDispatching}
-        error={mergeError}
-        onClose={() => {
-          if (isTimelineDispatching) return;
-          setShowMergeModal(false);
-          setMergeError(null);
-        }}
-        onMerge={handleTimelineMergeBranches}
-      />
-
-      {/* Capability ACC Modal (Phase 2.2.4) */}
-      <CapabilityACCModal
-        isOpen={showAccModal}
-        token={accToken}
-        reason={accReason}
-        onConfirm={handleAccConfirm}
-        onDismiss={handleAccDismiss}
-        isLoading={accIsLoading}
-      />
+      <Suspense fallback={null}>
+        <OrchestrationShell
+          mergeModalProps={{
+            isOpen: showMergeModal,
+            branches: timelineBranches,
+            defaultTargetBranchId: activeTimelineBranchId,
+            isMerging: isTimelineDispatching,
+            error: mergeError,
+            onClose: () => {
+              if (isTimelineDispatching) return;
+              setShowMergeModal(false);
+              setMergeError(null);
+            },
+            onMerge: handleTimelineMergeBranches,
+          }}
+          accModalProps={{
+            isOpen: showAccModal,
+            token: accToken,
+            reason: accReason,
+            onConfirm: handleAccConfirm,
+            onDismiss: handleAccDismiss,
+            isLoading: accIsLoading,
+          }}
+          proposalPanelProps={appState === AppState.READY && aplProposals.length > 0 ? {
+            proposals: aplProposals,
+            isScanning: isAplScanning,
+            dataSource: aplDataSource,
+            dataSourceReason: aplDataSourceReason,
+            onApplyDirect: handleAplApplyDirect,
+            onAuthorizeGated: handleAplAuthorizeGated,
+          } : null}
+        />
+      </Suspense>
 
       {/* Notification System */}
       <NotificationManager
         notifications={notifications}
         onDismiss={dismissNotification}
       />
-
-      {/* Phase 2: APL ProposalPanel - Intelligence Feed Sidebar */}
-      {appState === AppState.READY && aplProposals.length > 0 && (
-        <APLProposalPanel
-          proposals={aplProposals}
-          isScanning={isAplScanning}
-          dataSource={aplDataSource}
-          dataSourceReason={aplDataSourceReason}
-          onApplyDirect={handleAplApplyDirect}
-          onAuthorizeGated={handleAplAuthorizeGated}
-        />
-      )}
 
       {/* Demo Dashboard (Ghost System Modal) */}
       {showDemoMode && (

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import i18n from '../i18n';
-import { i18nService } from '../services/i18nService';
 import { EngineMode } from '../types';
 import { useViewport } from '../context/ViewportContext';
 import {
@@ -136,7 +135,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   const handleLanguageChange = async (lang: SupportedUILanguage) => {
     setIsChanging(true);
     await i18n.changeLanguage(lang);
-    await i18nService.setLanguage(lang);
     setCurrentLanguage(lang);
     setIsChanging(false);
   };
