@@ -115,7 +115,8 @@ declare global {
 }
 
 const ENGINE_MODE_KEY = 'echo.engineMode.v1';
-const FRIENDLY_TOUR_KEY = 'echo.friendlyTourSeen.v1';
+const FRIENDLY_TOUR_COMPLETED_KEY = 'echo.friendlyTourCompleted.v2';
+const FRIENDLY_TOUR_SESSION_DISMISSED_KEY = 'echo.friendlyTourDismissed.session.v1';
 const ACC_POLICY_TEMPLATE_KEY = 'echo.accPolicyTemplate.v1';
 const MODE_LABELS: Record<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO', string> = {
   SINGLE: 'Single Track',
@@ -1204,9 +1205,19 @@ const App: React.FC = () => {
   const dismissFriendlyTour = useCallback(() => {
     setShowFriendlyTour(false);
     try {
-      localStorage.setItem(FRIENDLY_TOUR_KEY, 'true');
+      sessionStorage.setItem(FRIENDLY_TOUR_SESSION_DISMISSED_KEY, 'true');
     } catch (e) {
       console.warn('[App] Failed to persist friendly tour state', e);
+    }
+  }, []);
+
+  const completeFriendlyTour = useCallback(() => {
+    setShowFriendlyTour(false);
+    try {
+      localStorage.setItem(FRIENDLY_TOUR_COMPLETED_KEY, 'true');
+      sessionStorage.setItem(FRIENDLY_TOUR_SESSION_DISMISSED_KEY, 'true');
+    } catch (e) {
+      console.warn('[App] Failed to persist friendly tour completion state', e);
     }
   }, []);
 
@@ -1286,12 +1297,12 @@ const App: React.FC = () => {
   const handleFriendlyTourNext = useCallback(() => {
     setFriendlyTourStep((prev) => {
       if (prev >= friendlyTourSteps.length - 1) {
-        dismissFriendlyTour();
+        completeFriendlyTour();
         return prev;
       }
       return prev + 1;
     });
-  }, [dismissFriendlyTour, friendlyTourSteps.length]);
+  }, [completeFriendlyTour, friendlyTourSteps.length]);
 
   const handleFriendlyTourBack = useCallback(() => {
     setFriendlyTourStep((prev) => Math.max(0, prev - 1));
@@ -1405,20 +1416,32 @@ const App: React.FC = () => {
   }, [accPolicyTemplate]);
 
   useEffect(() => {
-    if (engineMode !== 'FRIENDLY' || activeMode !== 'SINGLE') {
+    if (appState !== AppState.READY || engineMode !== 'FRIENDLY' || activeMode !== 'SINGLE') {
       setShowFriendlyTour(false);
       return;
     }
     try {
-      const seen = localStorage.getItem(FRIENDLY_TOUR_KEY) === 'true';
-      if (!seen) {
+      const completed = localStorage.getItem(FRIENDLY_TOUR_COMPLETED_KEY) === 'true';
+      const dismissedThisSession = sessionStorage.getItem(FRIENDLY_TOUR_SESSION_DISMISSED_KEY) === 'true';
+      if (!completed && !dismissedThisSession) {
         setFriendlyTourStep(0);
         setShowFriendlyTour(true);
       }
     } catch (e) {
       console.warn('[App] Failed to read friendly tour state', e);
     }
-  }, [engineMode, activeMode]);
+  }, [appState, engineMode, activeMode]);
+
+  const handleReplayFriendlyTour = useCallback(() => {
+    try {
+      localStorage.removeItem(FRIENDLY_TOUR_COMPLETED_KEY);
+      sessionStorage.removeItem(FRIENDLY_TOUR_SESSION_DISMISSED_KEY);
+    } catch (e) {
+      console.warn('[App] Failed to reset friendly tour state', e);
+    }
+    setFriendlyTourStep(0);
+    setShowFriendlyTour(true);
+  }, []);
 
   // Session autosave - check for existing session on mount
   useEffect(() => {
@@ -4608,6 +4631,7 @@ const App: React.FC = () => {
             onClose={() => setShowSettings(false)}
             engineMode={engineMode}
             setEngineMode={setEngineMode}
+            onReplayFriendlyTour={handleReplayFriendlyTour}
             accPolicyTemplate={accPolicyTemplate}
             setAccPolicyTemplate={setAccPolicyTemplate}
             onResetToOriginal={handleResetToOriginal}

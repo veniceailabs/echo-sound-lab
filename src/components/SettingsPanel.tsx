@@ -12,6 +12,7 @@ interface SettingsPanelProps {
   onClose: () => void;
   engineMode: EngineMode;
   setEngineMode: (mode: EngineMode) => void;
+  onReplayFriendlyTour?: () => void;
   accPolicyTemplate: AccPolicyTemplateName;
   setAccPolicyTemplate: (template: AccPolicyTemplateName) => void;
   onResetToOriginal: () => void;
@@ -107,6 +108,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClose,
   engineMode,
   setEngineMode,
+  onReplayFriendlyTour,
   accPolicyTemplate,
   setAccPolicyTemplate,
   onResetToOriginal,
@@ -261,6 +263,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             Reset to original
                           </button>
                         </div>
+                        {onReplayFriendlyTour && (
+                          <button
+                            onClick={onReplayFriendlyTour}
+                            className="w-full px-4 py-3 rounded-xl text-xs uppercase tracking-[0.2em] font-bold bg-slate-900/60 border border-slate-700/60 text-slate-200 hover:bg-slate-800"
+                          >
+                            Replay studio tour
+                          </button>
+                        )}
                       </>
                     )}
                     {section === 'governance' && (

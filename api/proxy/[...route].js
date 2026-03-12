@@ -1,10 +1,10 @@
 import { GoogleGenAI } from '@google/genai';
-import { getAnimateArtConfig, getGeminiConfig, getSunoConfig, getVoiceConfig } from './_lib/env.js';
-import { AuthError, requireAuthContext } from './_lib/auth.js';
-import { handleOptions, parseMultipartForm, proxyJson, readJsonBody, sendJson } from './_lib/http.js';
-import { signManifestPayload } from './_lib/manifest-signing.js';
-import { checkRateLimit } from './_lib/rate-limit.js';
-import { consumeExecutionNonce, createExecutionSession } from './_lib/security-session.js';
+import { getAnimateArtConfig, getGeminiConfig, getSunoConfig, getVoiceConfig } from '../_lib/env.js';
+import { AuthError, requireAuthContext } from '../_lib/auth.js';
+import { handleOptions, parseMultipartForm, proxyJson, readJsonBody, sendJson } from '../_lib/http.js';
+import { signManifestPayload } from '../_lib/manifest-signing.js';
+import { checkRateLimit } from '../_lib/rate-limit.js';
+import { consumeExecutionNonce, createExecutionSession } from '../_lib/security-session.js';
 
 export const config = {
   api: {
@@ -42,9 +42,9 @@ function getRouteSegments(req) {
   return [];
 }
 
-async function withAuthAndRate(req, res, config, callback) {
+async function withAuthAndRate(req, res, configFactory, callback) {
   const auth = requireAuthContext(req);
-  const rate = checkRateLimit(config(auth));
+  const rate = checkRateLimit(configFactory(auth));
   if (!rate.ok) {
     res.setHeader('Retry-After', String(rate.retryAfterSeconds));
     return sendJson(res, 429, {
@@ -163,7 +163,6 @@ async function handleSunoGenerate(req, res) {
   }), async () => {
     const body = await readJsonBody(req);
     const { apiKey, baseUrl } = getSunoConfig();
-
     return proxyJson(req, res, {
       url: `${baseUrl}/v2/generate/audio`,
       method: 'POST',
@@ -282,7 +281,6 @@ async function handleSunoHarmonies(req, res) {
   }), async () => {
     const body = await readJsonBody(req);
     const { apiKey, baseUrl } = getSunoConfig();
-
     return proxyJson(req, res, {
       url: `${baseUrl}/harmonies`,
       method: 'POST',
@@ -356,7 +354,6 @@ async function handleAnimateArtHooks(req, res) {
   }), async () => {
     const body = await readJsonBody(req);
     const { apiUrl, apiKey } = getAnimateArtConfig();
-
     return proxyJson(req, res, {
       url: `${apiUrl}/hooks`,
       method: 'POST',
@@ -371,82 +368,39 @@ async function handleAnimateArtHooks(req, res) {
 
 export default async function handler(req, res) {
   if (handleOptions(req, res)) return;
-
   const route = getRouteSegments(req);
 
   try {
-    if (route.length === 2 && route[0] === 'gemini' && (route[1] === 'generate' || route[1] === 'chat')) {
+    if (route.length === 1 && route[0] === 'gemini') {
       return await handleGemini(req, res);
     }
-
-    if (route.length === 2 && route[0] === 'proxy' && route[1] === 'gemini') {
-      return await handleGemini(req, res);
-    }
-
-    if (route.length === 3 && route[0] === 'proxy' && route[1] === 'security' && route[2] === 'session') {
+    if (route.length === 2 && route[0] === 'security' && route[1] === 'session') {
       return await handleSecuritySession(req, res);
     }
-
-    if (route.length === 3 && route[0] === 'proxy' && route[1] === 'security' && route[2] === 'consume') {
+    if (route.length === 2 && route[0] === 'security' && route[1] === 'consume') {
       return await handleSecurityConsume(req, res);
     }
-
-    if (route.length === 3 && route[0] === 'proxy' && route[1] === 'security' && route[2] === 'sign-manifest') {
+    if (route.length === 2 && route[0] === 'security' && route[1] === 'sign-manifest') {
       return await handleSignManifest(req, res);
     }
-
-    if (route.length === 3 && route[0] === 'proxy' && route[1] === 'suno' && route[2] === 'generate') {
-      return await handleSunoGenerate(req, res);
-    }
-
-    if (route.length === 4 && route[0] === 'proxy' && route[1] === 'suno' && route[2] === 'generate') {
-      return await handleSunoStatus(req, res, route[3]);
-    }
-
-    if (route.length === 3 && route[0] === 'proxy' && route[1] === 'suno' && route[2] === 'asset') {
-      return await handleSunoAsset(req, res);
-    }
-
-    if (route.length === 3 && route[0] === 'proxy' && route[1] === 'suno' && route[2] === 'harmonies') {
-      return await handleSunoHarmonies(req, res);
-    }
-
     if (route.length === 2 && route[0] === 'suno' && route[1] === 'generate') {
       return await handleSunoGenerate(req, res);
     }
-
     if (route.length === 3 && route[0] === 'suno' && route[1] === 'generate') {
       return await handleSunoStatus(req, res, route[2]);
     }
-
     if (route.length === 2 && route[0] === 'suno' && route[1] === 'asset') {
       return await handleSunoAsset(req, res);
     }
-
     if (route.length === 2 && route[0] === 'suno' && route[1] === 'harmonies') {
       return await handleSunoHarmonies(req, res);
     }
-
-    if (route.length === 2 && route[0] === 'proxy' && route[1] === 'voice-models') {
+    if (route.length === 1 && route[0] === 'voice-models') {
       return await handleVoiceModels(req, res);
     }
-
-    if (route.length === 3 && route[0] === 'proxy' && route[1] === 'voice-models') {
-      return await handleVoiceModelDelete(req, res, route[2]);
-    }
-
     if (route.length === 2 && route[0] === 'voice-models') {
-      return await handleVoiceModels(req, res);
+      return await handleVoiceModelDelete(req, res, route[1]);
     }
-
-    if (route.length === 3 && route[0] === 'voice-models') {
-      return await handleVoiceModelDelete(req, res, route[2]);
-    }
-
-    if (route.length === 3 && route[0] === 'proxy' && route[1] === 'animate-art' && route[2] === 'hooks') {
-      return await handleAnimateArtHooks(req, res);
-    }
-
     if (route.length === 2 && route[0] === 'animate-art' && route[1] === 'hooks') {
       return await handleAnimateArtHooks(req, res);
     }
@@ -456,7 +410,6 @@ export default async function handler(req, res) {
     if (error instanceof AuthError) {
       return sendJson(res, error.statusCode, { error: error.message });
     }
-
     return sendJson(res, 500, {
       error: error instanceof Error ? error.message : 'Unhandled API error',
     });
