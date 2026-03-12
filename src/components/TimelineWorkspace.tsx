@@ -43,6 +43,8 @@ interface TimelineWorkspaceProps {
   isTransportPlaying?: boolean;
   getTransportPlayheadSeconds?: () => number;
   transportTick?: number;
+  isGeneratingIntent?: boolean;
+  onGenerateIntent?: (intent: string, trackId: string) => void | Promise<void>;
 }
 
 function TimelineWorkspaceComponent({
@@ -55,11 +57,14 @@ function TimelineWorkspaceComponent({
   isTransportPlaying = false,
   getTransportPlayheadSeconds,
   transportTick = 0,
+  isGeneratingIntent = false,
+  onGenerateIntent,
 }: TimelineWorkspaceProps) {
   const [zoom, setZoom] = useState(1);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(timelineState.tracks[0]?.trackId || null);
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [intentPrompt, setIntentPrompt] = useState('');
   const timelineSurfaceRef = useRef<HTMLDivElement | null>(null);
 
   const maxEndSec = useMemo(() => {
@@ -179,6 +184,32 @@ function TimelineWorkspaceComponent({
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={intentPrompt}
+              onChange={(event) => setIntentPrompt(event.target.value)}
+              placeholder="Describe intent (e.g., make vocals aggressive)"
+              className="w-64 rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-[11px] text-slate-100 placeholder:text-slate-500"
+              disabled={isDispatching || isReadOnly || isGeneratingIntent || !onGenerateIntent}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                if (!onGenerateIntent) return;
+                const intent = intentPrompt.trim();
+                if (!intent) return;
+                const trackId = selectedTrackId || timelineState.tracks[0]?.trackId || 'track-main';
+                void Promise.resolve(onGenerateIntent(intent, trackId)).then(() => {
+                  setIntentPrompt('');
+                });
+              }}
+              disabled={isDispatching || isReadOnly || isGeneratingIntent || !intentPrompt.trim() || !onGenerateIntent}
+              className="rounded-lg border border-indigo-400/30 bg-indigo-500/10 px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-indigo-200 hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isGeneratingIntent ? 'Generating…' : 'AI Propose'}
+            </button>
+          </div>
           <label className="flex items-center gap-2 text-[11px] text-slate-300">
             Zoom
             <input

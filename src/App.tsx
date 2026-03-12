@@ -91,6 +91,7 @@ import { provenanceLedger } from './services/ProvenanceLedger';
 import { TimelineHydrationMetrics } from './services/timelineReplayCache';
 import { audioPlaybackEngine } from './services/AudioPlaybackEngine';
 import { assetRegistry } from './services/AssetRegistry';
+import { aiAgentService } from './services/AIAgentService';
 import {
   BranchEntity,
   DeterministicBranchRegistry,
@@ -385,6 +386,7 @@ const App: React.FC = () => {
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
   const [isTimelineDispatching, setIsTimelineDispatching] = useState(false);
+  const [isTimelineIntentGenerating, setIsTimelineIntentGenerating] = useState(false);
   const [isTimelinePlaying, setIsTimelinePlaying] = useState(false);
   const [timelinePlayheadDisplaySec, setTimelinePlayheadDisplaySec] = useState(0);
   const [timelineTransportTick, setTimelineTransportTick] = useState(0);
@@ -976,6 +978,43 @@ const App: React.FC = () => {
     const id = `notification-${Date.now()}-${Math.random()}`;
     setNotifications(prev => [...prev, { id, message, type, duration }]);
   }, []);
+
+  const handleTimelineGenerateIntent = useCallback(async (intent: string, trackId: string) => {
+    if (isTimelineIntentGenerating) return;
+    const trimmedIntent = intent.trim();
+    if (!trimmedIntent) return;
+
+    const trackName = timelineState.tracks.find((track) => track.trackId === trackId)?.trackName || trackId;
+
+    setIsTimelineIntentGenerating(true);
+    try {
+      const proposals = await aiAgentService.generateProposals(trimmedIntent, {
+        trackId,
+        trackName,
+        workspaceId: timelineState.workspaceId,
+      });
+
+      if (!proposals.length) {
+        showNotification('AI orchestrator produced no actions for this intent.', 'warning', 2600);
+        return;
+      }
+
+      setAplProposals((prev) => {
+        const deduped = new Map(prev.map((proposal) => [proposal.proposalId, proposal]));
+        for (const proposal of proposals) {
+          deduped.set(proposal.proposalId, proposal);
+        }
+        return Array.from(deduped.values());
+      });
+      setAplDataSource('real');
+      setAplDataSourceReason(null);
+      showNotification(`Generated ${proposals.length} AI proposal(s). Review and authorize in ACC.`, 'success', 3000);
+    } catch (error) {
+      showNotification(`AI orchestration failed: ${(error as Error).message}`, 'error', 3500);
+    } finally {
+      setIsTimelineIntentGenerating(false);
+    }
+  }, [isTimelineIntentGenerating, showNotification, timelineState.tracks, timelineState.workspaceId]);
 
   const beginVerdictRun = useCallback(() => {
     activeVerdictRunIdRef.current += 1;
@@ -4131,6 +4170,8 @@ const App: React.FC = () => {
                   isReadOnly={isTimelinePreviewMode || isTimelineDispatching}
                   dispatchError={timelineDispatchError}
                   onDispatchAction={handleTimelineDispatchAction}
+                  isGeneratingIntent={isTimelineIntentGenerating}
+                  onGenerateIntent={handleTimelineGenerateIntent}
                   isTransportPlaying={isTimelinePlaying}
                   getTransportPlayheadSeconds={getTimelinePlayheadSeconds}
                   transportTick={timelineTransportTick}

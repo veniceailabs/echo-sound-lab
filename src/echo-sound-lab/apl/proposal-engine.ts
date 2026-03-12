@@ -95,6 +95,67 @@ export interface APLProposal {
   signalIntelligence: APLSignalIntelligence;
 }
 
+export interface GeneratedAPLAction {
+  type: APLProposal['action']['type'];
+  description?: string;
+  trackId?: string;
+  trackName?: string;
+  parameters: Record<string, unknown>;
+}
+
+export interface BuildAplProposalOptions {
+  intent: string;
+  trackId: string;
+  trackName: string;
+  confidence?: number;
+  generatorId?: string;
+}
+
+export function buildAplProposalsFromActions(
+  actions: GeneratedAPLAction[],
+  options: BuildAplProposalOptions
+): APLProposal[] {
+  const confidence = typeof options.confidence === 'number' ? options.confidence : 0.92;
+  const generatorId = options.generatorId || 'ai-agent-service-v1';
+  const normalizedIntent = options.intent.trim() || 'audio intent refinement';
+
+  return actions.map((action, index) => {
+    const trackId = action.trackId || options.trackId;
+    const trackName = action.trackName || options.trackName;
+    const proposalId = deterministicId('prop-intent-driven', {
+      index,
+      intent: normalizedIntent,
+      actionType: action.type,
+      trackId,
+      parameters: action.parameters,
+      generatorId,
+    });
+
+    return {
+      proposalId,
+      trackId,
+      trackName,
+      action: {
+        type: action.type,
+        description: action.description || `${action.type} generated from intent`,
+        parameters: action.parameters,
+      },
+      evidence: {
+        metric: 'intent_instruction',
+        currentValue: index,
+        targetValue: actions.length,
+        rationale: `Generated from intent "${normalizedIntent}" using ${generatorId}.`,
+      },
+      confidence,
+      provenance: {
+        engine: 'CLASSICAL',
+        confidence,
+      },
+      signalIntelligence: {} as APLSignalIntelligence,
+    };
+  });
+}
+
 /**
  * APL Proposal Engine
  * Generates proposals from signal intelligence

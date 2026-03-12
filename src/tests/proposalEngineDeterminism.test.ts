@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { APLProposalEngine } from '../echo-sound-lab/apl/proposal-engine';
+import { APLProposalEngine, buildAplProposalsFromActions } from '../echo-sound-lab/apl/proposal-engine';
 import { createSignalIntelligence } from '../echo-sound-lab/apl/signal-intelligence';
 
 describe('APL Proposal Engine Determinism', () => {
@@ -58,5 +58,43 @@ describe('APL Proposal Engine Determinism', () => {
 
     expect(ids1).toEqual(ids2);
     expect(new Set(ids1).size).toBe(ids1.length);
+  });
+
+  test('buildAplProposalsFromActions is deterministic across equivalent parameter key ordering', () => {
+    const actionsA = [
+      {
+        type: 'SET_PLUGIN_PARAM' as const,
+        parameters: {
+          trackId: 'track-main',
+          instanceId: 'inst-1',
+          paramId: 'threshold',
+          value: -20,
+        },
+      },
+    ];
+    const actionsB = [
+      {
+        type: 'SET_PLUGIN_PARAM' as const,
+        parameters: {
+          value: -20,
+          paramId: 'threshold',
+          instanceId: 'inst-1',
+          trackId: 'track-main',
+        },
+      },
+    ];
+
+    const proposalsA = buildAplProposalsFromActions(actionsA, {
+      intent: 'make vocals aggressive',
+      trackId: 'track-main',
+      trackName: 'Main',
+    });
+    const proposalsB = buildAplProposalsFromActions(actionsB, {
+      intent: 'make vocals aggressive',
+      trackId: 'track-main',
+      trackName: 'Main',
+    });
+
+    expect(proposalsA[0].proposalId).toBe(proposalsB[0].proposalId);
   });
 });
