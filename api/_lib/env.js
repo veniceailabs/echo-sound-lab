@@ -23,7 +23,7 @@ export function optionalEnv(keys, fallback = '') {
 export function getGeminiConfig() {
   return {
     apiKey: requireEnv(['GEMINI_API_KEY'], 'Gemini API key'),
-    defaultModel: optionalEnv(['GEMINI_MODEL'], 'gemini-2.0-flash-exp'),
+    defaultModel: optionalEnv(['GEMINI_MODEL'], 'gemini-3.1-pro-preview'),
   };
 }
 

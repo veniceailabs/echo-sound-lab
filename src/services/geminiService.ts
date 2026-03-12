@@ -1,22 +1,40 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { AudioMetrics, ChatMessage, ProcessingReport, GapAnalysis, Stem, MixAnalysis, RefinementSuggestion, Suggestion, MixSignature, MixIntent, EchoMetrics, EchoReport, EchoAction, ProcessingConfig, MixReadiness } from '../types';
 import { GenreProfile, getAnalysisPromptForProfile } from './genreProfiles';
+import { postJson } from './backendApi';
 
-// Initialize Gemini with import.meta.env for Vite
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
+const Type = {
+    OBJECT: 'OBJECT',
+    ARRAY: 'ARRAY',
+    STRING: 'STRING',
+    NUMBER: 'NUMBER',
+    BOOLEAN: 'BOOLEAN',
+} as const;
 
 // ============================================================================
 // MODEL VERSION MANAGEMENT: Auto-update to latest Gemini when available
 // ============================================================================
 // This ensures the engine uses the best available Gemini version without code changes
 // Update the version here as new stable models are released
-// Current: gemini-2.0-flash-exp (latest, experimental - faster and smarter)
-const GEMINI_MODEL_VERSION = import.meta.env.VITE_GEMINI_MODEL || 'gemini-2.0-flash-exp';
+// Current: gemini-3.1-pro-preview (state-of-the-art reasoning model)
+const GEMINI_MODEL_VERSION = 'gemini-3.1-pro-preview';
 
 const getGeminiModel = (): string => {
   // Future: Could add auto-detection here via API call if Google provides version listing
   // For now, controlled by environment variable with fallback to latest stable
   return GEMINI_MODEL_VERSION;
+};
+
+type GeminiContentRequest = {
+    model: string;
+    contents: unknown;
+    config?: Record<string, unknown>;
+};
+
+const generateGeminiContent = async (request: GeminiContentRequest): Promise<{ text: string }> => {
+    const response = await postJson<{ text?: string }>('/api/proxy/gemini', request);
+    return {
+        text: response.text?.trim() || '',
+    };
 };
 
 // Timeout wrapper for AI calls to prevent infinite hanging
@@ -164,11 +182,7 @@ Your only job: Diagnose problems and fix ONLY those problems. Get out of the way
 `;
 
 export const generateSongLyrics = async (style: string, customPrompt?: string): Promise<string> => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    console.log('[Gemini] API Key present:', !!apiKey);
     console.log('[Gemini] Generating lyrics for style:', style);
-
-    if (!apiKey) throw new Error("Gemini API Key missing. Please add VITE_GEMINI_API_KEY to .env.local");
 
     const stylePrompts: Record<string, string> = {
         'hip-hop': 'Create powerful hip-hop lyrics with strong wordplay, metaphors, and confident delivery. Include verse-chorus structure with catchy hooks.',
@@ -222,7 +236,7 @@ Make it COMPLETE, original, creative, and ready to sing. Include ALL sections. D
     try {
         console.log('[Gemini] Calling API with prompt length:', aiPrompt.length);
 
-        const response = await ai.models.generateContent({
+        const response = await generateGeminiContent({
             model: getGeminiModel(),
             contents: aiPrompt,
             config: {
@@ -251,9 +265,6 @@ Make it COMPLETE, original, creative, and ready to sing. Include ALL sections. D
 };
 
 export const interpretMixPrompt = async (prompt: string, signature: MixSignature | null): Promise<MixIntent> => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) throw new Error("API Key missing");
-
     const aiPrompt = `
     USER MIX REQUEST: "${prompt}"
     
@@ -264,7 +275,7 @@ export const interpretMixPrompt = async (prompt: string, signature: MixSignature
     `;
 
     try {
-        const response = await ai.models.generateContent({
+        const response = await generateGeminiContent({
             model: getGeminiModel(),
             contents: aiPrompt,
             config: {
@@ -307,9 +318,6 @@ export const analyzeMixData = async (
   mixReadiness: MixReadiness,
   genreProfile?: GenreProfile | null
 ): Promise<{ suggestions: Suggestion[], genre: string, vibeAnalysis?: string }> => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) throw new Error("API Key missing");
-
   const userRMS = metrics.rms.toFixed(1);
   const estimatedLUFS = (metrics.rms + 3).toFixed(1);
 
@@ -338,7 +346,7 @@ export const analyzeMixData = async (
   console.log('[AI Analysis] Starting request', { filename, promptLength: prompt.length, hasGenreProfile: !!genreProfile });
 
   try {
-    const response = await withRetry(() => withTimeout(ai.models.generateContent({
+    const response = await withRetry(() => withTimeout(generateGeminiContent({
       model: getGeminiModel(),
       contents: prompt,
       config: {
@@ -404,9 +412,6 @@ export const analyzeMixData = async (
 };
 
 export const analyzeStemMix = async (stems: Stem[], referenceMetrics?: AudioMetrics): Promise<MixAnalysis> => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) throw new Error("Gemini API Key missing");
-
     const stemInfo = stems.map(s => `- ${s.name || 'Unnamed'}`).join('\n');
     const prompt = `You are an expert mix engineer. Analyze this multi-stem mix with ${stems.length} stems:
 
@@ -420,7 +425,7 @@ Provide a structured analysis in JSON format with:
 Be specific and actionable. If no issues found, provide optimization suggestions.`;
 
     try {
-        const response = await withRetry(() => withTimeout(ai.models.generateContent({
+        const response = await withRetry(() => withTimeout(generateGeminiContent({
             model: getGeminiModel(),
             contents: prompt,
             config: {
@@ -447,24 +452,18 @@ Be specific and actionable. If no issues found, provide optimization suggestions
 };
 
 export const chatWithEcho = async (history: ChatMessage[], message: string): Promise<string> => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) return "Chat unavailable without API Key.";
-
-  const formattedHistory = history.map(msg => ({
-    role: msg.role,
-    parts: [{ text: msg.text }]
-  }));
+  const transcript = history
+    .map((msg) => `${msg.role.toUpperCase()}: ${msg.text}`)
+    .join('\n');
 
   try {
-    const chat = ai.chats.create({
+    const result = await generateGeminiContent({
       model: getGeminiModel(),
+      contents: `Conversation history:\n${transcript || '(none)'}\n\nUSER: ${message}\nASSISTANT:`,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
       },
-      history: formattedHistory
     });
-
-    const result = await chat.sendMessage({ message });
     return result.text;
   } catch (error: any) {
     return `Error: ${error.message}`;
@@ -518,8 +517,6 @@ export const producerModeChat = async (
   userMessage: string,
   conversationHistory: ChatMessage[] = []
 ): Promise<ProducerResponse> => {
-  if (!process.env.API_KEY) throw new Error("API Key missing");
-
   const genreContext = context.genreProfile
     ? `TARGET VIBE: ${context.genreProfile.name} - ${context.genreProfile.aesthetic.vibe}`
     : '';
@@ -542,7 +539,7 @@ Always explain the EMOTIONAL outcome of each suggestion.
 `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await generateGeminiContent({
       model: getGeminiModel(),
       contents: prompt,
       config: {
@@ -621,11 +618,8 @@ export const classifyUserIntent = async (message: string): Promise<{
   extractedVibe?: string;
   extractedReference?: string;
 }> => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) return { type: 'general', confidence: 0 };
-
   try {
-    const response = await ai.models.generateContent({
+    const response = await generateGeminiContent({
       model: getGeminiModel(),
       contents: `Classify this user message: "${message}"`,
       config: {
@@ -650,9 +644,6 @@ export const classifyUserIntent = async (message: string): Promise<{
 };
 
 export const generateEchoReport = async (metrics: EchoMetrics, currentProcessingConfig: ProcessingConfig, referenceTrack?: { name: string; metrics: AudioMetrics }, referenceSignature?: MixSignature): Promise<EchoReport> => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) throw new Error("API Key missing");
-
     // Calculate improvements for context
     const rmsImprovement = metrics.after.rms - metrics.before.rms;
     const peakImprovement = metrics.after.peak - metrics.before.peak;
@@ -825,7 +816,7 @@ ${hasReference ? '- Compare to reference for genre accuracy scoring.' : ''}
     });
 
     try {
-        const response = await withRetry(() => withTimeout(ai.models.generateContent({
+        const response = await withRetry(() => withTimeout(generateGeminiContent({
             model: getGeminiModel(),
             contents: promptContent,
             config: {
