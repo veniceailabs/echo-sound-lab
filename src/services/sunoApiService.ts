@@ -1,5 +1,6 @@
 import { SunoGenerationRequest, SunoGenerationResponse, RateLimitState, GenerationCache } from '../types';
 import { authFetch, postJson, requestJson } from './backendApi';
+import { INTEGRATION_FLAGS } from '../config/integrationFlags';
 
 const RATE_LIMIT_KEY = 'suno_rate_limit';
 const GENERATION_CACHE_KEY = 'suno_generation_cache';
@@ -8,10 +9,15 @@ const COST_LOG_KEY = 'suno_cost_log';
 class SunoApiService {
     private defaultLimit: number;
     private mockMode: boolean;
+    private integrationEnabled: boolean;
 
     constructor() {
         this.defaultLimit = parseInt(import.meta.env.VITE_RATE_LIMIT_PER_DAY || '10', 10);
+        this.integrationEnabled = INTEGRATION_FLAGS.ENABLE_SUNO_INTEGRATION;
         this.mockMode = (import.meta.env.VITE_SUNO_API_MOCK || '').toLowerCase() === 'true';
+        if (!this.integrationEnabled) {
+            this.mockMode = true;
+        }
 
         console.log('[SunoAPI] Mock mode:', this.mockMode);
     }

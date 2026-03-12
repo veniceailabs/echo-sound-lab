@@ -4326,6 +4326,7 @@ const App: React.FC = () => {
                 key={`ai-${workspaceNonce.AI_STUDIO}`}
                 onSongGenerated={handleSongGenerated}
                 onSongOpenSingleTrack={handleSongOpenSingleTrack}
+                audioPlaybackEngine={audioPlaybackEngine}
               />
             </React.Suspense>
           </ErrorBoundary>

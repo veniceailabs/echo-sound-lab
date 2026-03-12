@@ -1,3 +1,6 @@
+import { INTEGRATION_FLAGS } from '../config/integrationFlags';
+import { nativeVoiceService } from './nativeVoiceService';
+
 /**
  * BRIDGE SERVICE
  * Connects React Frontend to Local Python Neural Engine (M2 Pro)
@@ -31,7 +34,6 @@ export type BridgeStatus = 'idle' | 'loading' | 'processing' | 'rendering' | 'co
  */
 export interface VoiceRoutingConfig {
   elevenlabsEnabled: boolean;
-  elevenlabsApiKey?: string;
   defaultVoiceProvider: 'elevenlabs' | 'pyttsx3';
   fallbackEnabled: boolean;
 }
@@ -86,11 +88,10 @@ class BridgeServiceImpl {
   private voiceRoutingConfig: VoiceRoutingConfig;
 
   constructor() {
-    // Initialize voice routing based on environment
+    const elevenlabsEnabled = (import.meta.env.VITE_ELEVENLABS_ENABLED || '').toLowerCase() === 'true';
     this.voiceRoutingConfig = {
-      elevenlabsEnabled: !!import.meta.env.VITE_ELEVENLABS_KEY,
-      elevenlabsApiKey: import.meta.env.VITE_ELEVENLABS_KEY,
-      defaultVoiceProvider: this._determineDefaultProvider(),
+      elevenlabsEnabled,
+      defaultVoiceProvider: this._determineDefaultProvider(elevenlabsEnabled),
       fallbackEnabled: true
     };
 
@@ -231,12 +232,8 @@ class BridgeServiceImpl {
   /**
    * Determine default voice provider based on available configuration
    */
-  private _determineDefaultProvider(): 'elevenlabs' | 'pyttsx3' {
-    // Priority: ElevenLabs > pyttsx3
-    if (import.meta.env.VITE_ELEVENLABS_KEY) {
-      return 'elevenlabs';
-    }
-    return 'pyttsx3';
+  private _determineDefaultProvider(elevenlabsEnabled: boolean): 'elevenlabs' | 'pyttsx3' {
+    return elevenlabsEnabled ? 'elevenlabs' : 'pyttsx3';
   }
 
   /**
@@ -272,6 +269,10 @@ class BridgeServiceImpl {
     provider?: 'elevenlabs' | 'pyttsx3' | 'auto',
     voiceModelId?: string
   ): Promise<{ audioPath: string; duration: number; provider: string }> {
+    if (!INTEGRATION_FLAGS.ENABLE_PREMIUM_VOICE) {
+      return this._generateViaBrowserSpeech(sceneId, text);
+    }
+
     // Determine which provider to use
     const selectedProvider = this._selectProvider(provider);
 
@@ -289,6 +290,26 @@ class BridgeServiceImpl {
     }
   }
 
+  private async _generateViaBrowserSpeech(
+    sceneId: number,
+    text: string
+  ): Promise<{ audioPath: string; duration: number; provider: string }> {
+    console.log(`[BridgeService] Native browser speech fallback (scene ${sceneId})`);
+
+    // Fire-and-forget playback for immediate audible feedback.
+    // If speech output is blocked by browser policy, we still return a WAV asset URL.
+    void nativeVoiceService.speakText(text).catch((error) => {
+      console.warn('[BridgeService] speechSynthesis playback failed:', error);
+    });
+
+    const asset = await nativeVoiceService.createVoiceAsset(text);
+    return {
+      audioPath: asset.audioUrl,
+      duration: asset.durationSec,
+      provider: 'browser-speech',
+    };
+  }
+
   /**
    * Generate voiceover via ElevenLabs API (through Python backend)
    */
@@ -302,8 +323,7 @@ class BridgeServiceImpl {
         action: 'GENERATE_SPEECH_ELEVENLABS',
         scene_id: sceneId,
         text: text,
-        voice_model_id: voiceModelId || 'default',
-        api_key: this.voiceRoutingConfig.elevenlabsApiKey
+        voice_model_id: voiceModelId || 'default'
       };
 
       const requestHandler = (response: BridgeMessage) => {
@@ -697,7 +717,8 @@ class BridgeServiceImpl {
    */
   async runMusicSystem(
     params: {
-      voicePath: string;
+      voicePath?: string;
+      takePaths?: string[];
       style: string;
       tempo?: number;
       lyrics?: string;
@@ -705,6 +726,17 @@ class BridgeServiceImpl {
       instrumental?: boolean;
       songTitle?: string;
       outputPath: string;
+      inputAudioPath?: string;
+      startTime?: number;
+      licenseTier?: string;
+      username?: string;
+      vocalTexture?: 'none' | 'gospel_choir' | 'rn_b_silk' | 'gritty_soul';
+      enableHonestTuner?: boolean;
+      tunerKey?: string;
+      tunerScale?: 'major' | 'minor' | 'chromatic';
+      tunerStrength?: number;
+      enableSmartComping?: boolean;
+      compingSegmentMs?: number;
     },
     onEvent?: (event: { percent?: number; message?: string }) => void
   ): Promise<{
@@ -764,7 +796,7 @@ class BridgeServiceImpl {
       this.send({
         action: 'RUN_MUSIC_SYSTEM',
         request_id: requestId,
-        voice_path: params.voicePath,
+        voice_path: params.voicePath || '',
         style: params.style,
         tempo: params.tempo ?? 120,
         lyrics: params.lyrics ?? '',
@@ -772,6 +804,18 @@ class BridgeServiceImpl {
         instrumental: !!params.instrumental,
         song_title: params.songTitle ?? '',
         output_path: params.outputPath,
+        input_audio: params.inputAudioPath ?? '',
+        start_time: Number.isFinite(params.startTime) ? params.startTime : undefined,
+        license_tier: params.licenseTier ?? '',
+        username: params.username ?? '',
+        vocal_texture: params.vocalTexture ?? 'none',
+        enable_honest_tuner: !!params.enableHonestTuner,
+        tuner_key: params.tunerKey ?? 'C',
+        tuner_scale: params.tunerScale ?? 'chromatic',
+        tuner_strength: Number.isFinite(params.tunerStrength) ? params.tunerStrength : 18,
+        enable_smart_comping: !!params.enableSmartComping,
+        comping_segment_ms: Number.isFinite(params.compingSegmentMs) ? params.compingSegmentMs : 420,
+        take_paths: params.takePaths ?? [],
       });
 
       setTimeout(() => {

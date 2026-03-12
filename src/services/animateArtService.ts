@@ -1,4 +1,6 @@
 import { AnimateArtRequest, HookAsset, HookStatus } from '../types';
+import { postJson } from './backendApi';
+import { INTEGRATION_FLAGS } from '../config/integrationFlags';
 
 const buildHookId = () => `hook-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -6,13 +8,9 @@ const getDefaultTitle = (index: number) => `Hook ${String(index + 1).padStart(2,
 
 class AnimateArtService {
   private hooks: HookAsset[] = [];
-  private apiKey: string;
-  private baseUrl: string;
   private mockMode: boolean;
 
   constructor() {
-    this.apiKey = import.meta.env.VITE_ANIMATE_ART_KEY || '';
-    this.baseUrl = import.meta.env.VITE_ANIMATE_ART_URL || '';
     this.mockMode = (import.meta.env.VITE_ANIMATE_ART_MOCK || '').toLowerCase() === 'true';
   }
 
@@ -26,13 +24,7 @@ class AnimateArtService {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/hooks`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
+      const data = await postJson<any>('/api/proxy/animate-art/hooks', {
           song_id: request.songId,
           source_image_url: request.sourceImageUrl,
           preview_url: request.previewUrl,
@@ -40,14 +32,7 @@ class AnimateArtService {
           style: request.style,
           count,
           duration_seconds: request.durationSeconds ?? 12
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Animate Art request failed: ${response.statusText}`);
-      }
-
-      const data = await response.json();
+        });
       const hooks = (data.hooks || data.assets || []).map((item: any, index: number) => ({
         id: item.id || buildHookId(),
         title: item.title || getDefaultTitle(this.hooks.length + index),
@@ -71,7 +56,7 @@ class AnimateArtService {
   }
 
   private isConfigured(): boolean {
-    return Boolean(this.baseUrl && this.apiKey);
+    return INTEGRATION_FLAGS.ENABLE_ANIMATE_ART;
   }
 
   private async generateHooksMock(request: AnimateArtRequest, count: number = 1): Promise<HookAsset[]> {

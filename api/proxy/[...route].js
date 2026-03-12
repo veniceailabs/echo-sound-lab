@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { getAnimateArtConfig, getGeminiConfig, getSunoConfig, getVoiceConfig } from '../_lib/env.js';
+import { getAnimateArtConfig, getGeminiConfig, getIntegrationFlags, getSunoConfig, getVoiceConfig } from '../_lib/env.js';
 import { AuthError, requireAuthContext } from '../_lib/auth.js';
 import { handleOptions, parseMultipartForm, proxyJson, readJsonBody, sendJson } from '../_lib/http.js';
 import { signManifestPayload } from '../_lib/manifest-signing.js';
@@ -162,6 +162,10 @@ async function handleSignManifest(req, res) {
 }
 
 async function handleSunoGenerate(req, res) {
+  const { enableSunoIntegration } = getIntegrationFlags();
+  if (!enableSunoIntegration) {
+    return sendJson(res, 403, { error: 'Suno integration is disabled' });
+  }
   if (req.method !== 'POST') {
     return sendJson(res, 405, { error: 'Method not allowed' });
   }
@@ -186,6 +190,10 @@ async function handleSunoGenerate(req, res) {
 }
 
 async function handleSunoStatus(req, res, songId) {
+  const { enableSunoIntegration } = getIntegrationFlags();
+  if (!enableSunoIntegration) {
+    return sendJson(res, 403, { error: 'Suno integration is disabled' });
+  }
   if (req.method !== 'GET') {
     return sendJson(res, 405, { error: 'Method not allowed' });
   }
@@ -210,6 +218,10 @@ async function handleSunoStatus(req, res, songId) {
 }
 
 async function handleSunoAsset(req, res) {
+  const { enableSunoIntegration } = getIntegrationFlags();
+  if (!enableSunoIntegration) {
+    return sendJson(res, 403, { error: 'Suno integration is disabled' });
+  }
   if (req.method !== 'POST') {
     return sendJson(res, 405, { error: 'Method not allowed' });
   }
@@ -280,6 +292,10 @@ async function handleSunoAsset(req, res) {
 }
 
 async function handleSunoHarmonies(req, res) {
+  const { enableSunoIntegration } = getIntegrationFlags();
+  if (!enableSunoIntegration) {
+    return sendJson(res, 403, { error: 'Suno integration is disabled' });
+  }
   if (req.method !== 'POST') {
     return sendJson(res, 405, { error: 'Method not allowed' });
   }
@@ -304,6 +320,10 @@ async function handleSunoHarmonies(req, res) {
 }
 
 async function handleVoiceModels(req, res) {
+  const { enablePremiumVoice } = getIntegrationFlags();
+  if (!enablePremiumVoice) {
+    return sendJson(res, 403, { error: 'Premium voice integration is disabled' });
+  }
   if (!['GET', 'POST'].includes(req.method || '')) {
     return sendJson(res, 405, { error: 'Method not allowed' });
   }
@@ -329,6 +349,10 @@ async function handleVoiceModels(req, res) {
 }
 
 async function handleVoiceModelDelete(req, res, id) {
+  const { enablePremiumVoice } = getIntegrationFlags();
+  if (!enablePremiumVoice) {
+    return sendJson(res, 403, { error: 'Premium voice integration is disabled' });
+  }
   if (req.method !== 'DELETE') {
     return sendJson(res, 405, { error: 'Method not allowed' });
   }
@@ -353,6 +377,10 @@ async function handleVoiceModelDelete(req, res, id) {
 }
 
 async function handleAnimateArtHooks(req, res) {
+  const { enableAnimateArt } = getIntegrationFlags();
+  if (!enableAnimateArt) {
+    return sendJson(res, 403, { error: 'Animate Art integration is disabled' });
+  }
   if (req.method !== 'POST') {
     return sendJson(res, 405, { error: 'Method not allowed' });
   }

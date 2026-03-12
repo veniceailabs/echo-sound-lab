@@ -65,6 +65,14 @@ export interface ConvolverNodeLike extends AudioNodeLike {
   normalize: boolean;
 }
 
+export interface AnalyserNodeLike extends AudioNodeLike {
+  fftSize: number;
+  frequencyBinCount: number;
+  smoothingTimeConstant?: number;
+  getByteFrequencyData: (array: Uint8Array) => void;
+  getByteTimeDomainData?: (array: Uint8Array) => void;
+}
+
 export interface AudioBufferLike {
   duration: number;
   length?: number;
@@ -94,6 +102,7 @@ export interface AudioContextLike {
   createDelay?: (maxDelayTime?: number) => DelayNodeLike;
   createWaveShaper?: () => WaveShaperNodeLike;
   createConvolver?: () => ConvolverNodeLike;
+  createAnalyser?: () => AnalyserNodeLike;
   createBuffer?: (numberOfChannels: number, length: number, sampleRate: number) => AudioBufferLike;
   resume(): Promise<void> | void;
 }
@@ -275,6 +284,7 @@ export class AudioPlaybackEngine {
   private readonly createAudioContext: () => AudioContextLike | Promise<AudioContextLike>;
   private context: AudioContextLike | null = null;
   private masterGainNode: GainNodeLike | null = null;
+  private masterAnalyserNode: AnalyserNodeLike | null = null;
   private currentState: ReplayState | null = null;
   private readonly trackRuntimes = new Map<string, TrackRuntime>();
   private readonly regionBuffers = new Map<string, AudioBufferLike>();
@@ -293,6 +303,16 @@ export class AudioPlaybackEngine {
     this.masterGainNode = context.createGain();
     this.masterGainNode.gain.value = 1;
     this.connectNodes(this.masterGainNode, context.destination);
+
+    if (context.createAnalyser) {
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 2048;
+      if (typeof analyser.smoothingTimeConstant === 'number') {
+        analyser.smoothingTimeConstant = 0.75;
+      }
+      this.connectNodes(this.masterGainNode, analyser);
+      this.masterAnalyserNode = analyser;
+    }
   }
 
   async resume(): Promise<void> {
@@ -492,6 +512,10 @@ export class AudioPlaybackEngine {
 
   getIsPlaying(): boolean {
     return this.isPlaying;
+  }
+
+  getMasterAnalyserNode(): AnalyserNodeLike | null {
+    return this.masterAnalyserNode;
   }
 
   private scheduleAutomationForPlayback(playheadSec: number, contextStartTimeSec: number): void {

@@ -20,6 +20,22 @@ export function optionalEnv(keys, fallback = '') {
   return firstDefined(keys) || fallback;
 }
 
+function parseBooleanFlag(value, fallback = false) {
+  if (typeof value !== 'string') return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+}
+
+export function getIntegrationFlags() {
+  return {
+    enableSunoIntegration: parseBooleanFlag(optionalEnv(['ENABLE_SUNO_INTEGRATION'], 'false'), false),
+    enablePremiumVoice: parseBooleanFlag(optionalEnv(['ENABLE_PREMIUM_VOICE'], 'false'), false),
+    enableAnimateArt: parseBooleanFlag(optionalEnv(['ENABLE_ANIMATE_ART'], 'false'), false),
+  };
+}
+
 export function getGeminiConfig() {
   return {
     apiKey: requireEnv(['GEMINI_API_KEY'], 'Gemini API key'),

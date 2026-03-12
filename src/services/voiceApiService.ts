@@ -1,9 +1,8 @@
 import { VoiceModel } from '../types';
+import { requestJson as backendRequestJson } from './backendApi';
+import { INTEGRATION_FLAGS } from '../config/integrationFlags';
 
-const API_URL = import.meta.env.VITE_VOICE_API_URL || '';
-const API_KEY = import.meta.env.VITE_VOICE_API_KEY || '';
-
-const isConfigured = () => Boolean(API_URL && API_KEY);
+const isConfigured = () => INTEGRATION_FLAGS.ENABLE_PREMIUM_VOICE;
 
 const normalizeModel = (raw: any): VoiceModel => ({
   id: raw.id || raw.model_id || `vm-${Date.now()}`,
@@ -14,38 +13,43 @@ const normalizeModel = (raw: any): VoiceModel => ({
   persona: raw.persona
 });
 
-const requestJson = async (path: string, options: RequestInit = {}) => {
-  const url = `${API_URL.replace(/\/$/, '')}${path}`;
-  const response = await fetch(url, {
+const requestVoiceApi = async (path: string, options: RequestInit = {}) => {
+  return backendRequestJson<any>(`/api/proxy${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${API_KEY}`,
       ...(options.headers || {})
     }
   });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || `Voice API request failed: ${response.status}`);
-  }
-  return response.json();
 };
 
 export const voiceApiService = {
   isConfigured,
   async trainVoiceModel(samples: string[], name: string, persona?: string): Promise<VoiceModel> {
-    const payload = await requestJson('/voice-models', {
+    if (!isConfigured()) {
+      return normalizeModel({
+        id: `native-${Date.now()}`,
+        name,
+        persona,
+        samples,
+      });
+    }
+    const payload = await requestVoiceApi('/voice-models', {
       method: 'POST',
       body: JSON.stringify({ samples, name, persona })
     });
     return normalizeModel(payload.model || payload);
   },
   async listVoiceModels(): Promise<VoiceModel[]> {
-    const payload = await requestJson('/voice-models', { method: 'GET' });
+    if (!isConfigured()) {
+      return [];
+    }
+    const payload = await requestVoiceApi('/voice-models', { method: 'GET' });
     const items = payload.models || payload.items || payload || [];
     return items.map(normalizeModel);
   },
   async deleteVoiceModel(id: string): Promise<void> {
-    await requestJson(`/voice-models/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!isConfigured()) return;
+    await requestVoiceApi(`/voice-models/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 };

@@ -3,15 +3,19 @@ import { VoiceModel, GeneratedSong, HookAsset, AnimateArtRequest } from '../type
 import { voiceEngineService } from '../services/voiceEngineService';
 import { useRecorder } from '../hooks/useRecorder';
 import { animateArtService } from '../services/animateArtService';
+import { INTEGRATION_FLAGS } from '../config/integrationFlags';
 import { glassCard, glowButton, secondaryButton, sectionHeader, gradientDivider, cn } from '../utils/secondLightStyles';
 import SongGenerationWizard from './SongGenerationWizard';
+import NativeVisualizer from './NativeVisualizer';
+import type { AudioPlaybackEngine } from '../services/AudioPlaybackEngine';
 
 interface AIStudioProps {
     onSongGenerated?: (song: GeneratedSong) => void;
     onSongOpenSingleTrack?: (song: GeneratedSong) => void;
+    audioPlaybackEngine?: AudioPlaybackEngine | null;
 }
 
-const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated, onSongOpenSingleTrack }) => {
+const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated, onSongOpenSingleTrack, audioPlaybackEngine }) => {
     const [view, setView] = useState<'library' | 'training' | 'generate'>('library');
     const [models, setModels] = useState<VoiceModel[]>([]);
     const [selectedModel, setSelectedModel] = useState<VoiceModel | null>(null);
@@ -25,7 +29,9 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated, onSongOpenSingleTr
 
     useEffect(() => {
         loadModels();
-        setHooks(animateArtService.getHooks());
+        if (INTEGRATION_FLAGS.ENABLE_ANIMATE_ART) {
+            setHooks(animateArtService.getHooks());
+        }
     }, []);
 
     const loadModels = async () => {
@@ -52,6 +58,7 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated, onSongOpenSingleTr
     };
 
     const handleAnimateArt = async () => {
+        if (!INTEGRATION_FLAGS.ENABLE_ANIMATE_ART) return;
         if (!coverArtUrl) {
             alert('Upload cover art before animating.');
             return;
@@ -141,6 +148,20 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated, onSongOpenSingleTr
                         </div>
                     ))}
                 </div>
+
+                <div className="mt-5 rounded-2xl border border-orange-500/25 bg-gradient-to-r from-orange-500/10 to-sky-500/10 p-4">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-[0.2em] text-orange-300">Defender Pricing</p>
+                            <p className="text-sm text-slate-200 mt-1">
+                                Beta is free. Launch: Artist at $19/mo or Founding Defender at $199 one-time (first 500 users).
+                            </p>
+                        </div>
+                        <p className="text-xs text-slate-400 md:text-right">
+                            Lifetime means v2.x lifecycle. Unlimited is for human creators, not headless automation.
+                        </p>
+                    </div>
+                </div>
             </div>
             {view === 'library' && (
                 <VoiceModelLibrary
@@ -165,7 +186,8 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated, onSongOpenSingleTr
                     onCancel={() => setView('library')}
                 />
             )}
-            <div className={cn(glassCard, 'p-6')}>
+            {INTEGRATION_FLAGS.ENABLE_ANIMATE_ART ? (
+              <div className={cn(glassCard, 'p-6')}>
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     <div>
                         <h3 className="text-lg font-bold text-white mb-1">Animate Art and Hooks</h3>
@@ -283,7 +305,25 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated, onSongOpenSingleTr
                         </div>
                     </div>
                 </div>
-            </div>
+              </div>
+            ) : (
+              <div className={cn(glassCard, 'p-6')}>
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-white mb-1">Native Visualizer</h3>
+                    <p className="text-sm text-slate-400">
+                      Real-time waveform and frequency energy rendered locally from the studio master bus.
+                    </p>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-[0.2em] text-emerald-300 border border-emerald-500/40 rounded-full px-3 py-1">
+                    Zero-Cost Mode
+                  </span>
+                </div>
+                <div className="mt-5 h-48">
+                  <NativeVisualizer audioPlaybackEngine={audioPlaybackEngine} className="h-full" />
+                </div>
+              </div>
+            )}
         </div>
     );
 };
