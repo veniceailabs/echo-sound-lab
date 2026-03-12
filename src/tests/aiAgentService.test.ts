@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { aiAgentService } from '../services/AIAgentService';
+import { AI_AGENT_SYSTEM_PROMPT, aiAgentService } from '../services/AIAgentService';
 
 describe('AIAgentService', () => {
   test('maps natural language intent to deterministic JSON APL action sequence', async () => {
@@ -28,5 +28,33 @@ describe('AIAgentService', () => {
 
     expect(run1.map((proposal) => proposal.proposalId)).toEqual(run2.map((proposal) => proposal.proposalId));
     expect(run1.every((proposal) => typeof proposal.action.type === 'string')).toBe(true);
+  });
+
+  test('includes multilingual strict orchestration system prompt directive', () => {
+    expect(aiAgentService.getSystemPrompt()).toBe(AI_AGENT_SYSTEM_PROMPT);
+    expect(AI_AGENT_SYSTEM_PROMPT).toContain('strictly defined English JSON APL schema');
+    expect(AI_AGENT_SYSTEM_PROMPT).toContain('may speak any language');
+  });
+
+  test('maps spanish intent to same deterministic plugin actions', async () => {
+    const actions = await aiAgentService.generateActionSequence('Haz las voces más agresivas con más aire', {
+      trackId: 'track-vocal',
+      trackName: 'Lead Vocal',
+      workspaceId: 'workspace-main',
+    });
+
+    expect(actions.some((action) => action.type === 'ADD_PLUGIN' && action.parameters.manifestId === 'echo.vocal.comp.fet')).toBe(true);
+    expect(actions.some((action) => action.type === 'ADD_PLUGIN' && action.parameters.manifestId === 'echo.vocal.eq.air')).toBe(true);
+  });
+
+  test('maps korean intent to same deterministic plugin actions', async () => {
+    const actions = await aiAgentService.generateActionSequence('보컬을 더 공격적으로 만들고 밝게 해줘', {
+      trackId: 'track-vocal',
+      trackName: 'Lead Vocal',
+      workspaceId: 'workspace-main',
+    });
+
+    expect(actions.some((action) => action.type === 'ADD_PLUGIN' && action.parameters.manifestId === 'echo.vocal.comp.fet')).toBe(true);
+    expect(actions.some((action) => action.type === 'ADD_PLUGIN' && action.parameters.manifestId === 'echo.vocal.eq.air')).toBe(true);
   });
 });

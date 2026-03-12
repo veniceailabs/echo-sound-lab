@@ -79,5 +79,53 @@
     "processed": "B (Processed)"
   },
 
-  "waveform": "Waveform"
+  "waveform": "Waveform",
+
+  "transport": {
+    "play": "Play",
+    "pause": "Pause",
+    "stop": "Stop",
+    "exportWav": "Export WAV",
+    "rendering": "Rendering…",
+    "seekLabel": "Timeline playhead seek"
+  },
+
+  "history": {
+    "title": "Visual Time-Travel",
+    "stateLine": "State {{current}} / {{total}}",
+    "hashLabel": "hash",
+    "branchFromHere": "Branch from Here",
+    "latest": "Latest",
+    "restore": "Restore",
+    "hydration": "Hydration {{duration}}ms • replayed {{count}} actions",
+    "snapshotSuffix": " from snapshot {{index}}",
+    "baseState": "Base state (no applied actions)"
+  },
+
+  "pluginRack": {
+    "title": "Plugin Rack",
+    "addPlugin": "+ Add Plugin",
+    "noInserts": "No inserts on this track."
+  },
+
+  "pluginCategories": {
+    "dynamics": "Dynamics",
+    "eq": "EQ",
+    "space": "Space",
+    "utility": "Utility",
+    "bus": "Bus",
+    "master": "Master",
+    "fx": "FX",
+    "mod": "Mod",
+    "color": "Color"
+  },
+
+  "acc": {
+    "needsApproval": "Needs Approval",
+    "autoExecutes": "Auto-Executes",
+    "effectivePolicySummary": "Effective Policy Summary",
+    "fullAutonomy": "Full Autonomy",
+    "coPilot": "Co-Pilot",
+    "strictReview": "Strict Review"
+  }
 }

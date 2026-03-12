@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface TransportBarProps {
   isPlaying: boolean;
@@ -36,6 +37,7 @@ export default function TransportBar({
   const safeDuration = Math.max(durationSec, 0);
   const safeCurrent = Math.max(0, Math.min(currentTimeSec, safeDuration || currentTimeSec));
   const progressValue = safeDuration > 0 ? safeCurrent : 0;
+  const { t } = useTranslation();
 
   return (
     <section className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
@@ -47,7 +49,7 @@ export default function TransportBar({
             disabled={isBusy || isPlaying}
             className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-200 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Play
+            {t('transport.play', { defaultValue: 'Play' })}
           </button>
           <button
             type="button"
@@ -55,7 +57,7 @@ export default function TransportBar({
             disabled={isBusy || !isPlaying}
             className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-200 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Pause
+            {t('transport.pause', { defaultValue: 'Pause' })}
           </button>
           <button
             type="button"
@@ -63,7 +65,7 @@ export default function TransportBar({
             disabled={isBusy || (safeCurrent <= 0 && !isPlaying)}
             className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-red-200 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Stop
+            {t('transport.stop', { defaultValue: 'Stop' })}
           </button>
           <button
             type="button"
@@ -71,7 +73,9 @@ export default function TransportBar({
             disabled={isBusy || isExporting || !onExportWav}
             className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-200 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isExporting ? 'Rendering…' : 'Export WAV'}
+            {isExporting
+              ? t('transport.rendering', { defaultValue: 'Rendering…' })
+              : t('transport.exportWav', { defaultValue: 'Export WAV' })}
           </button>
         </div>
 
@@ -89,7 +93,7 @@ export default function TransportBar({
             onChange={(event) => onSeek?.(Number(event.target.value))}
             disabled={isBusy || !onSeek || safeDuration <= 0}
             className="w-full accent-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Timeline playhead seek"
+            aria-label={t('transport.seekLabel', { defaultValue: 'Timeline playhead seek' })}
           />
         </div>
       </div>

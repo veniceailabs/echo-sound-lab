@@ -79,5 +79,53 @@
     "processed": "B (Processed)"
   },
 
-  "waveform": "Waveform"
+  "waveform": "파형",
+
+  "transport": {
+    "play": "재생",
+    "pause": "일시정지",
+    "stop": "정지",
+    "exportWav": "WAV 내보내기",
+    "rendering": "렌더링 중…",
+    "seekLabel": "타임라인 재생 헤드 이동"
+  },
+
+  "history": {
+    "title": "시각적 타임 트래블",
+    "stateLine": "상태 {{current}} / {{total}}",
+    "hashLabel": "해시",
+    "branchFromHere": "여기서 브랜치 생성",
+    "latest": "최신",
+    "restore": "복원",
+    "hydration": "하이드레이션 {{duration}}ms • {{count}}개 액션 재생",
+    "snapshotSuffix": " 스냅샷 {{index}}에서 시작",
+    "baseState": "기본 상태 (적용된 액션 없음)"
+  },
+
+  "pluginRack": {
+    "title": "플러그인 랙",
+    "addPlugin": "+ 플러그인 추가",
+    "noInserts": "이 트랙에는 인서트가 없습니다."
+  },
+
+  "pluginCategories": {
+    "dynamics": "다이내믹",
+    "eq": "EQ",
+    "space": "공간",
+    "utility": "유틸리티",
+    "bus": "버스",
+    "master": "마스터",
+    "fx": "FX",
+    "mod": "모듈레이션",
+    "color": "컬러"
+  },
+
+  "acc": {
+    "needsApproval": "승인 필요",
+    "autoExecutes": "자동 실행",
+    "effectivePolicySummary": "유효 정책 요약",
+    "fullAutonomy": "완전 자율",
+    "coPilot": "코파일럿",
+    "strictReview": "엄격 검토"
+  }
 }

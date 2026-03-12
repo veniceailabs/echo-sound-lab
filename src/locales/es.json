@@ -79,5 +79,53 @@
     "processed": "B (Processed)"
   },
 
-  "waveform": "Waveform"
+  "waveform": "Forma de onda",
+
+  "transport": {
+    "play": "Reproducir",
+    "pause": "Pausar",
+    "stop": "Detener",
+    "exportWav": "Exportar WAV",
+    "rendering": "Renderizando…",
+    "seekLabel": "Buscar en la línea de tiempo"
+  },
+
+  "history": {
+    "title": "Viaje temporal visual",
+    "stateLine": "Estado {{current}} / {{total}}",
+    "hashLabel": "hash",
+    "branchFromHere": "Ramificar desde aquí",
+    "latest": "Último",
+    "restore": "Restaurar",
+    "hydration": "Hidratación {{duration}}ms • reproducidas {{count}} acciones",
+    "snapshotSuffix": " desde snapshot {{index}}",
+    "baseState": "Estado base (sin acciones aplicadas)"
+  },
+
+  "pluginRack": {
+    "title": "Rack de Plugins",
+    "addPlugin": "+ Agregar Plugin",
+    "noInserts": "No hay inserts en esta pista."
+  },
+
+  "pluginCategories": {
+    "dynamics": "Dinámica",
+    "eq": "EQ",
+    "space": "Espacio",
+    "utility": "Utilidad",
+    "bus": "Bus",
+    "master": "Master",
+    "fx": "FX",
+    "mod": "Modulación",
+    "color": "Color"
+  },
+
+  "acc": {
+    "needsApproval": "Necesita aprobación",
+    "autoExecutes": "Se ejecuta automáticamente",
+    "effectivePolicySummary": "Resumen de política efectiva",
+    "fullAutonomy": "Autonomía total",
+    "coPilot": "Co-Pilot",
+    "strictReview": "Revisión estricta"
+  }
 }

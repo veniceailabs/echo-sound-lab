@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { i18nService, SupportedLanguage } from '../services/i18nService';
+import i18n from '../i18n';
+import { i18nService } from '../services/i18nService';
 import { EngineMode } from '../types';
 import { useViewport } from '../context/ViewportContext';
 import {
@@ -88,6 +89,21 @@ const sectionIcons: Record<SectionKey, React.ReactNode> = {
   ),
 };
 
+type SupportedUILanguage = 'en' | 'es' | 'ko';
+
+const LANGUAGE_OPTIONS: Array<{ code: SupportedUILanguage; name: string; nativeName: string }> = [
+  { code: 'en', name: 'English', nativeName: 'English' },
+  { code: 'es', name: 'Spanish', nativeName: 'Español' },
+  { code: 'ko', name: 'Korean', nativeName: '한국어' },
+];
+
+function normalizeUILanguage(value: string): SupportedUILanguage {
+  const lower = value.toLowerCase();
+  if (lower.startsWith('es')) return 'es';
+  if (lower.startsWith('ko')) return 'ko';
+  return 'en';
+}
+
 const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClose,
   engineMode,
@@ -104,25 +120,25 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   onClearDebugInfo
 }) => {
   const { isPhone } = useViewport();
-  const [currentLanguage, setCurrentLanguage] = useState<SupportedLanguage>(i18nService.getLanguage());
+  const [currentLanguage, setCurrentLanguage] = useState<SupportedUILanguage>(normalizeUILanguage(i18n.language));
   const [isChanging, setIsChanging] = useState(false);
   const [openSection, setOpenSection] = useState<SectionKey | null>('mode');
   const [debugStatus, setDebugStatus] = useState<'idle' | 'copied' | 'error'>('idle');
-  const languages = i18nService.getSupportedLanguages();
+  const languages = LANGUAGE_OPTIONS;
   const governancePolicySummary = listCapabilitiesForTemplate(accPolicyTemplate);
 
   useEffect(() => {
-    const handleLanguageChange = () => setCurrentLanguage(i18nService.getLanguage());
-    window.addEventListener('languageChanged', handleLanguageChange);
-    return () => window.removeEventListener('languageChanged', handleLanguageChange);
+    const onLanguageChanged = (lang: string) => setCurrentLanguage(normalizeUILanguage(lang));
+    i18n.on('languageChanged', onLanguageChanged);
+    return () => i18n.off('languageChanged', onLanguageChanged);
   }, []);
 
-  const handleLanguageChange = async (lang: SupportedLanguage) => {
+  const handleLanguageChange = async (lang: SupportedUILanguage) => {
     setIsChanging(true);
+    await i18n.changeLanguage(lang);
     await i18nService.setLanguage(lang);
     setCurrentLanguage(lang);
     setIsChanging(false);
-    window.dispatchEvent(new Event('languageChanged'));
   };
 
   const sectionSummary = (section: SectionKey) => {
