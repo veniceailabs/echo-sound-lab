@@ -1,4 +1,15 @@
-export type EchoPluginCategory = 'utility' | 'dynamics' | 'eq' | 'delay' | 'reverb' | 'modulation' | 'other';
+export type EchoPluginCategory =
+  | 'utility'
+  | 'dynamics'
+  | 'eq'
+  | 'delay'
+  | 'reverb'
+  | 'modulation'
+  | 'saturation'
+  | 'bus'
+  | 'mastering'
+  | 'creative'
+  | 'other';
 
 export type EchoPluginParamType = 'float' | 'int' | 'boolean' | 'enum';
 
@@ -111,4 +122,3 @@ export function buildDefaultPluginParameters(
   }
   return params;
 }
-

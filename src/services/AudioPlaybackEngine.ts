@@ -55,6 +55,16 @@ export interface DelayNodeLike extends AudioNodeLike {
   delayTime: AudioParamLike;
 }
 
+export interface WaveShaperNodeLike extends AudioNodeLike {
+  curve: Float32Array | null;
+  oversample: 'none' | '2x' | '4x';
+}
+
+export interface ConvolverNodeLike extends AudioNodeLike {
+  buffer: AudioBufferLike | null;
+  normalize: boolean;
+}
+
 export interface AudioBufferLike {
   duration: number;
   length?: number;
@@ -74,6 +84,7 @@ export interface AudioContextLike {
   state: string;
   currentTime: number;
   destination: AudioNodeLike;
+  sampleRate?: number;
   createGain(): GainNodeLike;
   createBufferSource(): AudioBufferSourceNodeLike;
   decodeAudioData?: (audioData: ArrayBuffer) => Promise<AudioBufferLike>;
@@ -81,6 +92,9 @@ export interface AudioContextLike {
   createDynamicsCompressor?: () => DynamicsCompressorNodeLike;
   createBiquadFilter?: () => BiquadFilterNodeLike;
   createDelay?: (maxDelayTime?: number) => DelayNodeLike;
+  createWaveShaper?: () => WaveShaperNodeLike;
+  createConvolver?: () => ConvolverNodeLike;
+  createBuffer?: (numberOfChannels: number, length: number, sampleRate: number) => AudioBufferLike;
   resume(): Promise<void> | void;
 }
 
@@ -173,6 +187,51 @@ function isDecodedAssetBuffer(buffer: AudioBufferLike): buffer is AudioBufferLik
     typeof buffer.numberOfChannels === 'number' &&
     typeof buffer.getChannelData === 'function'
   );
+}
+
+function createSoftClipCurve(amount: number, length = 2048): Float32Array {
+  const curve = new Float32Array(length);
+  const drive = Math.max(0, amount);
+  for (let i = 0; i < length; i += 1) {
+    const x = (i * 2) / (length - 1) - 1;
+    curve[i] = Math.tanh(x * (1 + drive));
+  }
+  return curve;
+}
+
+function createBitcrushCurve(bits: number, length = 2048): Float32Array {
+  const curve = new Float32Array(length);
+  const depth = Math.max(2, Math.min(24, Math.round(bits)));
+  const levels = Math.pow(2, depth - 1);
+  for (let i = 0; i < length; i += 1) {
+    const x = (i * 2) / (length - 1) - 1;
+    curve[i] = Math.round(x * levels) / levels;
+  }
+  return curve;
+}
+
+function fillSyntheticImpulse(
+  buffer: AudioBufferLike,
+  decaySeconds: number,
+  tint = 1
+): void {
+  const channels = Math.max(1, buffer.numberOfChannels || 1);
+  const length = Math.max(1, buffer.length || Math.floor((buffer.sampleRate || 44100) * decaySeconds));
+  const sampleRate = buffer.sampleRate || 44100;
+  if (!buffer.getChannelData) return;
+
+  for (let channel = 0; channel < channels; channel += 1) {
+    const data = buffer.getChannelData(channel);
+    const channelTint = tint * (channel === 0 ? 1 : 0.95);
+    for (let i = 0; i < Math.min(length, data.length); i += 1) {
+      const t = i / sampleRate;
+      const envelope = Math.exp(-t / Math.max(0.01, decaySeconds));
+      const seeded = Math.sin((i + 1) * 12.9898 + (channel + 1) * 78.233) * 43758.5453;
+      const noise = (seeded - Math.floor(seeded)) * 2 - 1;
+      const white = noise * envelope * channelTint;
+      data[i] = white;
+    }
+  }
 }
 
 function getSortedAutomationPoints(points: Array<{ timeSec: number; value: number }>): Array<{ timeSec: number; value: number }> {
@@ -671,17 +730,76 @@ export class AudioPlaybackEngine {
       case 'echo.utility.gain.v1':
         return this.buildUtilityGainRuntime(insert, context);
       case 'echo.vocal.comp.fet':
-        return this.buildFetCompressorRuntime(insert, context);
+      case 'echo.vocal.comp.vca':
+      case 'echo.bus.glue':
+        return this.buildCompressorRuntime(insert, context, 'compressor-main');
       case 'echo.vocal.comp.opto':
-        return this.buildOptoCompressorRuntime(insert, context);
+        return this.buildCompressorRuntime(insert, context, 'compressor-opto');
+      case 'echo.vocal.deesser':
+        return this.buildDeEsserRuntime(insert, context);
+      case 'echo.vocal.gate':
+        return this.buildCompressorRuntime(insert, context, 'gate');
+      case 'echo.vocal.rider':
+        return this.buildGainTargetRuntime(insert, context, 'rider');
+      case 'echo.vocal.expander':
+        return this.buildGainTargetRuntime(insert, context, 'expander');
+      case 'echo.vocal.harshness':
+        return this.buildEqRuntime(insert, context, 'harshness');
       case 'echo.vocal.eq.air':
-        return this.buildAirEqRuntime(insert, context);
-      case 'echo.space.delay.slap':
-        return this.buildSlapDelayRuntime(insert, context);
+      case 'echo.vocal.eq.presence':
+      case 'echo.vocal.eq.mud':
+      case 'echo.vocal.eq.proximity':
+      case 'echo.vocal.eq.tilt':
+      case 'echo.fx.sub':
+        return this.buildEqRuntime(insert, context, 'single');
+      case 'echo.vocal.eq.telephone':
+        return this.buildDualEqRuntime(insert, context, 'telephone');
+      case 'echo.vocal.eq.tube':
+        return this.buildDualEqRuntime(insert, context, 'tube');
+      case 'echo.master.linear':
+        return this.buildTripleEqRuntime(insert, context, 'master-linear');
+      case 'echo.vocal.eq.clean':
+        return this.buildTripleEqRuntime(insert, context, 'clean');
       case 'echo.space.reverb.plate':
-        return this.buildPlatePlaceholderRuntime(insert, context);
+      case 'echo.space.reverb.hall':
+      case 'echo.space.reverb.room':
+      case 'echo.space.reverb.spring':
+      case 'echo.space.reverb.shimmer':
+      case 'echo.space.reverb.chamber':
+        return this.buildConvolverRuntime(insert, context);
+      case 'echo.mod.delay.slap':
+      case 'echo.space.delay.slap':
+      case 'echo.mod.delay.pingpong':
+      case 'echo.mod.delay.tape':
+      case 'echo.mod.doubler':
+      case 'echo.mod.chorus':
+      case 'echo.fx.flanger':
+      case 'echo.fx.phaser':
+      case 'echo.fx.tremolo':
+      case 'echo.fx.rotary':
+        return this.buildDelayModRuntime(insert, context);
+      case 'echo.color.tube':
+      case 'echo.color.tape':
+      case 'echo.color.bitcrush':
+      case 'echo.bus.tapemaster':
+      case 'echo.master.clipper':
+      case 'echo.fx.vinyl':
+      case 'echo.fx.amp':
+      case 'echo.fx.fuzz':
+      case 'echo.fx.ringmod':
+      case 'echo.bus.smasher':
+        return this.buildWaveShaperRuntime(insert, context);
+      case 'echo.bus.transient':
+      case 'echo.bus.width':
+        return this.buildGainTargetRuntime(insert, context, 'bus-shaper');
+      case 'echo.master.multiband':
+        return this.buildTripleEqRuntime(insert, context, 'multiband');
+      case 'echo.master.lufs':
+        return this.buildGainTargetRuntime(insert, context, 'lufs');
       case 'echo.master.limiter.brick':
-        return this.buildBrickLimiterRuntime(insert, context);
+        return this.buildCompressorRuntime(insert, context, 'limiter');
+      case 'echo.fx.autowah':
+        return this.buildEqRuntime(insert, context, 'autowah');
       default:
         return this.createPassthroughRuntime(insert, context, 'passthrough');
     }
@@ -777,6 +895,805 @@ export class AudioPlaybackEngine {
       dispose: () => {
         this.disconnectNode(gainNode);
         if (panNode) this.disconnectNode(panNode);
+      },
+    };
+  }
+
+  private buildCompressorRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike,
+    mode: 'compressor-main' | 'compressor-opto' | 'gate' | 'limiter'
+  ): PluginRuntime {
+    if (!context.createDynamicsCompressor) {
+      return this.createPassthroughRuntime(insert, context, `${mode}-fallback`);
+    }
+    const compressor = context.createDynamicsCompressor();
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: compressor,
+      outputNode: compressor,
+      nodeKind: 'dynamics-compressor',
+      gainNode: null,
+      panNode: null,
+      rewireInternal: () => {
+        // single-node plugin
+      },
+      dspSnapshot: () => ({
+        threshold: compressor.threshold.value,
+        ratio: compressor.ratio.value,
+        attack: compressor.attack.value,
+        release: compressor.release.value,
+      }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'threshold' || paramId === 'ceiling' || paramId === 'peakReduction') return compressor.threshold;
+        if (paramId === 'ratio' || paramId === 'makeup') return compressor.ratio;
+        if (paramId === 'attack') return compressor.attack;
+        if (paramId === 'release') return compressor.release;
+        return null;
+      },
+      mapAutomationValue: (paramId: string, value: number) => {
+        if (paramId === 'threshold' || paramId === 'ceiling') return clamp(value, -80, 0);
+        if (paramId === 'ratio') return clamp(value, 1, 20);
+        if (paramId === 'peakReduction') return clamp(value, -40, 0);
+        if (paramId === 'makeup') return 1 + clamp(value, 0, 24) / 4;
+        if (paramId === 'attack') return clamp(value, 0.001, 0.2);
+        if (paramId === 'release') return clamp(value, 0.01, 2);
+        return value;
+      },
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        const mix = clamp(toNumber(instance.mix, 1), 0, 1);
+
+        if (mode === 'compressor-opto') {
+          const peakReduction = clamp(toNumber(instance.parameters.peakReduction, -10), -40, 0);
+          const makeup = clamp(toNumber(instance.parameters.makeup, 2), 0, 24);
+          compressor.threshold.value = enabled ? peakReduction : 0;
+          compressor.ratio.value = enabled ? 1 + (1 + makeup / 6) * mix : 1;
+          compressor.attack.value = 0.03;
+          compressor.release.value = 0.25;
+          compressor.knee.value = 8;
+          return;
+        }
+
+        if (mode === 'gate') {
+          const threshold = clamp(toNumber(instance.parameters.threshold, -50), -80, -20);
+          const release = clamp(toNumber(instance.parameters.release, 0.5), 0.1, 2);
+          compressor.threshold.value = enabled ? threshold : 0;
+          compressor.ratio.value = enabled ? 20 : 1;
+          compressor.attack.value = 0.001;
+          compressor.release.value = release;
+          compressor.knee.value = 0;
+          return;
+        }
+
+        if (mode === 'limiter') {
+          const ceiling = clamp(toNumber(instance.parameters.ceiling, -0.1), -6, 0);
+          const release = clamp(toNumber(instance.parameters.release, 0.1), 0.01, 1);
+          compressor.threshold.value = enabled ? ceiling : 0;
+          compressor.ratio.value = enabled ? 20 : 1;
+          compressor.attack.value = 0.003;
+          compressor.release.value = release;
+          compressor.knee.value = 0;
+          return;
+        }
+
+        const threshold = clamp(toNumber(instance.parameters.threshold, -18), -60, 0);
+        const ratio = clamp(toNumber(instance.parameters.ratio, 4), 1, 20);
+        const attack = clamp(toNumber(instance.parameters.attack, 0.01), 0.001, 0.2);
+        const release = clamp(toNumber(instance.parameters.release, 0.2), 0.01, 2);
+        const makeup = clamp(toNumber(instance.parameters.makeup, 0), 0, 24);
+        compressor.threshold.value = enabled ? threshold : 0;
+        compressor.ratio.value = enabled ? 1 + (ratio - 1) * mix + makeup / 12 : 1;
+        compressor.attack.value = attack;
+        compressor.release.value = release;
+        compressor.knee.value = 6;
+      },
+      dispose: () => {
+        this.disconnectNode(compressor);
+      },
+    };
+  }
+
+  private buildGainTargetRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike,
+    mode: 'rider' | 'expander' | 'bus-shaper' | 'lufs'
+  ): PluginRuntime {
+    const gainNode = context.createGain();
+    let panNode: StereoPannerNodeLike | null = null;
+    let outputNode: AudioNodeLike = gainNode;
+    const rewireInternal = () => {
+      if (panNode) this.connectNodes(gainNode, panNode);
+    };
+    if (context.createStereoPanner) {
+      panNode = context.createStereoPanner();
+      rewireInternal();
+      outputNode = panNode;
+    }
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: gainNode,
+      outputNode,
+      nodeKind: 'gain-shaper',
+      gainNode,
+      panNode,
+      rewireInternal,
+      dspSnapshot: () => ({
+        gain: gainNode.gain.value,
+        pan: panNode ? panNode.pan.value : null,
+      }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'targetLufs' || paramId === 'threshold' || paramId === 'attack' || paramId === 'sustain' || paramId === 'width' || paramId === 'mix') return gainNode.gain;
+        if (paramId === 'speed' || paramId === 'ratio') return gainNode.gain;
+        if (paramId === 'pan' && panNode) return panNode.pan;
+        return null;
+      },
+      mapAutomationValue: (paramId: string, value: number) => {
+        if (paramId === 'width' && panNode) return clamp((value - 100) / 100, -1, 1);
+        return value;
+      },
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        const mix = clamp(toNumber(instance.mix, 1), 0, 1);
+        if (!enabled) {
+          gainNode.gain.value = 1;
+          if (panNode) panNode.pan.value = 0;
+          return;
+        }
+
+        if (mode === 'rider') {
+          const target = clamp(toNumber(instance.parameters.targetLufs, -14), -24, -6);
+          const speed = clamp(toNumber(instance.parameters.speed, 1), 0.1, 2);
+          const gainDb = (-14 - target) / Math.max(0.1, speed);
+          gainNode.gain.value = 1 + (dbToLinear(gainDb) - 1) * mix;
+          return;
+        }
+        if (mode === 'expander') {
+          const threshold = clamp(toNumber(instance.parameters.threshold, -40), -60, -20);
+          const ratio = clamp(toNumber(instance.parameters.ratio, 0.5), 0.1, 0.9);
+          const gainDb = Math.abs(threshold + 20) * (1 - ratio) * 0.05;
+          gainNode.gain.value = 1 + (dbToLinear(gainDb) - 1) * mix;
+          return;
+        }
+        if (mode === 'lufs') {
+          const target = clamp(toNumber(instance.parameters.target, -14), -24, -6);
+          const gainDb = -14 - target;
+          gainNode.gain.value = 1 + (dbToLinear(gainDb) - 1) * mix;
+          return;
+        }
+
+        const attack = clamp(toNumber(instance.parameters.attack, 20), -100, 100);
+        const sustain = clamp(toNumber(instance.parameters.sustain, 0), -100, 100);
+        const width = clamp(toNumber(instance.parameters.width, 100), 0, 200);
+        gainNode.gain.value = 1 + ((attack * 0.003 + sustain * 0.002) * mix);
+        if (panNode) {
+          panNode.pan.value = clamp((width - 100) / 100, -1, 1);
+        }
+      },
+      dispose: () => {
+        this.disconnectNode(gainNode);
+        if (panNode) this.disconnectNode(panNode);
+      },
+    };
+  }
+
+  private buildEqRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike,
+    mode: 'single' | 'harshness' | 'autowah'
+  ): PluginRuntime {
+    if (!context.createBiquadFilter) {
+      return this.createPassthroughRuntime(insert, context, 'eq-fallback');
+    }
+    const filter = context.createBiquadFilter();
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: filter,
+      outputNode: filter,
+      nodeKind: 'biquad-filter',
+      gainNode: null,
+      panNode: null,
+      rewireInternal: () => {
+        // single-node plugin
+      },
+      dspSnapshot: () => ({
+        type: filter.type,
+        frequency: filter.frequency.value,
+        gain: filter.gain.value,
+        q: filter.Q.value,
+      }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId.includes('freq') || paramId === 'frequency' || paramId === 'hpf') return filter.frequency;
+        if (paramId.includes('gain') || paramId.includes('boost') || paramId.includes('cut') || paramId === 'tilt' || paramId === 'amount') return filter.gain;
+        if (paramId === 'resonance') return filter.Q;
+        return null;
+      },
+      mapAutomationValue: (_, value: number) => value,
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        const mix = clamp(toNumber(instance.mix, 1), 0, 1);
+        const id = instance.manifestId;
+
+        if (!enabled) {
+          filter.type = 'allpass';
+          filter.frequency.value = 1000;
+          filter.gain.value = 0;
+          filter.Q.value = 0.707;
+          return;
+        }
+
+        if (mode === 'autowah') {
+          filter.type = 'bandpass';
+          const sensitivity = clamp(toNumber(instance.parameters.sensitivity, 50), 0, 100);
+          const resonance = clamp(toNumber(instance.parameters.resonance, 70), 0, 100);
+          filter.frequency.value = 300 + sensitivity * 35;
+          filter.Q.value = 0.2 + resonance * 0.08;
+          filter.gain.value = 0;
+          return;
+        }
+
+        if (mode === 'harshness') {
+          filter.type = 'peaking';
+          const amount = clamp(toNumber(instance.parameters.amount, 50), 0, 100);
+          const freq = clamp(toNumber(instance.parameters.freq, 3000), 2000, 5000);
+          filter.frequency.value = freq;
+          filter.Q.value = 2.5;
+          filter.gain.value = -amount * 0.12 * mix;
+          return;
+        }
+
+        if (id === 'echo.vocal.eq.air') {
+          filter.type = 'highshelf';
+          filter.frequency.value = clamp(toNumber(instance.parameters.freq, 12000), 8000, 20000);
+          filter.gain.value = clamp(toNumber(instance.parameters.boost, 4), 0, 15) * mix;
+          filter.Q.value = 0.707;
+          return;
+        }
+        if (id === 'echo.vocal.eq.presence') {
+          filter.type = 'peaking';
+          filter.frequency.value = clamp(toNumber(instance.parameters.freq, 3500), 2000, 6000);
+          filter.gain.value = clamp(toNumber(instance.parameters.gain, 3), -10, 10) * mix;
+          filter.Q.value = 1.2;
+          return;
+        }
+        if (id === 'echo.vocal.eq.mud') {
+          filter.type = 'peaking';
+          filter.frequency.value = clamp(toNumber(instance.parameters.freq, 300), 200, 600);
+          filter.gain.value = clamp(toNumber(instance.parameters.cut, -4), -15, 0) * mix;
+          filter.Q.value = 1.1;
+          return;
+        }
+        if (id === 'echo.vocal.eq.proximity') {
+          filter.type = 'lowshelf';
+          filter.frequency.value = clamp(toNumber(instance.parameters.freq, 120), 80, 200);
+          filter.gain.value = clamp(toNumber(instance.parameters.boost, 3), 0, 10) * mix;
+          filter.Q.value = 0.707;
+          return;
+        }
+        if (id === 'echo.vocal.eq.tilt') {
+          filter.type = 'highshelf';
+          filter.frequency.value = 3200;
+          filter.gain.value = clamp(toNumber(instance.parameters.tilt, 0), -10, 10) * mix;
+          filter.Q.value = 0.707;
+          return;
+        }
+        if (id === 'echo.fx.sub') {
+          filter.type = 'lowshelf';
+          filter.frequency.value = clamp(toNumber(instance.parameters.freq, 50), 30, 80);
+          const mixPct = clamp(toNumber(instance.parameters.mix, 30), 0, 100) / 100;
+          filter.gain.value = mixPct * 9;
+          filter.Q.value = 0.8;
+          return;
+        }
+
+        filter.type = 'peaking';
+        filter.frequency.value = 1000;
+        filter.gain.value = 0;
+        filter.Q.value = 1;
+      },
+      dispose: () => {
+        this.disconnectNode(filter);
+      },
+    };
+  }
+
+  private buildDualEqRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike,
+    mode: 'telephone' | 'tube'
+  ): PluginRuntime {
+    if (!context.createBiquadFilter) {
+      return this.createPassthroughRuntime(insert, context, 'eq-dual-fallback');
+    }
+    const first = context.createBiquadFilter();
+    const second = context.createBiquadFilter();
+    const rewireInternal = () => {
+      this.connectNodes(first, second);
+    };
+    rewireInternal();
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: first,
+      outputNode: second,
+      nodeKind: 'dual-biquad',
+      gainNode: null,
+      panNode: null,
+      rewireInternal,
+      dspSnapshot: () => ({
+        firstType: first.type,
+        secondType: second.type,
+        firstFreq: first.frequency.value,
+        secondFreq: second.frequency.value,
+        firstGain: first.gain.value,
+        secondGain: second.gain.value,
+      }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'lowcut' || paramId === 'hpf' || paramId === 'lowBoost') return first.frequency;
+        if (paramId === 'highcut' || paramId === 'highBoost') return second.frequency;
+        return null;
+      },
+      mapAutomationValue: (_, value: number) => value,
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        if (!enabled) {
+          first.type = 'allpass';
+          second.type = 'allpass';
+          first.frequency.value = 1000;
+          second.frequency.value = 1000;
+          first.gain.value = 0;
+          second.gain.value = 0;
+          return;
+        }
+
+        if (mode === 'telephone') {
+          first.type = 'highpass';
+          second.type = 'lowpass';
+          first.frequency.value = clamp(toNumber(instance.parameters.lowcut, 500), 300, 1000);
+          second.frequency.value = clamp(toNumber(instance.parameters.highcut, 4000), 2000, 6000);
+          first.Q.value = 0.707;
+          second.Q.value = 0.707;
+          return;
+        }
+
+        first.type = 'lowshelf';
+        second.type = 'highshelf';
+        first.frequency.value = 180;
+        second.frequency.value = 8200;
+        first.gain.value = clamp(toNumber(instance.parameters.lowBoost, 0), 0, 10);
+        second.gain.value = clamp(toNumber(instance.parameters.highBoost, 0), 0, 10);
+      },
+      dispose: () => {
+        this.disconnectNode(first);
+        this.disconnectNode(second);
+      },
+    };
+  }
+
+  private buildTripleEqRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike,
+    mode: 'clean' | 'multiband' | 'master-linear'
+  ): PluginRuntime {
+    if (!context.createBiquadFilter) {
+      return this.createPassthroughRuntime(insert, context, 'eq-triple-fallback');
+    }
+    const lowFilter = context.createBiquadFilter();
+    const lowGain = context.createGain();
+    const midFilter = context.createBiquadFilter();
+    const midGain = context.createGain();
+    const highFilter = context.createBiquadFilter();
+    const highGain = context.createGain();
+    const rewireInternal = () => {
+      this.connectNodes(lowFilter, lowGain);
+      this.connectNodes(lowGain, midFilter);
+      this.connectNodes(midFilter, midGain);
+      this.connectNodes(midGain, highFilter);
+      this.connectNodes(highFilter, highGain);
+    };
+    rewireInternal();
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: lowFilter,
+      outputNode: highGain,
+      nodeKind: 'triple-eq-chain',
+      gainNode: highGain,
+      panNode: null,
+      rewireInternal,
+      dspSnapshot: () => ({
+        lowType: lowFilter.type,
+        midType: midFilter.type,
+        highType: highFilter.type,
+        lowFreq: lowFilter.frequency.value,
+        midFreq: midFilter.frequency.value,
+        highFreq: highFilter.frequency.value,
+        lowGain: lowFilter.gain.value,
+        midGain: midFilter.gain.value,
+        highGain: highFilter.gain.value,
+      }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'hpf' || paramId === 'low' || paramId === 'lowGain') return lowFilter.frequency;
+        if (paramId === 'notchFreq' || paramId === 'mid' || paramId === 'midGain') return midFilter.frequency;
+        if (paramId === 'high' || paramId === 'highGain') return highFilter.frequency;
+        if (paramId === 'notchCut') return midFilter.gain;
+        return null;
+      },
+      mapAutomationValue: (_, value: number) => value,
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        if (!enabled) {
+          lowFilter.type = 'allpass';
+          midFilter.type = 'allpass';
+          highFilter.type = 'allpass';
+          lowGain.gain.value = 1;
+          midGain.gain.value = 1;
+          highGain.gain.value = 1;
+          return;
+        }
+
+        if (mode === 'clean') {
+          lowFilter.type = 'highpass';
+          lowFilter.frequency.value = clamp(toNumber(instance.parameters.hpf, 80), 20, 200);
+          lowFilter.Q.value = 0.707;
+          midFilter.type = 'notch';
+          midFilter.frequency.value = clamp(toNumber(instance.parameters.notchFreq, 2000), 1000, 5000);
+          midFilter.gain.value = clamp(toNumber(instance.parameters.notchCut, 0), -20, 0);
+          midFilter.Q.value = 4;
+          highFilter.type = 'allpass';
+          return;
+        }
+
+        if (mode === 'multiband') {
+          lowFilter.type = 'lowshelf';
+          midFilter.type = 'peaking';
+          highFilter.type = 'highshelf';
+          lowFilter.frequency.value = 120;
+          midFilter.frequency.value = 1000;
+          highFilter.frequency.value = 6000;
+          lowFilter.gain.value = clamp(toNumber(instance.parameters.lowGain, 0), -10, 10);
+          midFilter.gain.value = clamp(toNumber(instance.parameters.midGain, 0), -10, 10);
+          highFilter.gain.value = clamp(toNumber(instance.parameters.highGain, 0), -10, 10);
+          lowGain.gain.value = 1;
+          midGain.gain.value = 1;
+          highGain.gain.value = 1;
+          return;
+        }
+
+        lowFilter.type = 'lowshelf';
+        midFilter.type = 'peaking';
+        highFilter.type = 'highshelf';
+        lowFilter.frequency.value = 120;
+        midFilter.frequency.value = 1000;
+        highFilter.frequency.value = 8000;
+        lowFilter.gain.value = clamp(toNumber(instance.parameters.low, 0), -6, 6);
+        midFilter.gain.value = clamp(toNumber(instance.parameters.mid, 0), -6, 6);
+        highFilter.gain.value = clamp(toNumber(instance.parameters.high, 0), -6, 6);
+        lowGain.gain.value = 1;
+        midGain.gain.value = 1;
+        highGain.gain.value = 1;
+      },
+      dispose: () => {
+        this.disconnectNode(lowFilter);
+        this.disconnectNode(lowGain);
+        this.disconnectNode(midFilter);
+        this.disconnectNode(midGain);
+        this.disconnectNode(highFilter);
+        this.disconnectNode(highGain);
+      },
+    };
+  }
+
+  private buildConvolverRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike
+  ): PluginRuntime {
+    if (!context.createConvolver || !context.createBuffer) {
+      return this.createPassthroughRuntime(insert, context, 'reverb-fallback');
+    }
+    const inputGain = context.createGain();
+    const outputGain = context.createGain();
+    const dryGain = context.createGain();
+    const wetGain = context.createGain();
+    const convolver = context.createConvolver();
+    convolver.normalize = true;
+    const rewireInternal = () => {
+      this.connectNodes(inputGain, dryGain);
+      this.connectNodes(dryGain, outputGain);
+      this.connectNodes(inputGain, convolver);
+      this.connectNodes(convolver, wetGain);
+      this.connectNodes(wetGain, outputGain);
+    };
+    rewireInternal();
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      nodeKind: 'convolver-reverb',
+      gainNode: wetGain,
+      panNode: null,
+      rewireInternal,
+      dspSnapshot: () => ({
+        wet: wetGain.gain.value,
+        dry: dryGain.gain.value,
+        hasImpulse: Boolean(convolver.buffer),
+      }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'mix' || paramId === 'boing' || paramId === 'shimmerAmount') return wetGain.gain;
+        return null;
+      },
+      mapAutomationValue: (paramId: string, value: number) => {
+        if (paramId === 'mix') return clamp(value, 0, 1);
+        return clamp(value / 100, 0, 1);
+      },
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        const id = instance.manifestId;
+        const decayRaw = clamp(toNumber(instance.parameters.decay, 1.5), 0.1, 20);
+        const mixRaw = clamp(toNumber(instance.parameters.mix, 0.2), 0, 1);
+        const boing = clamp(toNumber(instance.parameters.boing, 50), 0, 100) / 100;
+        const shimmer = clamp(toNumber(instance.parameters.shimmerAmount, 50), 0, 100) / 100;
+        const mix = id === 'echo.space.reverb.spring' ? boing : id === 'echo.space.reverb.shimmer' ? shimmer : mixRaw;
+        const sampleRate = context.sampleRate || 44100;
+        const length = Math.max(1, Math.floor(sampleRate * decayRaw));
+        const impulse = context.createBuffer(2, length, sampleRate);
+        fillSyntheticImpulse(impulse, decayRaw, id === 'echo.space.reverb.shimmer' ? 0.75 : 1);
+        convolver.buffer = impulse;
+        wetGain.gain.value = enabled ? mix : 0;
+        dryGain.gain.value = 1;
+      },
+      dispose: () => {
+        this.disconnectNode(inputGain);
+        this.disconnectNode(outputGain);
+        this.disconnectNode(dryGain);
+        this.disconnectNode(wetGain);
+        this.disconnectNode(convolver);
+      },
+    };
+  }
+
+  private buildDelayModRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike
+  ): PluginRuntime {
+    if (!context.createDelay) {
+      return this.createPassthroughRuntime(insert, context, 'delay-mod-fallback');
+    }
+    const inputGain = context.createGain();
+    const outputGain = context.createGain();
+    const dryGain = context.createGain();
+    const wetGain = context.createGain();
+    const feedbackGain = context.createGain();
+    const delay = context.createDelay(2);
+    let panNode: StereoPannerNodeLike | null = null;
+    if (context.createStereoPanner) {
+      panNode = context.createStereoPanner();
+    }
+    const rewireInternal = () => {
+      this.connectNodes(inputGain, dryGain);
+      this.connectNodes(dryGain, outputGain);
+
+      this.connectNodes(inputGain, delay);
+      if (panNode) {
+        this.connectNodes(delay, panNode);
+        this.connectNodes(panNode, wetGain);
+      } else {
+        this.connectNodes(delay, wetGain);
+      }
+      this.connectNodes(wetGain, outputGain);
+
+      this.connectNodes(delay, feedbackGain);
+      this.connectNodes(feedbackGain, delay);
+    };
+    rewireInternal();
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      nodeKind: 'delay-mod',
+      gainNode: wetGain,
+      panNode,
+      rewireInternal,
+      dspSnapshot: () => ({
+        delayTime: delay.delayTime.value,
+        feedback: feedbackGain.gain.value,
+        wet: wetGain.gain.value,
+        dry: dryGain.gain.value,
+        pan: panNode ? panNode.pan.value : null,
+      }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'time') return delay.delayTime;
+        if (paramId === 'feedback' || paramId === 'depth' || paramId === 'mix') return wetGain.gain;
+        if (paramId === 'width' && panNode) return panNode.pan;
+        if (paramId === 'rate') return feedbackGain.gain;
+        return null;
+      },
+      mapAutomationValue: (paramId: string, value: number) => {
+        if (paramId === 'width') return clamp(value, -1, 1);
+        return value;
+      },
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        const id = instance.manifestId;
+        const mix = clamp(
+          toNumber(
+            instance.parameters.mix,
+            toNumber(instance.parameters.depth, 50) / 100
+          ),
+          0,
+          1
+        );
+        const rate = clamp(toNumber(instance.parameters.rate, 1), 0.1, 20);
+        const feedback = clamp(toNumber(instance.parameters.feedback, 0.2), 0, 0.9);
+
+        let time = clamp(toNumber(instance.parameters.time, 0.18), 0.01, 2);
+        if (id === 'echo.mod.delay.slap' || id === 'echo.space.delay.slap') {
+          time = clamp(toNumber(instance.parameters.time, 0.08), 0.05, 0.15);
+        } else if (id === 'echo.mod.delay.pingpong') {
+          time = clamp(toNumber(instance.parameters.time, 0.25), 0.1, 1);
+        } else if (id === 'echo.mod.delay.tape') {
+          time = clamp(toNumber(instance.parameters.time, 0.3), 0.1, 1);
+          const wow = clamp(toNumber(instance.parameters.wow, 20), 0, 100) / 100;
+          time = clamp(time * (1 + wow * 0.08), 0.01, 2);
+        } else if (id === 'echo.mod.doubler') {
+          time = 0.015 + clamp(toNumber(instance.parameters.detune, 15), 0, 50) * 0.0007;
+        } else if (id === 'echo.mod.chorus') {
+          time = 0.012 + (clamp(toNumber(instance.parameters.depth, 40), 0, 100) / 100) * 0.018;
+        } else if (id === 'echo.fx.flanger') {
+          time = 0.001 + (clamp(toNumber(instance.parameters.depth, 60), 0, 100) / 100) * 0.004;
+        } else if (id === 'echo.fx.phaser') {
+          time = 0.004 + (clamp(toNumber(instance.parameters.feedback, 50), 0, 100) / 100) * 0.006;
+        } else if (id === 'echo.fx.tremolo') {
+          time = 1 / Math.max(1, rate * 4);
+        } else if (id === 'echo.fx.rotary') {
+          const speed = clamp(toNumber(instance.parameters.speed, 50), 0, 100);
+          time = 0.03 + (speed / 100) * 0.08;
+        }
+
+        delay.delayTime.value = time;
+        feedbackGain.gain.value = enabled ? feedback : 0;
+        wetGain.gain.value = enabled ? mix : 0;
+        dryGain.gain.value = 1;
+        if (panNode) {
+          const width = clamp(toNumber(instance.parameters.width, 100), 0, 200);
+          panNode.pan.value = enabled ? clamp((width - 100) / 100, -1, 1) : 0;
+        }
+      },
+      dispose: () => {
+        this.disconnectNode(inputGain);
+        this.disconnectNode(outputGain);
+        this.disconnectNode(dryGain);
+        this.disconnectNode(wetGain);
+        this.disconnectNode(feedbackGain);
+        this.disconnectNode(delay);
+        if (panNode) this.disconnectNode(panNode);
+      },
+    };
+  }
+
+  private buildWaveShaperRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike
+  ): PluginRuntime {
+    if (!context.createWaveShaper) {
+      return this.createPassthroughRuntime(insert, context, 'waveshaper-fallback');
+    }
+    const inputGain = context.createGain();
+    const outputGain = context.createGain();
+    const preGain = context.createGain();
+    const shaper = context.createWaveShaper();
+    shaper.oversample = '2x';
+    let postFilter: BiquadFilterNodeLike | null = null;
+    if (context.createBiquadFilter) {
+      postFilter = context.createBiquadFilter();
+      postFilter.type = 'lowpass';
+      postFilter.frequency.value = 18000;
+      postFilter.Q.value = 0.707;
+    }
+    let compressor: DynamicsCompressorNodeLike | null = null;
+    if (insert.manifestId === 'echo.bus.smasher' && context.createDynamicsCompressor) {
+      compressor = context.createDynamicsCompressor();
+      compressor.ratio.value = 20;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.08;
+      compressor.threshold.value = -28;
+    }
+    const rewireInternal = () => {
+      this.connectNodes(inputGain, preGain);
+      if (compressor) {
+        this.connectNodes(preGain, compressor);
+        this.connectNodes(compressor, shaper);
+      } else {
+        this.connectNodes(preGain, shaper);
+      }
+      if (postFilter) {
+        this.connectNodes(shaper, postFilter);
+        this.connectNodes(postFilter, outputGain);
+      } else {
+        this.connectNodes(shaper, outputGain);
+      }
+    };
+    rewireInternal();
+    return {
+      instanceId: insert.instanceId,
+      manifestId: insert.manifestId,
+      inputNode: inputGain,
+      outputNode: outputGain,
+      nodeKind: 'waveshaper',
+      gainNode: outputGain,
+      panNode: null,
+      rewireInternal,
+      dspSnapshot: () => ({
+        preGain: preGain.gain.value,
+        outputGain: outputGain.gain.value,
+        curveLength: shaper.curve ? shaper.curve.length : 0,
+      }),
+      resolveAutomationParam: (paramId: string) => {
+        if (paramId === 'drive' || paramId === 'saturation' || paramId === 'fuzz') return preGain.gain;
+        if (paramId === 'mix' || paramId === 'knee' || paramId === 'tone') return outputGain.gain;
+        return null;
+      },
+      mapAutomationValue: (_, value: number) => value,
+      apply: (instance: ReplayPluginInstance) => {
+        const enabled = instance.enabled !== false;
+        const id = instance.manifestId;
+        const mix = clamp(
+          toNumber(
+            instance.parameters.mix,
+            toNumber(instance.parameters.drive, 0) / 100
+          ),
+          0,
+          1
+        );
+        const driveDb = clamp(toNumber(instance.parameters.drive, 0), 0, 100);
+        const saturation = clamp(toNumber(instance.parameters.saturation, driveDb), 0, 100);
+        const fuzz = clamp(toNumber(instance.parameters.fuzz, driveDb), 0, 100);
+        const tone = clamp(toNumber(instance.parameters.tone, 50), 0, 100);
+        const bits = clamp(toNumber(instance.parameters.bits, 8), 4, 16);
+        const knee = clamp(toNumber(instance.parameters.knee, 50), 0, 100);
+        const ringFreq = clamp(toNumber(instance.parameters.freq, 500), 100, 2000);
+        const ringMix = clamp(toNumber(instance.parameters.mix, 50), 0, 100) / 100;
+
+        preGain.gain.value = enabled ? 1 + (driveDb + saturation + fuzz) / 45 : 1;
+        outputGain.gain.value = enabled ? 1 + mix * 0.2 : 1;
+
+        if (id === 'echo.color.bitcrush') {
+          shaper.curve = createBitcrushCurve(bits);
+          shaper.oversample = 'none';
+        } else if (id === 'echo.fx.ringmod') {
+          shaper.curve = createSoftClipCurve(0.2 + ringMix * 0.6, 2048);
+          preGain.gain.value = enabled ? 1 + (ringFreq - 100) / 2400 : 1;
+        } else if (id === 'echo.master.clipper') {
+          shaper.curve = createSoftClipCurve(0.4 + knee / 100, 4096);
+          shaper.oversample = '4x';
+        } else {
+          shaper.curve = createSoftClipCurve(0.2 + (driveDb + saturation + fuzz) / 100, 4096);
+          shaper.oversample = '2x';
+        }
+
+        if (postFilter) {
+          if (id === 'echo.fx.amp') {
+            const cabinet = clamp(toNumber(instance.parameters.cabinet, 1), 1, 3);
+            postFilter.type = 'lowpass';
+            postFilter.frequency.value = 4200 + cabinet * 1200;
+          } else {
+            postFilter.type = 'lowpass';
+            postFilter.frequency.value = 1000 + tone * 180;
+          }
+        }
+      },
+      dispose: () => {
+        this.disconnectNode(inputGain);
+        this.disconnectNode(outputGain);
+        this.disconnectNode(preGain);
+        this.disconnectNode(shaper);
+        if (postFilter) this.disconnectNode(postFilter);
+        if (compressor) this.disconnectNode(compressor);
       },
     };
   }
