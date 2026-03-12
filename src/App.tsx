@@ -33,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import { PhaseCorrelationMeter, StereoFieldMeter, LUFSMeter } from './components/AdvancedMeters';
 import { historyManager } from './services/historyManager';
 import { sessionManager, SessionState } from './services/sessionManager';
+import { useStudioEngine } from './context/StudioEngineProvider';
 import { DiagnosticsOverlay, useDiagnosticsToggle } from './components/DiagnosticsOverlay';
 import { SSCOverlay } from './components/SSCOverlay';
 import { ProcessingOverlay } from './components/ProcessingOverlay';
@@ -67,8 +68,6 @@ const OrchestrationShell = React.lazy(() => import('./shells/OrchestrationShell'
 // Phase 4: ExecutionService (Main Process Integration)
 // ExecutionBridge is called directly from ProposalCard
 // ExecutionService is a singleton on the main process
-import { executionService } from './services/ExecutionService';
-import { ExecutionBridge } from './services/ExecutionBridge';
 import { ExecutionPayload } from './types/execution-contract';
 import { executionSessionService } from './services/executionSessionService';
 import { signExecutionPayload } from './services/executionSigning';
@@ -76,10 +75,7 @@ import { deterministicId } from './services/deterministicJson';
 import { ReplayState } from './services/deterministicReplayService';
 import { provenanceLedger } from './services/ProvenanceLedger';
 import { TimelineHydrationMetrics } from './services/timelineReplayCache';
-import { audioPlaybackEngine, type AudioBufferLike } from './services/AudioPlaybackEngine';
-import { assetRegistry } from './services/AssetRegistry';
-import { aiAgentService } from './services/AIAgentService';
-import { offlineRenderService } from './services/OfflineRenderService';
+import type { AudioBufferLike } from './services/AudioPlaybackEngine';
 import {
   BranchEntity,
   DeterministicBranchRegistry,
@@ -131,6 +127,15 @@ const TIMELINE_SNAPSHOT_INTERVAL = 50;
 const shellFallback = (
   <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-4 text-xs uppercase tracking-[0.18em] text-slate-500">
     Loading shell…
+  </div>
+);
+const studioEngineFallback = (
+  <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-5">
+    <p className="text-[10px] uppercase tracking-[0.22em] text-orange-300">Studio Engine</p>
+    <h3 className="mt-2 text-lg font-semibold text-slate-100">Initializing Studio Engine…</h3>
+    <p className="mt-2 text-sm text-slate-400">
+      Timeline transport, AI orchestration, and cryptographic export are loading in the background.
+    </p>
   </div>
 );
 
@@ -186,6 +191,14 @@ const capabilityAuthority = new CapabilityAuthority(
 
 const App: React.FC = () => {
   const { t } = useTranslation();
+  const studioEngine = useStudioEngine();
+  const studioServices = studioEngine.services;
+  const audioPlaybackEngine = studioServices?.audioPlaybackEngine ?? null;
+  const assetRegistry = studioServices?.assetRegistry ?? null;
+  const aiAgentService = studioServices?.aiAgentService ?? null;
+  const offlineRenderService = studioServices?.offlineRenderService ?? null;
+  const executionService = studioServices?.executionService ?? null;
+  const ExecutionBridge = studioServices?.ExecutionBridge ?? null;
   const defaultEqSettings: EQSettings = [
     { frequency: 60, gain: 0, type: 'lowshelf' },      // Sub bass
     { frequency: 250, gain: 0, type: 'peaking' },      // Low-mid
@@ -433,7 +446,7 @@ const App: React.FC = () => {
   }, []);
 
   const bindTimelineBuffers = useCallback((nextState: ReplayState) => {
-    if (!originalBuffer) return;
+    if (!originalBuffer || !assetRegistry || !audioPlaybackEngine) return;
     const sourceIds = new Set(
       nextState.regions
         .map((region) => region.sourceId)
@@ -442,11 +455,12 @@ const App: React.FC = () => {
     for (const sourceId of sourceIds) {
       audioPlaybackEngine.setRegionBuffer(sourceId, originalBuffer);
     }
-  }, [originalBuffer]);
+  }, [assetRegistry, audioPlaybackEngine, originalBuffer]);
 
   const getTimelinePlayheadSeconds = useCallback(() => timelinePlayheadSecondsRef.current, []);
 
   useEffect(() => {
+    if (!audioPlaybackEngine) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -518,9 +532,10 @@ const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [bindTimelineBuffers, isTimelinePlaying, timelineState]);
+  }, [audioPlaybackEngine, bindTimelineBuffers, isTimelinePlaying, timelineState]);
 
   useEffect(() => {
+    if (!audioPlaybackEngine) return;
     if (!isTimelinePlaying) {
       if (timelineTransportRafRef.current !== null) {
         cancelAnimationFrame(timelineTransportRafRef.current);
@@ -559,14 +574,15 @@ const App: React.FC = () => {
         timelineTransportRafRef.current = null;
       }
     };
-  }, [isTimelinePlaying]);
+  }, [audioPlaybackEngine, isTimelinePlaying]);
 
   useEffect(() => {
+    if (!audioPlaybackEngine) return;
     return () => {
       audioPlaybackEngine.stop();
       audioPlaybackEngine.dispose();
     };
-  }, []);
+  }, [audioPlaybackEngine]);
 
   useEffect(() => {
     const registry = timelineBranchRegistryRef.current;
@@ -609,6 +625,10 @@ const App: React.FC = () => {
   const isTimelinePreviewMode = timelineScrubIndex < timelineActionHistory.length;
 
   const handleTimelineDispatchAction = useCallback(async (request: TimelineActionRequest) => {
+    if (!ExecutionBridge) {
+      setTimelineDispatchError('Studio execution bridge is still initializing.');
+      return;
+    }
     const registry = timelineBranchRegistryRef.current;
     if (!registry || !activeTimelineBranchId) {
       setTimelineDispatchError('Branch registry is not initialized yet.');
@@ -721,7 +741,7 @@ const App: React.FC = () => {
     } finally {
       setIsTimelineDispatching(false);
     }
-  }, [activeTimelineBranchId, isTimelineDispatching, syncTimelineBranchState, timelineScrubIndex, timelineState]);
+  }, [ExecutionBridge, activeTimelineBranchId, isTimelineDispatching, syncTimelineBranchState, timelineScrubIndex, timelineState]);
 
   const handleTimelineScrubChange = useCallback((index: number) => {
     const registry = timelineBranchRegistryRef.current;
@@ -866,6 +886,10 @@ const App: React.FC = () => {
   }, [activeTimelineBranchId, isTimelineDispatching, syncTimelineBranchState]);
 
   const handleTimelinePlay = useCallback(async () => {
+    if (!audioPlaybackEngine) {
+      setTimelineDispatchError('Studio engine is still initializing.');
+      return;
+    }
     try {
       await audioPlaybackEngine.resume();
       bindTimelineBuffers(timelineState);
@@ -878,32 +902,35 @@ const App: React.FC = () => {
       setTimelineDispatchError((error as Error).message);
       setIsTimelinePlaying(false);
     }
-  }, [bindTimelineBuffers, timelineState]);
+  }, [audioPlaybackEngine, bindTimelineBuffers, timelineState]);
 
   const handleTimelinePause = useCallback(() => {
+    if (!audioPlaybackEngine) return;
     audioPlaybackEngine.pause();
     const current = audioPlaybackEngine.getCurrentTime();
     timelinePlayheadSecondsRef.current = current;
     setTimelinePlayheadDisplaySec(current);
     setTimelineTransportTick((value) => value + 1);
     setIsTimelinePlaying(false);
-  }, []);
+  }, [audioPlaybackEngine]);
 
   const handleTimelineStop = useCallback(() => {
+    if (!audioPlaybackEngine) return;
     audioPlaybackEngine.stop();
     timelinePlayheadSecondsRef.current = 0;
     setTimelinePlayheadDisplaySec(0);
     setTimelineTransportTick((value) => value + 1);
     setIsTimelinePlaying(false);
-  }, []);
+  }, [audioPlaybackEngine]);
 
   const handleTimelineSeek = useCallback((timeSec: number) => {
+    if (!audioPlaybackEngine) return;
     audioPlaybackEngine.seek(timeSec);
     const current = audioPlaybackEngine.getCurrentTime();
     timelinePlayheadSecondsRef.current = current;
     setTimelinePlayheadDisplaySec(current);
     setTimelineTransportTick((value) => value + 1);
-  }, []);
+  }, [audioPlaybackEngine]);
 
   const timelineProvenanceEvents = useMemo(() => {
     const proposalMeta = new Map<string, { actorId: string; timestamp: number }>();
@@ -984,6 +1011,10 @@ const App: React.FC = () => {
   }, []);
 
   const handleTimelineGenerateIntent = useCallback(async (intent: string, trackId: string) => {
+    if (!aiAgentService) {
+      showNotification('Studio AI is still initializing.', 'info', 2400);
+      return;
+    }
     if (isTimelineIntentGenerating) return;
     const trimmedIntent = intent.trim();
     if (!trimmedIntent) return;
@@ -1018,9 +1049,13 @@ const App: React.FC = () => {
     } finally {
       setIsTimelineIntentGenerating(false);
     }
-  }, [isTimelineIntentGenerating, showNotification, timelineState.tracks, timelineState.workspaceId]);
+  }, [aiAgentService, isTimelineIntentGenerating, showNotification, timelineState.tracks, timelineState.workspaceId]);
 
   const handleTimelineExportOffline = useCallback(async () => {
+    if (!offlineRenderService || !assetRegistry) {
+      showNotification('Studio export engine is still initializing.', 'info', 2400);
+      return;
+    }
     if (isTimelineExporting) return;
     setIsTimelineExporting(true);
     try {
@@ -1050,7 +1085,7 @@ const App: React.FC = () => {
     } finally {
       setIsTimelineExporting(false);
     }
-  }, [currentFileName, isTimelineExporting, originalBuffer, showNotification, timelineState]);
+  }, [assetRegistry, currentFileName, isTimelineExporting, offlineRenderService, originalBuffer, showNotification, timelineState]);
 
   const beginVerdictRun = useCallback(() => {
     activeVerdictRunIdRef.current += 1;
@@ -1655,6 +1690,10 @@ const App: React.FC = () => {
    * Called from ExecutionService via event bridge
    */
   const handleAplApplyDirect = useCallback(async (proposalId: string) => {
+    if (!executionService) {
+      showNotification('Studio execution service is still initializing.', 'info', 2400);
+      return;
+    }
     const proposal = aplProposals.find(p => p.proposalId === proposalId);
     if (!proposal) return;
 
@@ -1672,13 +1711,17 @@ const App: React.FC = () => {
     } catch (error) {
       showNotification(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error', 3000);
     }
-  }, [aplProposals, showNotification]);
+  }, [aplProposals, executionService, showNotification]);
 
   /**
    * Path B: Gated Execution (High Security)
    * Called from ExecutionService after FSM EXECUTED
    */
   const handleAplAuthorizeGated = useCallback(async (proposalId: string) => {
+    if (!executionService) {
+      showNotification('Studio execution service is still initializing.', 'info', 2400);
+      return;
+    }
     const proposal = aplProposals.find(p => p.proposalId === proposalId);
     if (!proposal) return;
 
@@ -1696,7 +1739,7 @@ const App: React.FC = () => {
     } catch (error) {
       showNotification(`Error: ${error instanceof Error ? error.message : 'Unknown'}`, 'error', 3000);
     }
-  }, [aplProposals, showNotification]);
+  }, [aplProposals, executionService, showNotification]);
 
   // NOTE: APL proposals are now loaded in handleFileUpload using real spectral analysis
   // Mock proposal fallback is still used if analysis fails
@@ -4167,6 +4210,7 @@ const App: React.FC = () => {
           }
           timelineShell={
             appState === AppState.READY ? (
+              !studioEngine.isReady ? studioEngineFallback : (
               <Suspense fallback={shellFallback}>
                 <TimelineShell
                   branchSelectorProps={{
@@ -4182,7 +4226,7 @@ const App: React.FC = () => {
                   transportBarProps={{
                     isPlaying: isTimelinePlaying,
                     currentTimeSec: timelinePlayheadDisplaySec,
-                    durationSec: audioPlaybackEngine.getDuration(),
+                    durationSec: audioPlaybackEngine?.getDuration() ?? 0,
                     isBusy: isTimelineDispatching,
                     isExporting: isTimelineExporting,
                     onPlay: () => {
@@ -4226,6 +4270,7 @@ const App: React.FC = () => {
                   }}
                 />
               </Suspense>
+              )
             ) : null
           }
         />
