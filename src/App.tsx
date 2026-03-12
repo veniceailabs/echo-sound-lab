@@ -89,9 +89,10 @@ import { deterministicId } from './services/deterministicJson';
 import { ReplayState } from './services/deterministicReplayService';
 import { provenanceLedger } from './services/ProvenanceLedger';
 import { TimelineHydrationMetrics } from './services/timelineReplayCache';
-import { audioPlaybackEngine } from './services/AudioPlaybackEngine';
+import { audioPlaybackEngine, type AudioBufferLike } from './services/AudioPlaybackEngine';
 import { assetRegistry } from './services/AssetRegistry';
 import { aiAgentService } from './services/AIAgentService';
+import { offlineRenderService } from './services/OfflineRenderService';
 import {
   BranchEntity,
   DeterministicBranchRegistry,
@@ -387,6 +388,7 @@ const App: React.FC = () => {
   const [mergeError, setMergeError] = useState<string | null>(null);
   const [isTimelineDispatching, setIsTimelineDispatching] = useState(false);
   const [isTimelineIntentGenerating, setIsTimelineIntentGenerating] = useState(false);
+  const [isTimelineExporting, setIsTimelineExporting] = useState(false);
   const [isTimelinePlaying, setIsTimelinePlaying] = useState(false);
   const [timelinePlayheadDisplaySec, setTimelinePlayheadDisplaySec] = useState(0);
   const [timelineTransportTick, setTimelineTransportTick] = useState(0);
@@ -1015,6 +1017,38 @@ const App: React.FC = () => {
       setIsTimelineIntentGenerating(false);
     }
   }, [isTimelineIntentGenerating, showNotification, timelineState.tracks, timelineState.workspaceId]);
+
+  const handleTimelineExportOffline = useCallback(async () => {
+    if (isTimelineExporting) return;
+    setIsTimelineExporting(true);
+    try {
+      const fallbackRegionBuffers: Record<string, AudioBufferLike> = {};
+      if (originalBuffer) {
+        const unresolvedSourceIds = Array.from(new Set(
+          timelineState.regions
+            .map((region) => region.sourceId)
+            .filter((sourceId) => sourceId && !assetRegistry.hasAsset(sourceId))
+        ));
+        for (const sourceId of unresolvedSourceIds) {
+          fallbackRegionBuffers[sourceId] = originalBuffer;
+        }
+      }
+
+      const baseFileName = (currentFileName || 'timeline-export').replace(/\.[^.]+$/, '');
+      const result = await offlineRenderService.renderTimelineToWav({
+        timelineState,
+        audioFileName: `${baseFileName}-timeline.wav`,
+        creatorId: 'human:timeline-editor',
+        fallbackRegionBuffers,
+        autoDownload: true,
+      });
+      showNotification(`Exported ${result.audioFileName} with signed provenance manifest.`, 'success', 3500);
+    } catch (error) {
+      showNotification(`Offline export failed: ${(error as Error).message}`, 'error', 4000);
+    } finally {
+      setIsTimelineExporting(false);
+    }
+  }, [currentFileName, isTimelineExporting, originalBuffer, showNotification, timelineState]);
 
   const beginVerdictRun = useCallback(() => {
     activeVerdictRunIdRef.current += 1;
@@ -4136,12 +4170,16 @@ const App: React.FC = () => {
                   currentTimeSec={timelinePlayheadDisplaySec}
                   durationSec={audioPlaybackEngine.getDuration()}
                   isBusy={isTimelineDispatching}
+                  isExporting={isTimelineExporting}
                   onPlay={() => {
                     void handleTimelinePlay();
                   }}
                   onPause={handleTimelinePause}
                   onStop={handleTimelineStop}
                   onSeek={handleTimelineSeek}
+                  onExportWav={() => {
+                    void handleTimelineExportOffline();
+                  }}
                 />
               </div>
               <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] transition-shadow duration-300 overflow-hidden">
