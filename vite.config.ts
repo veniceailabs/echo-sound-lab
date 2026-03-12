@@ -1,9 +1,8 @@
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
-    const env = loadEnv(mode, '.', '');
     return {
       server: {
         port: 3005,
@@ -21,21 +20,51 @@ export default defineConfig(({ mode }) => {
         sourcemap: false,
         rollupOptions: {
           output: {
-            manualChunks: {
-              'vendor-react': ['react', 'react-dom'],
-              'vendor-motion': ['framer-motion'],
-              'vendor-ai': ['@google/genai'],
-              'vendor-audio': ['@webaudiomodules/api', '@webaudiomodules/sdk', '@breezystack/lamejs'],
+            manualChunks(id) {
+              if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+                return 'vendor-react';
+              }
+              if (id.includes('node_modules/framer-motion')) {
+                return 'vendor-motion';
+              }
+              if (
+                id.includes('@webaudiomodules/api') ||
+                id.includes('@webaudiomodules/sdk') ||
+                id.includes('@breezystack/lamejs')
+              ) {
+                return 'vendor-audio';
+              }
+              if (id.includes('/src/components/demo/') || id.includes('/src/services/demo/')) {
+                return 'feature-demo';
+              }
+              if (
+                id.includes('/src/components/AIStudio') ||
+                id.includes('/src/components/APL/') ||
+                id.includes('/src/services/AIAgentService') ||
+                id.includes('/src/services/APLAnalysisService') ||
+                id.includes('/src/services/geminiService')
+              ) {
+                return 'feature-ai';
+              }
+              if (
+                id.includes('/src/components/HistoryTimeline') ||
+                id.includes('/src/services/historyManager') ||
+                id.includes('/src/services/sessionManager')
+              ) {
+                return 'feature-history';
+              }
+              if (
+                id.includes('/src/services/AudioPlaybackEngine') ||
+                id.includes('/src/services/OfflineRenderService') ||
+                id.includes('/src/services/AssetRegistry') ||
+                id.includes('/src/services/ProvenanceLedger')
+              ) {
+                return 'feature-engine';
+              }
+              return undefined;
             },
           },
         },
-      },
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.VITE_SUNO_API_KEY': JSON.stringify(env.VITE_SUNO_API_KEY),
-        'process.env.VITE_SUNO_API_URL': JSON.stringify(env.VITE_SUNO_API_URL),
-        'process.env.VITE_RATE_LIMIT_PER_DAY': JSON.stringify(env.VITE_RATE_LIMIT_PER_DAY)
       },
       resolve: {
         alias: {
@@ -43,7 +72,7 @@ export default defineConfig(({ mode }) => {
         }
       },
       optimizeDeps: {
-        exclude: ['@breezystack/lamejs', '@google/genai']
+        exclude: ['@breezystack/lamejs']
       }
     };
 });

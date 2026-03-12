@@ -19,24 +19,17 @@ import { SAFE_TEST_CONFIG } from './services/testConfig';
 import { actionsToConfig } from './services/processingActionUtils';
 import { loadFullStudioSuite, FullStudioStatus } from './services/fullStudioSuite';
 import Visualizer from './components/Visualizer';
-import ChatInterface from './components/ChatInterface';
-import { ProcessingPanel } from './components/ProcessingPanel';
-import AnalysisPanel from './components/AnalysisPanel';
 const MultiStemWorkspace = React.lazy(() => import('./components/MultiStemWorkspace'));
 const AIStudio = React.lazy(() => import('./components/AIStudio'));
 const VideoEngine = React.lazy(() => import('./components/VideoEngine'));
-import { EchoReportPanel } from './components/EchoReportPanel';
-import { ListeningPassCard } from './components/ListeningPassCard';
 import { FeedbackButton } from './components/SharedComponents';
 import { storageService } from './services/storageService';
 import { runSafeAsync } from './utils/safeAsync';
 import { saveEQSettings, saveDynamicEQSettings } from './utils/eqPersistence';
-import SettingsPanel from './components/SettingsPanel';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useTranslation } from 'react-i18next';
 
 // NEW: Import enhanced features
-import { EnhancedControlPanel } from './components/EnhancedControlPanel';
 import { PhaseCorrelationMeter, StereoFieldMeter, LUFSMeter } from './components/AdvancedMeters';
 import { historyManager } from './services/historyManager';
 import { sessionManager, SessionState } from './services/sessionManager';
@@ -44,7 +37,6 @@ import { DiagnosticsOverlay, useDiagnosticsToggle } from './components/Diagnosti
 import { SSCOverlay } from './components/SSCOverlay';
 import { ProcessingOverlay } from './components/ProcessingOverlay';
 import { FloatingControls } from './components/FloatingControls';
-import { HistoryTimeline } from './components/HistoryTimeline';
 import { HistoryEntry } from './types';
 import { useViewport } from './context/ViewportContext';
 import { debugTelemetryService } from './services/debugTelemetryService';
@@ -98,7 +90,7 @@ import {
 import { aplAnalysisService } from './services/APLAnalysisService';
 
 // ===== GHOST SYSTEM (Self-Demonstrating Mode) =====
-import { VirtualCursor, DemoDashboard } from './components/demo';
+import { VirtualCursor } from './components/demo';
 import { getDemoDirector } from './services/demo/DemoDirector';
 import { HIP_HOP_MASTER_SCENARIO, POP_MASTER_SCENARIO, QUICK_TOUR_SCENARIO } from './services/demo/HipHopMasterScenario';
 
@@ -108,7 +100,16 @@ import { GhostUser } from './services/demo/GhostUser';
 import { MerkleAuditLog } from './action-authority/audit/MerkleAuditLog';
 
 // ===== PHASE 3: HYBRID BRIDGE =====
-import { BridgeTest } from './components/BridgeTest';
+const ChatInterface = React.lazy(() => import('./components/ChatInterface'));
+const ProcessingPanel = React.lazy(() => import('./components/ProcessingPanel').then((module) => ({ default: module.ProcessingPanel })));
+const AnalysisPanel = React.lazy(() => import('./components/AnalysisPanel'));
+const EchoReportPanel = React.lazy(() => import('./components/EchoReportPanel').then((module) => ({ default: module.EchoReportPanel })));
+const ListeningPassCard = React.lazy(() => import('./components/ListeningPassCard').then((module) => ({ default: module.ListeningPassCard })));
+const SettingsPanel = React.lazy(() => import('./components/SettingsPanel'));
+const EnhancedControlPanel = React.lazy(() => import('./components/EnhancedControlPanel').then((module) => ({ default: module.EnhancedControlPanel })));
+const HistoryTimeline = React.lazy(() => import('./components/HistoryTimeline').then((module) => ({ default: module.HistoryTimeline })));
+const DemoDashboard = React.lazy(() => import('./components/demo').then((module) => ({ default: module.DemoDashboard })));
+const BridgeTest = React.lazy(() => import('./components/BridgeTest').then((module) => ({ default: module.BridgeTest })));
 
 declare var process: { env: Record<string, string | undefined> };
 declare global {
@@ -3548,7 +3549,9 @@ const App: React.FC = () => {
       {/* ===== PHASE 3: HYBRID BRIDGE TEST (debug only) ===== */}
       {showLabDebugPanels && (
         <div className="fixed bottom-4 right-4 z-40 max-w-sm">
-          <BridgeTest />
+          <Suspense fallback={null}>
+            <BridgeTest />
+          </Suspense>
         </div>
       )}
 
@@ -4052,104 +4055,111 @@ const App: React.FC = () => {
           </div>
 
           {/* Listening Pass Card - Phase 4 */}
-          <ListeningPassCard
-            listeningPassData={listeningPassData}
-            llmGuidance={llmGuidance}
-          />
+          <Suspense fallback={shellFallback}>
+            <ListeningPassCard
+              listeningPassData={listeningPassData}
+              llmGuidance={llmGuidance}
+            />
+          </Suspense>
 
           {/* AI Recommendations Panel - Full Width */}
           <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden">
-            <AnalysisPanel
-              engineMode={engineMode}
-              analysisResult={analysisResult}
-              onReferenceUpload={handleReferenceUpload}
-              referenceMetrics={referenceTrack?.metrics || null}
-              referenceTrack={referenceTrack}
-              onClearReference={handleClearReference}
-              isLoadingReference={isLoadingReference}
-              onApplySuggestions={handleApplySuggestions}
-              onImproveMyMix={handleImproveMyMix}
-              onToggleSuggestion={handleToggleSuggestion}
-              appliedSuggestionIds={appliedSuggestionIds}
-              isProcessing={showProcessingOverlay}
-              applySuggestionsError={applySuggestionsError}
-              selectedSuggestionCount={selectedSuggestionCount}
-              mixReadiness="in_progress"
-              onRequestAIAnalysis={handleRequestAIAnalysis}
-              echoReportStatus={echoReportStatus}
-              onRemoveAppliedSuggestion={handleRemoveAppliedSuggestion}
-              onAutoMix={handleAutoMix}
-              onCancelAutoMix={handleCancelAutoMix}
-              isAutoMixing={isAutoMixing}
-              autoMixProgress={autoMixProgress}
-              autoMixError={autoMixError}
-              autoMixMode={autoMixMode}
-              onFullStudioAutoMix={handleFullStudioAutoMix}
-              fullStudioStatus={fullStudioStatus}
-              shadowDelta={displayTelemetry?.shadowDelta}
-              quantumConfidence={displayTelemetry?.quantumConfidence}
-              quantumScore={displayTelemetry?.quantumScore}
-              classicalScore={displayTelemetry?.classicalScore}
-              humanIntentIndex={displayTelemetry?.humanIntentIndex}
-              intentCoreActive={displayTelemetry?.intentCoreActive}
-              preservationMode={preservationMode}
-              onPreservationModeChange={setPreservationMode}
-              engineVerdict={latestEngineVerdict}
-              engineVerdictReason={latestEngineVerdictReason}
-              debugTelemetry={debugTelemetry}
-            />
+            <Suspense fallback={shellFallback}>
+              <AnalysisPanel
+                engineMode={engineMode}
+                analysisResult={analysisResult}
+                onReferenceUpload={handleReferenceUpload}
+                referenceMetrics={referenceTrack?.metrics || null}
+                referenceTrack={referenceTrack}
+                onClearReference={handleClearReference}
+                isLoadingReference={isLoadingReference}
+                onApplySuggestions={handleApplySuggestions}
+                onImproveMyMix={handleImproveMyMix}
+                onToggleSuggestion={handleToggleSuggestion}
+                appliedSuggestionIds={appliedSuggestionIds}
+                isProcessing={showProcessingOverlay}
+                applySuggestionsError={applySuggestionsError}
+                selectedSuggestionCount={selectedSuggestionCount}
+                mixReadiness="in_progress"
+                onRequestAIAnalysis={handleRequestAIAnalysis}
+                echoReportStatus={echoReportStatus}
+                onRemoveAppliedSuggestion={handleRemoveAppliedSuggestion}
+                onAutoMix={handleAutoMix}
+                onCancelAutoMix={handleCancelAutoMix}
+                isAutoMixing={isAutoMixing}
+                autoMixProgress={autoMixProgress}
+                autoMixError={autoMixError}
+                autoMixMode={autoMixMode}
+                onFullStudioAutoMix={handleFullStudioAutoMix}
+                fullStudioStatus={fullStudioStatus}
+                shadowDelta={displayTelemetry?.shadowDelta}
+                quantumConfidence={displayTelemetry?.quantumConfidence}
+                quantumScore={displayTelemetry?.quantumScore}
+                classicalScore={displayTelemetry?.classicalScore}
+                humanIntentIndex={displayTelemetry?.humanIntentIndex}
+                intentCoreActive={displayTelemetry?.intentCoreActive}
+                preservationMode={preservationMode}
+                onPreservationModeChange={setPreservationMode}
+                engineVerdict={latestEngineVerdict}
+                engineVerdictReason={latestEngineVerdictReason}
+                debugTelemetry={debugTelemetry}
+              />
+            </Suspense>
           </div>
 
           {/* Echo Report Panel */}
           <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden">
-            <EchoReportPanel
-              echoReport={echoReport}
-              onApplyEchoAction={handleApplyEchoAction}
-              isProcessing={showProcessingOverlay}
-              echoActionStatus={echoActionStatus}
-              echoActionError={echoActionError}
-              revisionLog={revisionLog}
-              onRevertRevision={async () => {}}
-              onShowRevisionLogModal={() => {}}
-              echoReportStatus={echoReportStatus}
-              onRetryEchoReport={handleGenerateEchoReport}
-              onShowSystemCheck={() => {}}
-              onCopyDebugLog={async () => {}}
-              referenceTrackName={referenceTrack?.name}
-              // V.E.N.U.M. props
-              beforeMetrics={originalMetrics}
-              afterMetrics={processedMetrics}
-              trackName={currentFileName}
-              processedConfig={currentConfig}
-            />
+            <Suspense fallback={shellFallback}>
+              <EchoReportPanel
+                echoReport={echoReport}
+                onApplyEchoAction={handleApplyEchoAction}
+                isProcessing={showProcessingOverlay}
+                echoActionStatus={echoActionStatus}
+                echoActionError={echoActionError}
+                revisionLog={revisionLog}
+                onRevertRevision={async () => {}}
+                onShowRevisionLogModal={() => {}}
+                echoReportStatus={echoReportStatus}
+                onRetryEchoReport={handleGenerateEchoReport}
+                onShowSystemCheck={() => {}}
+                onCopyDebugLog={async () => {}}
+                referenceTrackName={referenceTrack?.name}
+                beforeMetrics={originalMetrics}
+                afterMetrics={processedMetrics}
+                trackName={currentFileName}
+                processedConfig={currentConfig}
+              />
+            </Suspense>
           </div>
 
           {/* Processing Controls - Below Echo Report */}
           {originalMetrics && (
             <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden">
-              <ProcessingPanel
-                originalMetrics={originalMetrics}
-                processedMetrics={processedMetrics}
-                onCommit={handleCommit}
-                onConfigChange={handleConfigChange}
-                onUserInteraction={() => {
-                  hasUserInitiatedProcessingRef.current = true;
-                }}
-                isCommitting={isCommitting}
-                echoReport={echoReport}
-                onToggleAB={handleToggleAB}
-                isAbComparing={isAbComparing}
-                isPlaying={isPlaying}
-                onTogglePlayback={handleTogglePlayback}
-                onExportComplete={() => setShowExportSharePrompt(true)}
-                hasAppliedChanges={hasAppliedChanges}
-                abLabel={abPanelLabel}
-                abDisabled={abDisabled}
-                eqSettings={eqSettings}
-                setEqSettings={setEqSettings}
-                dynamicEq={dynamicEq}
-                setDynamicEq={setDynamicEq}
-              />
+              <Suspense fallback={shellFallback}>
+                <ProcessingPanel
+                  originalMetrics={originalMetrics}
+                  processedMetrics={processedMetrics}
+                  onCommit={handleCommit}
+                  onConfigChange={handleConfigChange}
+                  onUserInteraction={() => {
+                    hasUserInitiatedProcessingRef.current = true;
+                  }}
+                  isCommitting={isCommitting}
+                  echoReport={echoReport}
+                  onToggleAB={handleToggleAB}
+                  isAbComparing={isAbComparing}
+                  isPlaying={isPlaying}
+                  onTogglePlayback={handleTogglePlayback}
+                  onExportComplete={() => setShowExportSharePrompt(true)}
+                  hasAppliedChanges={hasAppliedChanges}
+                  abLabel={abPanelLabel}
+                  abDisabled={abDisabled}
+                  eqSettings={eqSettings}
+                  setEqSettings={setEqSettings}
+                  dynamicEq={dynamicEq}
+                  setDynamicEq={setDynamicEq}
+                />
+              </Suspense>
             </div>
           )}
 
@@ -4430,15 +4440,17 @@ const App: React.FC = () => {
               </button>
             </div>
             <div className="flex-1 overflow-auto p-6">
-              <EnhancedControlPanel
-                onConfigApply={handleEnhancedConfigApply}
-                onPluginChange={handlePluginChange}
-                currentConfig={currentConfig}
-                eqSettings={eqSettings}
-                setEqSettings={setEqSettings}
-                dynamicEq={dynamicEq}
-                setDynamicEq={setDynamicEq}
-              />
+              <Suspense fallback={shellFallback}>
+                <EnhancedControlPanel
+                  onConfigApply={handleEnhancedConfigApply}
+                  onPluginChange={handlePluginChange}
+                  currentConfig={currentConfig}
+                  eqSettings={eqSettings}
+                  setEqSettings={setEqSettings}
+                  dynamicEq={dynamicEq}
+                  setDynamicEq={setDynamicEq}
+                />
+              </Suspense>
             </div>
           </div>
         </div>
@@ -4473,7 +4485,9 @@ const App: React.FC = () => {
 
             {/* Chat Content */}
             <div className="flex-1 overflow-hidden">
-              <ChatInterface />
+              <Suspense fallback={shellFallback}>
+                <ChatInterface />
+              </Suspense>
             </div>
           </div>
         </div>
@@ -4544,41 +4558,45 @@ const App: React.FC = () => {
 
       {/* Settings Panel */}
       {showSettings && (
-        <SettingsPanel
-          onClose={() => setShowSettings(false)}
-          engineMode={engineMode}
-          setEngineMode={setEngineMode}
-          accPolicyTemplate={accPolicyTemplate}
-          setAccPolicyTemplate={setAccPolicyTemplate}
-          onResetToOriginal={handleResetToOriginal}
-          appVersion={appVersion}
-          themeMode={themeMode}
-          setThemeMode={setThemeMode}
-          networkSettings={networkSettings}
-          setNetworkSettings={setNetworkSettings}
-          onCopyDebugInfo={copyDebugInfo}
-          onClearDebugInfo={() => {
-            debugTelemetryService.clearErrors();
-            showNotification('Debug log cleared', 'success', 2000);
-          }}
-        />
+        <Suspense fallback={null}>
+          <SettingsPanel
+            onClose={() => setShowSettings(false)}
+            engineMode={engineMode}
+            setEngineMode={setEngineMode}
+            accPolicyTemplate={accPolicyTemplate}
+            setAccPolicyTemplate={setAccPolicyTemplate}
+            onResetToOriginal={handleResetToOriginal}
+            appVersion={appVersion}
+            themeMode={themeMode}
+            setThemeMode={setThemeMode}
+            networkSettings={networkSettings}
+            setNetworkSettings={setNetworkSettings}
+            onCopyDebugInfo={copyDebugInfo}
+            onClearDebugInfo={() => {
+              debugTelemetryService.clearErrors();
+              showNotification('Debug log cleared', 'success', 2000);
+            }}
+          />
+        </Suspense>
       )}
 
       {/* History Timeline */}
       {showHistoryTimeline && (
-        <HistoryTimeline
-          isOpen={showHistoryTimeline}
-          onClose={() => setShowHistoryTimeline(false)}
-          onJumpToEntry={handleJumpToHistoryEntry}
-          onSetSnapshotA={handleSetSnapshotA}
-          onSetSnapshotB={handleSetSnapshotB}
-          snapshotAId={snapshotAId}
-          snapshotBId={snapshotBId}
-          snapshotALabel={snapshotALabel}
-          snapshotBLabel={snapshotBLabel}
-          snapshotABActive={snapshotABActive}
-          onClearSnapshotAB={handleClearSnapshotAB}
-        />
+        <Suspense fallback={null}>
+          <HistoryTimeline
+            isOpen={showHistoryTimeline}
+            onClose={() => setShowHistoryTimeline(false)}
+            onJumpToEntry={handleJumpToHistoryEntry}
+            onSetSnapshotA={handleSetSnapshotA}
+            onSetSnapshotB={handleSetSnapshotB}
+            snapshotAId={snapshotAId}
+            snapshotBId={snapshotBId}
+            snapshotALabel={snapshotALabel}
+            snapshotBLabel={snapshotBLabel}
+            snapshotABActive={snapshotABActive}
+            onClearSnapshotAB={handleClearSnapshotAB}
+          />
+        </Suspense>
       )}
 
       <Suspense fallback={null}>
@@ -4623,10 +4641,12 @@ const App: React.FC = () => {
 
       {/* Demo Dashboard (Ghost System Modal) */}
       {showDemoMode && (
-        <DemoDashboard
-          onClose={() => setShowDemoMode(false)}
-          demoDirector={demoDirector}
-        />
+        <Suspense fallback={null}>
+          <DemoDashboard
+            onClose={() => setShowDemoMode(false)}
+            demoDirector={demoDirector}
+          />
+        </Suspense>
       )}
 
       </div>
