@@ -400,6 +400,40 @@ function applyProposalToState(state: ReplayState, proposal: APLProposal): string
       impactedTrackIds.add(trackId);
       break;
     }
+    case 'ADD_REGION': {
+      const trackId = getParameterString(params as Record<string, unknown>, 'trackId', primaryTrack.trackId);
+      const trackName = getParameterString(params as Record<string, unknown>, 'trackName', trackId);
+      ensureTrack(state, trackId, trackName);
+
+      const regionId = getParameterString(
+        params as Record<string, unknown>,
+        'regionId',
+        deterministicId('region', { proposalId: proposal.proposalId, trackId })
+      );
+      const sourceId = getParameterString(
+        params as Record<string, unknown>,
+        'assetId',
+        getParameterString(params as Record<string, unknown>, 'sourceId', regionId)
+      );
+      const startTimeSec = round6(Math.max(0, toNumber((params as Record<string, unknown>).startTimeSec, 0)));
+      const offsetSec = round6(Math.max(0, toNumber((params as Record<string, unknown>).offsetSec, 0)));
+      const durationSec = round6(Math.max(0.001, toNumber((params as Record<string, unknown>).durationSec, 1)));
+      const gainDb = round6(toNumber((params as Record<string, unknown>).gainDb, 0));
+
+      state.regions = state.regions.filter((region) => region.regionId !== regionId);
+      state.regions.push(normalizeRegion({
+        regionId,
+        trackId,
+        sourceId,
+        startTimeSec,
+        offsetSec,
+        durationSec,
+        gainDb,
+      }));
+      state.regions.sort(compareRegions);
+      impactedTrackIds.add(trackId);
+      break;
+    }
     case 'MOVE_REGION': {
       const regionId = getParameterString(params as Record<string, unknown>, 'regionId', '');
       const region = state.regions.find((entry) => entry.regionId === regionId);

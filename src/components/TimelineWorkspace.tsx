@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { APLProposal } from '../echo-sound-lab/apl/proposal-engine';
 import type { ReplayState } from '../services/deterministicReplayService';
+import { assetRegistry } from '../services/AssetRegistry';
 import { TrackHeader } from './TrackHeader';
 import { RegionLane } from './RegionLane';
 import { AutomationLane } from './AutomationLane';
@@ -9,12 +10,20 @@ import PluginRack from './PluginRack';
 type TimelineActionType = Extract<
   APLProposal['action']['type'],
   | 'ADD_TRACK'
+  | 'ADD_REGION'
   | 'MOVE_REGION'
   | 'SPLIT_REGION'
   | 'SET_AUTOMATION_POINT'
   | 'ADD_PLUGIN'
   | 'SET_PLUGIN_PARAM'
 >;
+
+const AUDIO_FILE_EXTENSION_PATTERN = /\.(wav|mp3|aif|aiff|flac|m4a|ogg)$/i;
+
+function isAudioFile(file: File): boolean {
+  if (file.type.startsWith('audio/')) return true;
+  return AUDIO_FILE_EXTENSION_PATTERN.test(file.name);
+}
 
 export interface TimelineActionRequest {
   actionType: TimelineActionType;
@@ -50,6 +59,7 @@ function TimelineWorkspaceComponent({
   const [zoom, setZoom] = useState(1);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(timelineState.tracks[0]?.trackId || null);
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
   const timelineSurfaceRef = useRef<HTMLDivElement | null>(null);
 
   const maxEndSec = useMemo(() => {
@@ -82,13 +92,90 @@ function TimelineWorkspaceComponent({
     return () => cancelAnimationFrame(rafId);
   }, [getTransportPlayheadSeconds, isTransportPlaying, updatePlayheadCss]);
 
+  const handleDroppedFiles = useCallback(async (files: File[]) => {
+    if (isReadOnly || isDispatching) return;
+    if (!files.length) return;
+
+    const targetTrackId = selectedTrackId || timelineState.tracks[0]?.trackId;
+    if (!targetTrackId) return;
+    const targetTrackName = timelineState.tracks.find((track) => track.trackId === targetTrackId)?.trackName || targetTrackId;
+
+    const nowTag = Date.now().toString(36);
+    let timelineAnchorSec = Math.max(
+      0,
+      ...timelineState.regions
+        .filter((region) => region.trackId === targetTrackId)
+        .map((region) => region.startTimeSec + region.durationSec)
+    );
+
+    const audioFiles = files.filter(isAudioFile);
+    for (let index = 0; index < audioFiles.length; index += 1) {
+      const file = audioFiles[index];
+      const registration = await assetRegistry.registerFile(file);
+      const decoded = await assetRegistry.ensureDecodedBuffer(registration.assetId);
+      const durationSec = decoded?.duration && Number.isFinite(decoded.duration)
+        ? Number(decoded.duration.toFixed(6))
+        : 8;
+      const regionId = `region-${targetTrackId}-${nowTag}-${index + 1}`;
+
+      await onDispatchAction({
+        actionType: 'ADD_REGION',
+        trackId: targetTrackId,
+        trackName: targetTrackName,
+        description: `Add region from ${file.name}`,
+        parameters: {
+          trackId: targetTrackId,
+          trackName: targetTrackName,
+          regionId,
+          assetId: registration.assetId,
+          sourceId: registration.assetId,
+          startTimeSec: Number(timelineAnchorSec.toFixed(3)),
+          offsetSec: 0,
+          durationSec,
+          gainDb: 0,
+        },
+      });
+
+      setSelectedRegionId(regionId);
+      timelineAnchorSec += durationSec + 0.05;
+    }
+  }, [isDispatching, isReadOnly, onDispatchAction, selectedTrackId, timelineState.regions, timelineState.tracks]);
+
   return (
-    <section className="rounded-2xl border border-white/10 bg-slate-950/45 p-4">
+    <section
+      className={`rounded-2xl border bg-slate-950/45 p-4 transition-colors ${
+        isDragOver ? 'border-cyan-300/70' : 'border-white/10'
+      }`}
+      onDragOver={(event) => {
+        if (isReadOnly || isDispatching) return;
+        event.preventDefault();
+        setIsDragOver(true);
+      }}
+      onDragEnter={(event) => {
+        if (isReadOnly || isDispatching) return;
+        event.preventDefault();
+        setIsDragOver(true);
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget.contains(event.relatedTarget as Node)) return;
+        setIsDragOver(false);
+      }}
+      onDrop={(event) => {
+        if (isReadOnly || isDispatching) return;
+        event.preventDefault();
+        setIsDragOver(false);
+        const dropped = Array.from(event.dataTransfer?.files || []);
+        void handleDroppedFiles(dropped);
+      }}
+    >
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-slate-500">Deterministic Timeline</p>
           <p className="text-[11px] text-slate-400">
             Hash <span className="font-mono text-cyan-300">{outputStateHash.slice(0, 16)}</span>
+          </p>
+          <p className="mt-1 text-[10px] text-slate-500">
+            Drop audio files to ingest assets and append regions.
           </p>
         </div>
         <div className="flex items-center gap-3">

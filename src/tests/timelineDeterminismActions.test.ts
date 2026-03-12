@@ -39,7 +39,7 @@ const BASE_TIMELINE_STATE: ReplayState = {
 
 function proposalFactory(
   proposalId: string,
-  type: APLProposal['action']['type'] | 'ADD_TRACK' | 'MOVE_REGION' | 'SPLIT_REGION' | 'SET_AUTOMATION_POINT',
+  type: APLProposal['action']['type'] | 'ADD_TRACK' | 'ADD_REGION' | 'MOVE_REGION' | 'SPLIT_REGION' | 'SET_AUTOMATION_POINT',
   parameters: Record<string, unknown>
 ): APLProposal {
   return {
@@ -104,6 +104,30 @@ describe('Timeline Determinism Actions', () => {
     expect(runA.outputStateHash).toBe(runB.outputStateHash);
     const splitRegions = runA.outputState.regions.filter((region) => String(region.regionId).startsWith('region-1'));
     expect(splitRegions.length).toBe(2);
+  });
+
+  test('ADD_REGION deterministically ingests an asset-backed region', async () => {
+    const proposals: APLProposal[] = [
+      proposalFactory('p-add-region', 'ADD_REGION', {
+        trackId: 'track-main',
+        regionId: 'region-ingested',
+        assetId: 'asset-kick-1',
+        startTimeSec: 9,
+        durationSec: 2.5,
+      }),
+    ];
+
+    const runA = await runDeterministicReplay(BASE_TIMELINE_STATE, proposals);
+    const runB = await runDeterministicReplay(BASE_TIMELINE_STATE, proposals, {
+      seed: 41,
+      clockStartMs: 1000,
+    });
+
+    expect(runA.outputStateHash).toBe(runB.outputStateHash);
+    const addedRegion = runA.outputState.regions.find((region) => region.regionId === 'region-ingested');
+    expect(addedRegion).toBeDefined();
+    expect(addedRegion?.sourceId).toBe('asset-kick-1');
+    expect(addedRegion?.durationSec).toBe(2.5);
   });
 
   test('SET_AUTOMATION_POINT is deterministic across key ordering', async () => {

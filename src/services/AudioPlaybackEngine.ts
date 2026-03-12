@@ -4,6 +4,7 @@ import {
   ReplayState,
   ReplayTrackState,
 } from './deterministicReplayService';
+import { assetRegistry, DecodedAssetBuffer } from './AssetRegistry';
 
 export interface AudioParamLike {
   value: number;
@@ -56,6 +57,10 @@ export interface DelayNodeLike extends AudioNodeLike {
 
 export interface AudioBufferLike {
   duration: number;
+  length?: number;
+  sampleRate?: number;
+  numberOfChannels?: number;
+  getChannelData?: (channel: number) => Float32Array;
 }
 
 export interface AudioBufferSourceNodeLike extends AudioNodeLike {
@@ -71,6 +76,7 @@ export interface AudioContextLike {
   destination: AudioNodeLike;
   createGain(): GainNodeLike;
   createBufferSource(): AudioBufferSourceNodeLike;
+  decodeAudioData?: (audioData: ArrayBuffer) => Promise<AudioBufferLike>;
   createStereoPanner?: () => StereoPannerNodeLike;
   createDynamicsCompressor?: () => DynamicsCompressorNodeLike;
   createBiquadFilter?: () => BiquadFilterNodeLike;
@@ -158,6 +164,15 @@ function toBoolean(value: unknown, fallback = false): boolean {
     if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') return false;
   }
   return fallback;
+}
+
+function isDecodedAssetBuffer(buffer: AudioBufferLike): buffer is AudioBufferLike & DecodedAssetBuffer {
+  return (
+    typeof buffer.length === 'number' &&
+    typeof buffer.sampleRate === 'number' &&
+    typeof buffer.numberOfChannels === 'number' &&
+    typeof buffer.getChannelData === 'function'
+  );
 }
 
 function getSortedAutomationPoints(points: Array<{ timeSec: number; value: number }>): Array<{ timeSec: number; value: number }> {
@@ -248,6 +263,7 @@ export class AudioPlaybackEngine {
   async syncState(state: ReplayState): Promise<void> {
     await this.init();
     this.currentState = state;
+    await this.ensureRegionBuffersDecoded(state.regions);
 
     const nextTrackIds = new Set(state.tracks.map((track) => track.trackId));
     for (const [trackId, runtime] of this.trackRuntimes.entries()) {
@@ -263,6 +279,35 @@ export class AudioPlaybackEngine {
         .sort((a, b) => (a.startTimeSec === b.startTimeSec ? a.regionId.localeCompare(b.regionId) : a.startTimeSec - b.startTimeSec));
       this.applyTrackChannelValues(runtime, track);
       this.reconcileTrackPlugins(runtime, track.inserts || []);
+    }
+  }
+
+  private async ensureRegionBuffersDecoded(regions: ReplayRegionState[]): Promise<void> {
+    const context = this.requireContext();
+    for (const region of regions) {
+      const sourceId = region.sourceId;
+      if (!sourceId) continue;
+      if (this.regionBuffers.has(sourceId)) continue;
+
+      const cachedDecoded = assetRegistry.getDecodedBuffer(sourceId);
+      if (cachedDecoded) {
+        this.regionBuffers.set(sourceId, cachedDecoded);
+        continue;
+      }
+
+      const encodedBytes = assetRegistry.getArrayBuffer(sourceId);
+      if (!encodedBytes || !context.decodeAudioData) continue;
+
+      try {
+        const decodedBuffer = await context.decodeAudioData(encodedBytes);
+        if (!decodedBuffer) continue;
+        this.regionBuffers.set(sourceId, decodedBuffer);
+        if (isDecodedAssetBuffer(decodedBuffer)) {
+          assetRegistry.setDecodedBuffer(sourceId, decodedBuffer);
+        }
+      } catch {
+        // decode failed; deterministic no-op
+      }
     }
   }
 

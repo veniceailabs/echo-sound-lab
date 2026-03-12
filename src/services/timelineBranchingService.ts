@@ -114,11 +114,31 @@ function getConflictKey(proposal: APLProposal): string | null {
       const addTrackId = getStringParam(params, 'trackId', trackId);
       return `track:add:${addTrackId}`;
     }
+    case 'ADD_REGION': {
+      const regionId = getStringParam(params, 'regionId', '');
+      const targetTrackId = getStringParam(params, 'trackId', trackId);
+      return regionId ? `region:add:${targetTrackId}:${regionId}` : `region:add:${targetTrackId}`;
+    }
     case 'GAIN_ADJUSTMENT':
     case 'NORMALIZATION':
     case 'LIMITING':
     case 'DC_REMOVAL':
       return `track:${trackId}:${proposal.action.type}`;
+    case 'ADD_PLUGIN': {
+      const manifestId = getStringParam(params, 'manifestId', 'plugin');
+      const instanceId = getStringParam(params, 'instanceId', manifestId);
+      return `plugin:add:${trackId}:${instanceId}`;
+    }
+    case 'REMOVE_PLUGIN':
+    case 'REORDER_PLUGIN': {
+      const instanceId = getStringParam(params, 'instanceId', '');
+      return instanceId ? `plugin:${trackId}:${instanceId}` : `plugin:${trackId}:unknown`;
+    }
+    case 'SET_PLUGIN_PARAM': {
+      const instanceId = getStringParam(params, 'instanceId', '');
+      const paramId = getStringParam(params, 'paramId', 'param');
+      return `plugin-param:${trackId}:${instanceId}:${paramId}`;
+    }
     default:
       return `${proposal.action.type}:${trackId}`;
   }

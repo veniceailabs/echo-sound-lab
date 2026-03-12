@@ -99,7 +99,12 @@ export const ProposalMapper: Record<string, (params: Record<string, any>) => str
   'MUTE_TOGGLE': (params: any) => LogicTemplates.setTrackMute(params.track || 'Main', params.muted || false),
   'RENAME': (params: any) => LogicTemplates.renameTrack(params.track || 'Main', params.newName || 'Renamed'),
   'ADD_TRACK': (params: any) => LogicTemplates.logTimelineAction('ADD_TRACK', params),
+  'ADD_REGION': (params: any) => LogicTemplates.logTimelineAction('ADD_REGION', params),
   'MOVE_REGION': (params: any) => LogicTemplates.logTimelineAction('MOVE_REGION', params),
   'SPLIT_REGION': (params: any) => LogicTemplates.logTimelineAction('SPLIT_REGION', params),
   'SET_AUTOMATION_POINT': (params: any) => LogicTemplates.logTimelineAction('SET_AUTOMATION_POINT', params),
+  'ADD_PLUGIN': (params: any) => LogicTemplates.logTimelineAction('ADD_PLUGIN', params),
+  'REMOVE_PLUGIN': (params: any) => LogicTemplates.logTimelineAction('REMOVE_PLUGIN', params),
+  'REORDER_PLUGIN': (params: any) => LogicTemplates.logTimelineAction('REORDER_PLUGIN', params),
+  'SET_PLUGIN_PARAM': (params: any) => LogicTemplates.logTimelineAction('SET_PLUGIN_PARAM', params),
 };

@@ -58,6 +58,7 @@ export interface APLProposal {
       | 'NORMALIZATION'
       | 'DC_REMOVAL'
       | 'ADD_TRACK'
+      | 'ADD_REGION'
       | 'MOVE_REGION'
       | 'SPLIT_REGION'
       | 'SET_AUTOMATION_POINT'

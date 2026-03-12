@@ -90,6 +90,7 @@ import { ReplayState } from './services/deterministicReplayService';
 import { provenanceLedger } from './services/ProvenanceLedger';
 import { TimelineHydrationMetrics } from './services/timelineReplayCache';
 import { audioPlaybackEngine } from './services/AudioPlaybackEngine';
+import { assetRegistry } from './services/AssetRegistry';
 import {
   BranchEntity,
   DeterministicBranchRegistry,
@@ -427,7 +428,11 @@ const App: React.FC = () => {
 
   const bindTimelineBuffers = useCallback((nextState: ReplayState) => {
     if (!originalBuffer) return;
-    const sourceIds = new Set(nextState.regions.map((region) => region.sourceId));
+    const sourceIds = new Set(
+      nextState.regions
+        .map((region) => region.sourceId)
+        .filter((sourceId) => !assetRegistry.hasAsset(sourceId))
+    );
     for (const sourceId of sourceIds) {
       audioPlaybackEngine.setRegionBuffer(sourceId, originalBuffer);
     }

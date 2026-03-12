@@ -3,7 +3,7 @@ import { ProposalMapper } from '../services/logic/LogicTemplates';
 
 describe('Timeline Execution Mapper', () => {
   test('maps deterministic timeline actions to executable templates', () => {
-    const timelineActions = ['ADD_TRACK', 'MOVE_REGION', 'SPLIT_REGION', 'SET_AUTOMATION_POINT'] as const;
+    const timelineActions = ['ADD_TRACK', 'ADD_REGION', 'MOVE_REGION', 'SPLIT_REGION', 'SET_AUTOMATION_POINT'] as const;
 
     for (const actionType of timelineActions) {
       const mapper = ProposalMapper[actionType];

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { assetRegistry } from '../services/AssetRegistry';
 import {
   AudioBufferLike,
   AudioBufferSourceNodeLike,
@@ -63,6 +64,7 @@ class FakeAudioContext implements AudioContextLike {
   currentTime = 10;
   destination = new FakeNode('destination');
   readonly createdBufferSources: FakeBufferSourceNode[] = [];
+  decodeCalls = 0;
   private gainCounter = 0;
   private pannerCounter = 0;
   private sourceCounter = 0;
@@ -82,6 +84,17 @@ class FakeAudioContext implements AudioContextLike {
   createStereoPanner(): StereoPannerNodeLike {
     this.pannerCounter += 1;
     return new FakeStereoPannerNode(`panner-${this.pannerCounter}`);
+  }
+
+  async decodeAudioData(_audioData: ArrayBuffer): Promise<AudioBufferLike> {
+    this.decodeCalls += 1;
+    return {
+      duration: 12,
+      length: 529200,
+      sampleRate: 44100,
+      numberOfChannels: 1,
+      getChannelData: () => new Float32Array(529200),
+    };
   }
 
   async resume(): Promise<void> {
@@ -140,6 +153,38 @@ function makeState(gainDb: number): ReplayState {
 }
 
 describe('AudioPlaybackEngine', () => {
+  test('decodes asset-backed regions via AssetRegistry when explicit region buffers are absent', async () => {
+    assetRegistry.clear();
+    const fakeContext = new FakeAudioContext();
+    const engine = new AudioPlaybackEngine({
+      createAudioContext: () => fakeContext,
+    });
+
+    assetRegistry.registerArrayBuffer(new Uint8Array([0, 1, 2, 3]).buffer, { name: 'kick.wav', mimeType: 'audio/wav' }, 'asset-kick');
+
+    const state = makeState(0);
+    state.regions = [
+      {
+        regionId: 'region-vocal-1',
+        trackId: 'track-vocal',
+        sourceId: 'asset-kick',
+        startTimeSec: 0,
+        offsetSec: 0,
+        durationSec: 2,
+        gainDb: 0,
+      },
+    ];
+
+    await engine.init();
+    await engine.syncState(state);
+    engine.playFrom(0);
+
+    expect(fakeContext.decodeCalls).toBe(1);
+    const track = engine.getTrackDebug('track-vocal');
+    expect(track?.activeSources.length).toBe(1);
+    assetRegistry.clear();
+  });
+
   test('renders deterministic routing Source -> Insert -> Track -> Master', async () => {
     const fakeContext = new FakeAudioContext();
     const engine = new AudioPlaybackEngine({
