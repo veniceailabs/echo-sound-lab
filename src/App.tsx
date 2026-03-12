@@ -1416,7 +1416,8 @@ const App: React.FC = () => {
   }, [accPolicyTemplate]);
 
   useEffect(() => {
-    if (appState !== AppState.READY || engineMode !== 'FRIENDLY' || activeMode !== 'SINGLE') {
+    const isStudioEntrySurface = appState === AppState.IDLE || appState === AppState.READY;
+    if (!isStudioEntrySurface || engineMode !== 'FRIENDLY' || activeMode !== 'SINGLE') {
       setShowFriendlyTour(false);
       return;
     }
