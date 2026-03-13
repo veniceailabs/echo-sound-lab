@@ -305,8 +305,18 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
           </div>
 
           {!INTEGRATION_FLAGS.ENABLE_PREMIUM_VOICE && (
-            <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-[10px] uppercase tracking-wider text-emerald-200">
-              Native Voice Mode
+            <div className="space-y-2">
+              <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-[10px] uppercase tracking-wider text-emerald-200">
+                Native Voice Mode
+              </div>
+              <button
+                type="button"
+                disabled
+                title="This capability is disabled in Sovereign Mode."
+                className="w-full rounded-xl border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-[10px] uppercase tracking-wider text-slate-500 cursor-not-allowed"
+              >
+                Premium Voice API Disabled
+              </button>
             </div>
           )}
 

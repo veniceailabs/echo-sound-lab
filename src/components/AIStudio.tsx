@@ -319,6 +319,17 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated, onSongOpenSingleTr
                     Zero-Cost Mode
                   </span>
                 </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled
+                    title="This capability is disabled in Sovereign Mode."
+                    className="rounded-lg border border-slate-700/70 bg-slate-900/70 px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-slate-500 cursor-not-allowed"
+                  >
+                    Animate Art (Disabled)
+                  </button>
+                  <span className="text-xs text-slate-400">This capability is disabled in Sovereign Mode.</span>
+                </div>
                 <div className="mt-5 h-48">
                   <NativeVisualizer audioPlaybackEngine={audioPlaybackEngine} className="h-full" />
                 </div>

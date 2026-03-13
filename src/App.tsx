@@ -15,6 +15,7 @@ import { AudioSessionProvider, useAudioSession } from './context/AudioSessionCon
 import { audioProcessingPipeline } from './services/audioProcessingPipeline';
 import { qualityAssurance, QualityVerdictInfo } from './services/qualityAssurance';
 import { FEATURE_FLAGS } from './config/featureFlags';
+import { isPremiumStackEnabled } from './config/integrationFlags';
 import { SAFE_TEST_CONFIG } from './services/testConfig';
 import { actionsToConfig } from './services/processingActionUtils';
 import { loadFullStudioSuite, FullStudioStatus } from './services/fullStudioSuite';
@@ -336,6 +337,12 @@ const App: React.FC = () => {
   const [networkSettings, setNetworkSettings] = useState({ ssid: 'Echo WiFi', proxy: '', isLocal: true });
   const [showFriendlyTour, setShowFriendlyTour] = useState(false);
   const [friendlyTourStep, setFriendlyTourStep] = useState(0);
+  const [latestExportVerification, setLatestExportVerification] = useState<{
+    fileName: string;
+    manifestHash: string;
+    signature: string;
+    signedAt: number;
+  } | null>(null);
 
   // ===== GHOST SYSTEM STATE =====
   const [showDemoMode, setShowDemoMode] = useState(false);
@@ -421,6 +428,14 @@ const App: React.FC = () => {
   const AUTO_MIX_TARGET_SCORE = 90;
   const AUTO_MIX_MAX_ITERATIONS = 4;
   const appVersion = 'RC 1.0 (Adversarial Hardened)';
+  const premiumModeEnabled = isPremiumStackEnabled();
+  const studioOperatingModeLabel = premiumModeEnabled ? 'Premium' : 'Sovereign (Zero-Cost)';
+  const studioOperatingModeSubtitle = premiumModeEnabled
+    ? 'Premium integrations enabled'
+    : 'Zero-cost sovereign runtime';
+  const studioOperatingModeBadgeClass = premiumModeEnabled
+    ? 'border-violet-400/35 bg-violet-500/10 text-violet-200'
+    : 'border-emerald-400/35 bg-emerald-500/10 text-emerald-200';
   useEffect(() => {
     debugTelemetryService.installGlobalErrorHandlers();
   }, []);
@@ -1080,6 +1095,12 @@ const App: React.FC = () => {
         fallbackRegionBuffers,
         autoDownload: true,
       });
+      setLatestExportVerification({
+        fileName: result.audioFileName,
+        manifestHash: result.signedManifest.manifestHash,
+        signature: result.signedManifest.signature,
+        signedAt: result.signedManifest.signedAt,
+      });
       showNotification(`Exported ${result.audioFileName} with signed provenance manifest.`, 'success', 3500);
     } catch (error) {
       showNotification(`Offline export failed: ${(error as Error).message}`, 'error', 4000);
@@ -1201,6 +1222,14 @@ const App: React.FC = () => {
   const dismissNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
   }, []);
+
+  useEffect(() => {
+    if (!latestExportVerification) return;
+    const timeoutId = window.setTimeout(() => {
+      setLatestExportVerification(null);
+    }, 10000);
+    return () => window.clearTimeout(timeoutId);
+  }, [latestExportVerification]);
 
   const dismissFriendlyTour = useCallback(() => {
     setShowFriendlyTour(false);
@@ -1422,9 +1451,9 @@ const App: React.FC = () => {
       return;
     }
     try {
-      const completed = localStorage.getItem(FRIENDLY_TOUR_COMPLETED_KEY) === 'true';
       const dismissedThisSession = sessionStorage.getItem(FRIENDLY_TOUR_SESSION_DISMISSED_KEY) === 'true';
-      if (!completed && !dismissedThisSession) {
+      // Always surface onboarding once per session when entering studio.
+      if (!dismissedThisSession) {
         setFriendlyTourStep(0);
         setShowFriendlyTour(true);
       }
@@ -3682,6 +3711,13 @@ const App: React.FC = () => {
                 </button>
               </div>
             )}
+            <div
+              className={`hidden sm:flex items-center gap-2 rounded-full px-3 py-1.5 border text-[10px] uppercase tracking-[0.14em] ${studioOperatingModeBadgeClass}`}
+              title={studioOperatingModeSubtitle}
+            >
+              <span className="font-semibold">Mode:</span>
+              <span className="normal-case tracking-normal">{studioOperatingModeLabel}</span>
+            </div>
             {appState === AppState.READY && (
               <button
                 onClick={() => setShowHistoryTimeline(true)}
@@ -4584,6 +4620,41 @@ const App: React.FC = () => {
         <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
         Second Light OS
       </div>
+
+      {latestExportVerification && (
+        <div className="fixed right-4 bottom-16 z-[70] w-[360px] max-w-[92vw] rounded-2xl border border-emerald-400/30 bg-slate-950/95 p-4 shadow-[0_12px_28px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.18em] text-emerald-300">Cryptographic Provenance Verified</p>
+              <h4 className="mt-1 text-sm font-semibold text-white">Signed by Echo Sound Lab</h4>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLatestExportVerification(null)}
+              className="text-[10px] uppercase tracking-wider text-slate-400 hover:text-white"
+            >
+              Close
+            </button>
+          </div>
+          <div className="mt-3 space-y-1.5 rounded-xl border border-white/10 bg-white/5 p-3 text-[11px]">
+            <p className="text-slate-300">
+              <span className="text-slate-500 uppercase tracking-[0.12em] mr-2">File</span>
+              {latestExportVerification.fileName}
+            </p>
+            <p className="text-slate-300 font-mono break-all">
+              <span className="text-slate-500 uppercase tracking-[0.12em] mr-2 font-sans">Hash</span>
+              {latestExportVerification.manifestHash.slice(0, 16)}…{latestExportVerification.manifestHash.slice(-8)}
+            </p>
+            <p className="text-slate-300 font-mono break-all">
+              <span className="text-slate-500 uppercase tracking-[0.12em] mr-2 font-sans">Seal</span>
+              {latestExportVerification.signature.slice(0, 16)}…
+            </p>
+            <p className="text-slate-500">
+              Signed {new Date(latestExportVerification.signedAt).toLocaleTimeString()}
+            </p>
+          </div>
+        </div>
+      )}
 
       <ExportShell
         nudgeBannerProps={showExportSharePrompt ? {

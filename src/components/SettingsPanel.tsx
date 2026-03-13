@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import i18n from '../i18n';
 import { EngineMode } from '../types';
 import { useViewport } from '../context/ViewportContext';
+import SystemHealthDiagnostic from './SystemHealthDiagnostic';
 import {
   AccPolicyTemplateName,
   CapabilityPolicyDecision,
@@ -46,7 +47,7 @@ const policyTemplateDescriptions: Record<AccPolicyTemplateName, { title: string;
   },
 };
 
-const sections = ['mode', 'governance', 'display', 'language', 'network', 'about'] as const;
+const sections = ['mode', 'governance', 'display', 'language', 'network', 'system', 'about'] as const;
 type SectionKey = (typeof sections)[number];
 const sectionTitles: Record<SectionKey, string> = {
   mode: 'Mode',
@@ -54,6 +55,7 @@ const sectionTitles: Record<SectionKey, string> = {
   display: 'Display',
   language: 'Language',
   network: 'Network',
+  system: 'System',
   about: 'About',
 };
 const sectionIcons: Record<SectionKey, React.ReactNode> = {
@@ -80,6 +82,11 @@ const sectionIcons: Record<SectionKey, React.ReactNode> = {
   network: (
     <svg className="w-4 h-4 text-orange-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M8.111 16.404a3 3 0 015.778 0M5.05 12.747a7 7 0 0113.9 0M2 9a11 11 0 0120 0" />
+    </svg>
+  ),
+  system: (
+    <svg className="w-4 h-4 text-orange-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5.12 14.38a2.25 2.25 0 000 3.182l1.318 1.318a2.25 2.25 0 003.182 0l3.971-3.97a2.25 2.25 0 011.591-.66h5.714m0 0H21m-.104 0a2.25 2.25 0 11-3.182-3.182 2.25 2.25 0 013.182 3.182z" />
     </svg>
   ),
   about: (
@@ -153,6 +160,8 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
         return currentLanguage.toUpperCase();
       case 'network':
         return networkSettings.ssid || 'Local network';
+      case 'system':
+        return 'Diagnostics';
       case 'about':
         return 'Restraint > Expansion';
       default:
@@ -400,6 +409,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                           These values are saved locally to help the studio analytic routing and diagnostics only.
                         </div>
                       </>
+                    )}
+                    {section === 'system' && (
+                      <SystemHealthDiagnostic />
                     )}
                     {section === 'about' && (
                       <div className="text-sm text-slate-300 space-y-2">

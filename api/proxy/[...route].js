@@ -1,5 +1,12 @@
 import { GoogleGenAI } from '@google/genai';
-import { getAnimateArtConfig, getGeminiConfig, getIntegrationFlags, getSunoConfig, getVoiceConfig } from '../_lib/env.js';
+import {
+  getAnimateArtConfig,
+  getGeminiConfig,
+  getIntegrationFlags,
+  getSunoConfig,
+  getSystemHealthSnapshot,
+  getVoiceConfig,
+} from '../_lib/env.js';
 import { AuthError, requireAuthContext } from '../_lib/auth.js';
 import { handleOptions, parseMultipartForm, proxyJson, readJsonBody, sendJson } from '../_lib/http.js';
 import { signManifestPayload } from '../_lib/manifest-signing.js';
@@ -404,6 +411,20 @@ async function handleAnimateArtHooks(req, res) {
   });
 }
 
+async function handleSystemHealth(req, res) {
+  if (req.method !== 'GET') {
+    return sendJson(res, 405, { error: 'Method not allowed' });
+  }
+
+  return withAuthAndRate(req, res, (auth) => ({
+    key: `system:health:${auth.actorFingerprint}`,
+    limit: 120,
+    windowMs: 60_000,
+  }), async () => {
+    return sendJson(res, 200, getSystemHealthSnapshot());
+  });
+}
+
 export default async function handler(req, res) {
   if (handleOptions(req, res)) return;
   const route = getRouteSegments(req);
@@ -441,6 +462,9 @@ export default async function handler(req, res) {
     }
     if (route.length === 2 && route[0] === 'animate-art' && route[1] === 'hooks') {
       return await handleAnimateArtHooks(req, res);
+    }
+    if (route.length === 2 && route[0] === 'system' && route[1] === 'health') {
+      return await handleSystemHealth(req, res);
     }
 
     return sendJson(res, 404, { error: 'Route not found', route });

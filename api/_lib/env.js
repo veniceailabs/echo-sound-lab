@@ -8,6 +8,10 @@ function firstDefined(keys) {
   return '';
 }
 
+function hasConfiguredEnv(keys) {
+  return Boolean(firstDefined(keys));
+}
+
 export function requireEnv(keys, label) {
   const value = firstDefined(keys);
   if (!value) {
@@ -33,6 +37,24 @@ export function getIntegrationFlags() {
     enableSunoIntegration: parseBooleanFlag(optionalEnv(['ENABLE_SUNO_INTEGRATION'], 'false'), false),
     enablePremiumVoice: parseBooleanFlag(optionalEnv(['ENABLE_PREMIUM_VOICE'], 'false'), false),
     enableAnimateArt: parseBooleanFlag(optionalEnv(['ENABLE_ANIMATE_ART'], 'false'), false),
+  };
+}
+
+export function getSystemHealthSnapshot() {
+  const integrationFlags = getIntegrationFlags();
+  const premiumMode =
+    integrationFlags.enableSunoIntegration
+    || integrationFlags.enablePremiumVoice
+    || integrationFlags.enableAnimateArt;
+
+  return {
+    mode: premiumMode ? 'PREMIUM' : 'SOVEREIGN',
+    gemini: {
+      configured: hasConfiguredEnv(['GEMINI_API_KEY']),
+      model: optionalEnv(['GEMINI_MODEL'], 'gemini-3.1-pro-preview'),
+    },
+    integrations: integrationFlags,
+    checkedAt: Date.now(),
   };
 }
 
