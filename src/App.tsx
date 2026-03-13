@@ -77,6 +77,7 @@ import { ReplayState } from './services/deterministicReplayService';
 import { provenanceLedger } from './services/ProvenanceLedger';
 import { TimelineHydrationMetrics } from './services/timelineReplayCache';
 import type { AudioBufferLike } from './services/AudioPlaybackEngine';
+import { buildServiceTemplateProposals, listServiceTemplates } from './services/ServiceTemplates';
 import {
   BranchEntity,
   DeterministicBranchRegistry,
@@ -410,6 +411,7 @@ const App: React.FC = () => {
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [mergeError, setMergeError] = useState<string | null>(null);
   const [isTimelineDispatching, setIsTimelineDispatching] = useState(false);
+  const [isApplyingServiceTemplate, setIsApplyingServiceTemplate] = useState(false);
   const [isTimelineIntentGenerating, setIsTimelineIntentGenerating] = useState(false);
   const [isTimelineExporting, setIsTimelineExporting] = useState(false);
   const [isTimelinePlaying, setIsTimelinePlaying] = useState(false);
@@ -428,6 +430,7 @@ const App: React.FC = () => {
   const AUTO_MIX_TARGET_SCORE = 90;
   const AUTO_MIX_MAX_ITERATIONS = 4;
   const appVersion = 'RC 1.0 (Adversarial Hardened)';
+  const serviceTemplates = useMemo(() => listServiceTemplates(), []);
   const premiumModeEnabled = isPremiumStackEnabled();
   const studioOperatingModeLabel = premiumModeEnabled ? 'Premium' : 'Sovereign (Zero-Cost)';
   const studioOperatingModeSubtitle = premiumModeEnabled
@@ -1066,6 +1069,76 @@ const App: React.FC = () => {
       setIsTimelineIntentGenerating(false);
     }
   }, [aiAgentService, isTimelineIntentGenerating, showNotification, timelineState.tracks, timelineState.workspaceId]);
+
+  const handleApplyServiceTemplate = useCallback(async (templateId: string) => {
+    if (isApplyingServiceTemplate || isTimelineDispatching) return;
+
+    const template = serviceTemplates.find((entry) => entry.templateId === templateId);
+    if (!template) {
+      showNotification(`Unknown template: ${templateId}`, 'error', 2600);
+      return;
+    }
+
+    const registry = timelineBranchRegistryRef.current;
+    if (registry && activeTimelineBranchId && timelineScrubIndex < registry.getBranchLength(activeTimelineBranchId)) {
+      showNotification('Jump to latest timeline state before applying a service template.', 'warning', 3200);
+      return;
+    }
+
+    const targetTrack = timelineState.tracks[0];
+    if (!targetTrack) {
+      showNotification('No target track is available for template application.', 'error', 2800);
+      return;
+    }
+
+    const proposals = buildServiceTemplateProposals(template, {
+      trackId: targetTrack.trackId,
+      trackName: targetTrack.trackName,
+      confidence: 0.99,
+      generatorId: `service-template/${template.templateId}`,
+    });
+
+    setAplProposals((prev) => {
+      const deduped = new Map(prev.map((proposal) => [proposal.proposalId, proposal]));
+      for (const proposal of proposals) {
+        deduped.set(proposal.proposalId, proposal);
+      }
+      return Array.from(deduped.values());
+    });
+    setAplDataSource('real');
+    setAplDataSourceReason(null);
+
+    setIsApplyingServiceTemplate(true);
+    try {
+      for (const proposal of proposals) {
+        await handleTimelineDispatchAction({
+          actionType: proposal.action.type as TimelineActionRequest['actionType'],
+          trackId: targetTrack.trackId,
+          trackName: targetTrack.trackName,
+          description: `[${template.name}] ${proposal.action.description}`,
+          parameters: {
+            ...proposal.action.parameters,
+            trackId: targetTrack.trackId,
+            trackName: targetTrack.trackName,
+          },
+        });
+      }
+      showNotification(`${template.name} applied with ${proposals.length} deterministic steps.`, 'success', 3200);
+    } catch (error) {
+      showNotification(`Template apply failed: ${(error as Error).message}`, 'error', 3600);
+    } finally {
+      setIsApplyingServiceTemplate(false);
+    }
+  }, [
+    activeTimelineBranchId,
+    handleTimelineDispatchAction,
+    isApplyingServiceTemplate,
+    isTimelineDispatching,
+    serviceTemplates,
+    showNotification,
+    timelineScrubIndex,
+    timelineState.tracks,
+  ]);
 
   const handleTimelineExportOffline = useCallback(async () => {
     if (!offlineRenderService || !assetRegistry) {
@@ -3987,6 +4060,11 @@ const App: React.FC = () => {
       {/* Main Workspace - Second Light OS */}
       {appState === AppState.READY && activeMode === 'SINGLE' && (
         <SessionShell
+          serviceTemplateBar={{
+            templates: serviceTemplates,
+            isBusy: isApplyingServiceTemplate || isTimelineDispatching,
+            onApplyTemplate: handleApplyServiceTemplate,
+          }}
           workspace={
             <>
           {/* Visualizer Module */}

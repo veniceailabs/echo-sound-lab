@@ -66,7 +66,7 @@ export const Notification: React.FC<NotificationProps> = ({
 
   return (
     <div
-      className={`fixed top-6 right-6 z-[100] flex items-center gap-3 px-5 py-3 rounded-2xl border backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] ${getStyles()} ${
+      className={`pointer-events-none flex items-center gap-3 px-5 py-3 rounded-2xl border backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] ${getStyles()} ${
         isExiting
           ? 'animate-out slide-out-to-right-full fade-out duration-300'
           : 'animate-in slide-in-from-right-full fade-in duration-300'
@@ -102,7 +102,7 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
             top: `${24 + index * 80}px`, // Stack notifications vertically
             right: '24px'
           }}
-          className="fixed z-[100]"
+          className="fixed z-[100] pointer-events-none"
         >
           <Notification
             message={notification.message}
