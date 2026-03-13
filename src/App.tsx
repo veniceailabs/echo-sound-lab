@@ -4511,7 +4511,7 @@ const App: React.FC = () => {
       {/* Mode Switcher - Always Visible */}
       <div
         className="fixed left-6 z-50 flex gap-2 items-center"
-        style={{ bottom: `calc(24px + var(--esl-safe-bottom) + ${cornerUiOffsetPx}px)` }}
+        style={{ bottom: `calc(24px + var(--esl-safe-bottom, 0px) + ${cornerUiOffsetPx}px)` }}
       >
         <div className="flex gap-3 items-center group/mode-switcher">
           <button
@@ -4587,7 +4587,7 @@ const App: React.FC = () => {
       {appState !== AppState.IDLE && (
         <button
           onClick={() => setShowEchoChat(true)}
-          style={{ bottom: `calc(24px + var(--esl-safe-bottom) + ${cornerUiOffsetPx}px)` }}
+          style={{ bottom: `calc(24px + var(--esl-safe-bottom, 0px) + ${cornerUiOffsetPx}px)` }}
           className="fixed right-6 z-50 w-14 h-14 bg-slate-900 text-orange-400 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03),_0_0_20px_rgba(251,146,60,0.03)] hover:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02),_0_0_25px_rgba(251,146,60,0.05)] hover:text-orange-300 active:shadow-[inset_3px_3px_8px_rgba(0,0,0,0.9)] active:translate-y-[1px] transition-all flex items-center justify-center group"
           title="Open Echo Chat"
         >

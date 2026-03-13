@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+html, body {
+  height: 100%;
+  overflow-x: hidden;
+}
+
+/* iOS safe-area helpers */
+:root {
+  --esl-safe-bottom: 0px;
+  --esl-safe-top: 0px;
+}
+
+/* Promote real safe-area values when the browser supports env(). */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  :root {
+    --esl-safe-bottom: env(safe-area-inset-bottom);
+    --esl-safe-top: env(safe-area-inset-top);
+  }
+}
+
+.esl-safe-modal {
+  padding-top: calc(12px + var(--esl-safe-top));
+  padding-bottom: calc(12px + var(--esl-safe-bottom));
+}
+
 /* Theme helpers */
 :root.theme-dark body {
   background: #0f172a;
