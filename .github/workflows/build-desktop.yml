@@ -1,0 +1,106 @@
+name: Build desktop apps
+
+# Native addons cannot be cross-compiled: a Windows .node must be built on
+# Windows, a Linux .so on Linux. This matrix is the only way to produce all
+# three platforms from a Mac-only dev machine.
+
+on:
+  push:
+    # native-desktop is included so this workflow can run before it reaches
+    # main: pull_request events execute the workflow file from the *base*
+    # branch, so a PR alone cannot trigger a workflow main doesn't have yet.
+    branches: [main, master, native-desktop]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            name: macOS (arm64)
+            builder_args: --mac --arm64
+          - os: macos-13
+            name: macOS (x64)
+            builder_args: --mac --x64
+          - os: windows-2022
+            name: Windows (x64)
+            builder_args: --win --x64
+          - os: ubuntu-22.04
+            name: Linux (x64)
+            builder_args: --linux --x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      # --- PortAudio, per platform ---
+
+      - name: Install PortAudio (macOS)
+        if: runner.os == 'macOS'
+        run: brew install portaudio
+
+      - name: Install PortAudio (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y portaudio19-dev libasound2-dev
+
+      - name: Install PortAudio (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          vcpkg install portaudio:x64-windows-static
+        shell: pwsh
+
+      - name: Set VCPKG_ROOT (Windows)
+        if: runner.os == 'Windows'
+        run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+        shell: pwsh
+
+      # --- Build and verify the native core ---
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build native core
+        working-directory: native
+        run: |
+          npm install --no-audit --no-fund
+          npx node-gyp rebuild
+
+      - name: Test native core
+        working-directory: native
+        run: npm test
+
+      # --- Package the desktop app ---
+
+      - name: Build renderer
+        run: npm run build
+
+      - name: Package
+        run: npx electron-builder ${{ matrix.builder_args }} --publish never
+        env:
+          # Unsigned CI builds. Provide CSC_LINK / CSC_KEY_PASSWORD (macOS) and
+          # WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD (Windows) as repo secrets to
+          # produce signed artifacts.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: echo-sound-lab-${{ matrix.os }}
+          path: |
+            dist-electron/*.dmg
+            dist-electron/*.zip
+            dist-electron/*.exe
+            dist-electron/*.AppImage
+          if-no-files-found: warn
+          retention-days: 14
