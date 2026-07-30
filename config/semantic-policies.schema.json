@@ -1,140 +1,166 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Semantic Policy Configuration Schema",
-  "description": "Schema for Level 4: Contextual Reasoning policy configuration files",
+  "title": "Semantic Policies Configuration Schema",
+  "description": "JSON Schema for validating semantic policy configuration files used by Level 4: Contextual Reasoning",
   "type": "object",
-  "required": ["version", "customRules"],
-  "additionalProperties": false,
+  "required": ["version", "coreRules"],
   "properties": {
     "version": {
       "type": "string",
-      "description": "Configuration version (semantic versioning)",
+      "description": "Configuration format version (semantic versioning)",
       "pattern": "^\\d+\\.\\d+\\.\\d+$",
-      "example": "1.0.0"
+      "examples": ["1.0.0"]
+    },
+    "coreRules": {
+      "type": "object",
+      "description": "Enable/disable core safety policies",
+      "required": ["piiDetection", "externalApiDetection", "productionDataProtection"],
+      "properties": {
+        "piiDetection": {
+          "type": "boolean",
+          "description": "Detect PII exposure (emails, SSNs, phone numbers, credit cards)"
+        },
+        "externalApiDetection": {
+          "type": "boolean",
+          "description": "Detect external API calls (HTTP URLs, fetch/axios, WebSocket)"
+        },
+        "productionDataProtection": {
+          "type": "boolean",
+          "description": "Detect destructive operations on production databases"
+        }
+      },
+      "additionalProperties": false
     },
     "customRules": {
       "type": "array",
       "description": "User-defined policy rules",
       "items": {
         "type": "object",
-        "required": ["id", "name", "description", "type", "severity", "enabled", "patterns"],
-        "additionalProperties": false,
+        "required": ["id", "name", "checkFields", "pattern", "violationType", "severity", "reason", "suggestedFix", "enabled"],
         "properties": {
           "id": {
             "type": "string",
-            "description": "Unique rule identifier (lowercase, hyphenated)",
-            "pattern": "^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+            "description": "Unique identifier for this rule",
+            "pattern": "^[a-z0-9\\-_.]+$",
             "minLength": 3,
-            "maxLength": 50
+            "maxLength": 100
           },
           "name": {
             "type": "string",
-            "description": "Human-readable rule name",
+            "description": "Display name for this rule",
             "minLength": 1,
-            "maxLength": 100
+            "maxLength": 200
           },
-          "description": {
+          "checkFields": {
+            "type": "array",
+            "description": "Fields to check for pattern matches",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": ["parameters", "codeContext", "dataContext", "proposalId", "actionType"]
+            }
+          },
+          "pattern": {
             "type": "string",
-            "description": "What this policy prevents or allows",
-            "minLength": 10,
+            "description": "Regular expression pattern to match against",
+            "minLength": 1,
             "maxLength": 500
           },
-          "type": {
+          "violationType": {
             "type": "string",
-            "description": "Category of policy violation",
-            "enum": [
-              "PII_EXPOSURE",
-              "EXTERNAL_API_CALL",
-              "PRODUCTION_DATA_MODIFICATION",
-              "CUSTOM_RULE"
-            ]
+            "description": "Type of violation this rule detects",
+            "enum": ["PII_EXPOSURE", "EXTERNAL_API_CALL", "PRODUCTION_DATA_MODIFICATION", "CUSTOM_RULE"]
           },
           "severity": {
             "type": "string",
-            "description": "How serious the violation is (CRITICAL/HIGH block execution)",
+            "description": "Severity level (CRITICAL/HIGH block execution)",
             "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+          },
+          "reason": {
+            "type": "string",
+            "description": "Human-readable description of what this rule detects",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "suggestedFix": {
+            "type": "string",
+            "description": "Suggested action to fix violations of this rule",
+            "minLength": 1,
+            "maxLength": 500
           },
           "enabled": {
             "type": "boolean",
             "description": "Whether this rule is active"
-          },
-          "patterns": {
-            "type": "array",
-            "description": "Regular expressions to match against action data",
-            "minItems": 1,
-            "items": {
-              "type": "object",
-              "required": ["regex"],
-              "additionalProperties": false,
-              "properties": {
-                "regex": {
-                  "type": "string",
-                  "description": "Regular expression pattern (without delimiters)",
-                  "minLength": 1,
-                  "maxLength": 1000
-                },
-                "flags": {
-                  "type": "string",
-                  "description": "Regex flags (g=global, i=case-insensitive, m=multiline)",
-                  "pattern": "^[gim]*$"
-                },
-                "field": {
-                  "type": "string",
-                  "description": "Optional: specific field to check (e.g., 'email', 'url')",
-                  "minLength": 1,
-                  "maxLength": 50
-                }
-              }
-            }
-          },
-          "exemptions": {
-            "type": "array",
-            "description": "Action types that are exempt from this rule",
-            "items": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 50
-            }
           }
-        }
+        },
+        "additionalProperties": false
       }
     },
-    "coreRulesOverrides": {
+    "exemptions": {
       "type": "object",
-      "description": "Override settings for built-in core policies",
-      "additionalProperties": false,
-      "properties": {
-        "piiDetection": {
-          "type": "object",
-          "description": "PII Detection policy (emails, SSNs, phone numbers, etc.)",
-          "additionalProperties": false,
-          "properties": {
-            "enabled": {
-              "type": "boolean"
-            }
-          }
-        },
-        "externalApiDetection": {
-          "type": "object",
-          "description": "External API Detection policy (HTTP calls, fetch, axios, etc.)",
-          "additionalProperties": false,
-          "properties": {
-            "enabled": {
-              "type": "boolean"
-            }
-          }
-        },
-        "productionDataProtection": {
-          "type": "object",
-          "description": "Production Data Protection policy (DELETE, DROP on prod databases)",
-          "additionalProperties": false,
-          "properties": {
-            "enabled": {
-              "type": "boolean"
-            }
+      "description": "Exemptions for specific action types or violation types",
+      "patternProperties": {
+        "^(actionType|violationType):[a-zA-Z0-9_]+$": {
+          "type": "array",
+          "description": "Violation types to exempt for this action/category",
+          "items": {
+            "type": "string",
+            "enum": ["PII_EXPOSURE", "EXTERNAL_API_CALL", "PRODUCTION_DATA_MODIFICATION", "CUSTOM_RULE"]
           }
         }
-      }
+      },
+      "additionalProperties": false
+    },
+    "performance": {
+      "type": "object",
+      "description": "Performance and security tuning",
+      "properties": {
+        "timeoutMs": {
+          "type": "integer",
+          "description": "Maximum milliseconds to spend evaluating policies",
+          "minimum": 10,
+          "maximum": 1000,
+          "default": 50
+        },
+        "maxPatternComplexity": {
+          "type": "integer",
+          "description": "Maximum regex pattern complexity (prevents ReDoS attacks)",
+          "minimum": 10,
+          "maximum": 500,
+          "default": 50
+        },
+        "cacheMaxSize": {
+          "type": "integer",
+          "description": "Maximum number of policy results to cache (LRU)",
+          "minimum": 0,
+          "maximum": 10000,
+          "default": 100
+        }
+      },
+      "additionalProperties": false
+    },
+    "logging": {
+      "type": "object",
+      "description": "Logging configuration for policy evaluations",
+      "properties": {
+        "logEvaluations": {
+          "type": "boolean",
+          "description": "Log all policy evaluations (verbose)",
+          "default": true
+        },
+        "logViolationsOnly": {
+          "type": "boolean",
+          "description": "Only log violations (overrides logEvaluations)",
+          "default": false
+        },
+        "logErrors": {
+          "type": "boolean",
+          "description": "Log evaluation errors (timeout, regex failures)",
+          "default": true
+        }
+      },
+      "additionalProperties": false
     }
-  }
+  },
+  "additionalProperties": false
 }

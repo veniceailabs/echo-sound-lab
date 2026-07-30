@@ -84,10 +84,10 @@ export const StudioEngineProvider: React.FC<{ children: React.ReactNode }> = ({ 
       };
     }
 
-    const timeoutId = window.setTimeout(start, 0);
+    const timeoutId = globalThis.setTimeout(start, 0);
     return () => {
       cancelled = true;
-      window.clearTimeout(timeoutId);
+      globalThis.clearTimeout(timeoutId);
     };
   }, []);
 

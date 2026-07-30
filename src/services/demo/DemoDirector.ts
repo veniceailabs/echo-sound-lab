@@ -47,8 +47,21 @@ export class DemoDirector {
   static getInstance(config?: DemoDirectorConfig): DemoDirector {
     if (!DemoDirector.instance) {
       DemoDirector.instance = new DemoDirector(config);
+    } else if (config) {
+      DemoDirector.instance.updateConfig(config);
     }
     return DemoDirector.instance;
+  }
+
+  /**
+   * Merge a new config into the live singleton.
+   * This keeps modal callbacks current across open/close cycles.
+   */
+  private updateConfig(config: DemoDirectorConfig): void {
+    this.config = {
+      ...this.config,
+      ...config,
+    };
   }
 
   /**
@@ -80,11 +93,11 @@ export class DemoDirector {
     this.status = 'running';
     this.startTime = Date.now();
 
-    const actions = script.generate();
+      const actions = script.generate();
 
-    try {
-      for (let i = 0; i < actions.length; i++) {
-        if (this.status === 'paused') {
+      try {
+        for (let i = 0; i < actions.length; i++) {
+        if ((this.status as string) === 'paused') {
           await this.waitUntilResumed();
         }
 

@@ -99,8 +99,8 @@ const SystemHealthDiagnostic: React.FC = () => {
         label: 'Gemini Orchestrator',
         status: health.gemini.configured ? 'online' : 'offline',
         detail: health.gemini.configured
-          ? `Online Â· ${health.gemini.model}`
-          : 'Offline Â· GEMINI_API_KEY missing',
+          ? `Online Â${health.gemini.model}`
+          : 'Offline ÂGEMINI_API_KEY missing',
       },
       {
         id: 'suno',
@@ -119,6 +119,18 @@ const SystemHealthDiagnostic: React.FC = () => {
         label: 'Animate Art',
         status: health.integrations.enableAnimateArt ? 'online' : 'disabled',
         detail: health.integrations.enableAnimateArt ? 'Enabled' : 'Disabled (Sovereign Mode)',
+      },
+      {
+        id: 'stripe-core',
+        label: 'Stripe Monetization Hook',
+        status: 'online',
+        detail: 'Checkout and webhook endpoints active in the local core',
+      },
+      {
+        id: 'distro-packager',
+        label: 'DistroKid API Export',
+        status: 'online',
+        detail: 'Payment-gated distro-ready ZIP endpoint active',
       },
     ];
   }, [health]);

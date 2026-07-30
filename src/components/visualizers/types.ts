@@ -24,7 +24,11 @@ export interface VisualizerRenderer {
 
 export type VisualizerStyle =
   | 'spectrum'
-  | 'scope';
+  | 'scope'
+  | 'radialBloom'
+  | 'galaxyField'
+  | 'cinemaScope'
+  | 'frequencyWaterfall';
 
 export interface VisualizerStyleInfo {
   value: VisualizerStyle;

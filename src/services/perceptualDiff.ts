@@ -237,14 +237,16 @@ export function analyzePerceptualDiff(
   const deltas: PerceptualDelta[] = [];
 
   // 1. Loudness (LUFS)
-  const lufsDelta = after.lufs - before.lufs;
+  const beforeLufs = before.lufs?.integrated ?? 0;
+  const afterLufs = after.lufs?.integrated ?? 0;
+  const lufsDelta = afterLufs - beforeLufs;
   const lufsSeverity = assessSeverity(lufsDelta, SEVERITY_THRESHOLDS.loudness);
 
   if (lufsSeverity !== 'negligible') {
     deltas.push({
       domain: 'loudness',
-      before: before.lufs,
-      after: after.lufs,
+      before: beforeLufs,
+      after: afterLufs,
       delta: lufsDelta,
       severity: lufsSeverity,
       meaning: describeLoudnessChange(lufsDelta, lufsSeverity),

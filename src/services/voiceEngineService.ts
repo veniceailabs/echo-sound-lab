@@ -79,11 +79,25 @@ class VoiceEngineService {
       songTitle?: string;
       voiceId?: string;
       instrumental?: boolean;
+      inputAudioPath?: string;
+      startTime?: number;
+      licenseTier?: string;
+      username?: string;
+      vocalTexture?: 'none' | 'gospel_choir' | 'rn_b_silk' | 'gritty_soul';
+      enableHonestTuner?: boolean;
+      tunerKey?: string;
+      tunerScale?: 'major' | 'minor' | 'chromatic';
+      tunerStrength?: number;
+      enableSmartComping?: boolean;
+      compingSegmentMs?: number;
+      compTakeInputs?: Array<Blob | File>;
     }
   ): Promise<GeneratedSong> {
     const voiceBlob = options?.userVocals || options?.voiceInput;
-    if (!voiceBlob) {
-      throw new Error('Voice input is required for local generation.');
+    const hasInputAudioPath = !!options?.inputAudioPath;
+    const hasCompTakes = !!(options?.enableSmartComping && options?.compTakeInputs?.length);
+    if (!voiceBlob && !hasInputAudioPath && !hasCompTakes) {
+      throw new Error('Voice input is required unless extending an existing song.');
     }
 
     const requestedStyle = style && style.trim() ? style.trim() : 'Trap';
@@ -93,11 +107,20 @@ class VoiceEngineService {
 
     bridge.connect();
 
-    const saved = await bridge.saveAudioFile(voiceBlob, `voice_input_${Date.now()}.wav`);
+    const saved = voiceBlob
+      ? await bridge.saveAudioFile(voiceBlob, `voice_input_${Date.now()}.wav`)
+      : null;
+    const savedCompTakes = options?.compTakeInputs?.length
+      ? await Promise.all(
+          options.compTakeInputs.map((take, idx) =>
+            bridge.saveAudioFile(take, `voice_take_${Date.now()}_${idx + 1}.wav`)
+          )
+        )
+      : [];
 
     const result = await bridge.runMusicSystem(
       {
-        voicePath: saved.audioPath,
+        voicePath: saved?.audioPath,
         style: requestedStyle,
         tempo,
         lyrics,
@@ -105,6 +128,18 @@ class VoiceEngineService {
         voiceId: options?.voiceId,
         instrumental: !!options?.instrumental,
         outputPath: outputName,
+        inputAudioPath: options?.inputAudioPath,
+        startTime: options?.startTime,
+        licenseTier: options?.licenseTier,
+        username: options?.username,
+        vocalTexture: options?.vocalTexture || 'none',
+        enableHonestTuner: !!options?.enableHonestTuner,
+        tunerKey: options?.tunerKey || 'C',
+        tunerScale: options?.tunerScale || 'chromatic',
+        tunerStrength: Number.isFinite(options?.tunerStrength) ? Number(options?.tunerStrength) : 18,
+        enableSmartComping: !!options?.enableSmartComping,
+        compingSegmentMs: Number.isFinite(options?.compingSegmentMs) ? Number(options?.compingSegmentMs) : 420,
+        takePaths: savedCompTakes.map((t) => t.audioPath),
       },
       () => {
         // Progress handled by caller/wizard if needed; currently no-op.
@@ -124,6 +159,8 @@ class VoiceEngineService {
       name: `${voiceModel?.name || 'Local Voice'} - ${requestedStyle}`,
       coverArtUrl: result.coverArtUrl,
       coverArtPath: result.coverArtPath,
+      sourceSongPath: result.songPath,
+      sourceSongUrl: result.songUrl,
       buffer: songBuffer,
       stems: {
         vocals: vocalsBuffer,
@@ -136,6 +173,66 @@ class VoiceEngineService {
         generatedAt: Date.now(),
       }
     };
+  }
+
+  async extendSong(
+    baseSong: GeneratedSong,
+    options?: {
+      lyrics?: string;
+      style?: string;
+      tempo?: number;
+      songTitle?: string;
+      voiceId?: string;
+      instrumental?: boolean;
+      startTime?: number;
+      voiceInput?: Blob | File;
+      licenseTier?: string;
+      username?: string;
+      vocalTexture?: 'none' | 'gospel_choir' | 'rn_b_silk' | 'gritty_soul';
+      enableHonestTuner?: boolean;
+      tunerKey?: string;
+      tunerScale?: 'major' | 'minor' | 'chromatic';
+      tunerStrength?: number;
+      enableSmartComping?: boolean;
+      compingSegmentMs?: number;
+      compTakeInputs?: Array<Blob | File>;
+    }
+  ): Promise<GeneratedSong> {
+    const basePath = baseSong.sourceSongPath;
+    if (!basePath) {
+      throw new Error('Base song path is missing; cannot extend this track.');
+    }
+
+    const outputName = `${(options?.songTitle || baseSong.name || 'extended_song')
+      .replace(/[^a-zA-Z0-9_-]+/g, '_')}_${Date.now()}.wav`;
+
+    return this.generateSong(
+      null,
+      options?.lyrics || baseSong.metadata.prompt || '',
+      options?.style || baseSong.metadata.style || 'Trap',
+      {
+        voiceInput: options?.voiceInput,
+        tempo: options?.tempo,
+        outputName,
+        songTitle: options?.songTitle || `${baseSong.name} (Extended)`,
+        voiceId: options?.voiceId,
+        instrumental: !!options?.instrumental,
+        inputAudioPath: basePath,
+        startTime: Number.isFinite(options?.startTime)
+          ? options!.startTime
+          : Math.max(0, (baseSong.buffer?.duration || 0) - 0.01),
+        licenseTier: options?.licenseTier,
+        username: options?.username,
+        vocalTexture: options?.vocalTexture || 'none',
+        enableHonestTuner: !!options?.enableHonestTuner,
+        tunerKey: options?.tunerKey || 'C',
+        tunerScale: options?.tunerScale || 'chromatic',
+        tunerStrength: Number.isFinite(options?.tunerStrength) ? Number(options?.tunerStrength) : 18,
+        enableSmartComping: !!options?.enableSmartComping,
+        compingSegmentMs: Number.isFinite(options?.compingSegmentMs) ? Number(options?.compingSegmentMs) : 420,
+        compTakeInputs: options?.compTakeInputs,
+      }
+    );
   }
 
   private async fetchAudioBuffer(urlOrPath: string): Promise<AudioBuffer> {

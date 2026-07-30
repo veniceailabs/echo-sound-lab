@@ -1,0 +1,609 @@
+================================================================================
+ECHO SOUND LAB v2.5
+Technical & Product White Paper
+Prepared: March 2026
+================================================================================
+
+
+EXECUTIVE SUMMARY
+─────────────────
+Echo Sound Lab is a browser-based professional audio production platform that
+brings studio-grade mixing and mastering tools to any creator with a web
+browser. Its core premise is simple but ambitious: a musician with no
+engineering background should be able to upload a rough mix and walk away with
+a release-ready master — while an experienced engineer should find every tool
+they'd expect in a professional session, without compromise.
+
+The platform is built on three pillars:
+  1. AI-powered stem separation and analysis
+  2. Analog hardware emulation (SSL, Neve, API) running natively in the browser
+  3. A policy-governed action system that makes professional-grade decisions
+     understandable to non-engineers
+
+
+================================================================================
+SECTION 1: VISION AND POSITIONING
+================================================================================
+
+The problem with existing browser-based audio tools is a fork in the road:
+they are either consumer-grade (limited, opinionated, no control) or they
+attempt to replicate desktop DAWs in the browser (complex, slow, intimidating).
+Echo Sound Lab takes a third path — intelligent, tiered access.
+
+The three user profiles built into the onboarding system reflect this
+philosophy directly:
+
+  FIRST SONG (Walkthrough Mode)
+  Guided, one-step-at-a-time flow with plain language. The user never
+  sees a compressor ratio or EQ frequency band unless they ask. AI makes
+  the decisions and explains them in plain English.
+
+  ARTIST FAST PATH (Quick Results Mode)
+  Minimal friction from upload to finished release. AI handles analysis
+  and mastering decisions; the artist confirms or overrides at the genre
+  and vibe level rather than the parameter level.
+
+  ENGINEER ADVANCED (Logic-style Mode)
+  Full parameter access, direct routing, no hand-holding. SSL and Neve
+  hardware emulation exposed. LUFS metering with per-platform compliance
+  targets. Multi-stem workspace with individual stem processing chains.
+
+All three profiles share the same underlying engine — the difference is
+which layer of the interface is visible, not what processing happens.
+
+
+================================================================================
+SECTION 2: AUDIO PROCESSING ARCHITECTURE
+================================================================================
+
+2.1 STEM SEPARATION PIPELINE
+──────────────────────────────
+The stem separation pipeline supports three modes, allowing the application
+to work in demo environments, connected to a local inference server, or via
+cloud processing:
+
+  MOCK MODE
+  Simulates separation for demo recordings and reliability testing.
+  Returns properly shaped AudioBuffer objects with metadata including
+  confidence scores and confidence bands (low / medium / high). Used for
+  all automated demo scenarios and as a guaranteed fallback.
+
+  LOCAL DEMUCS MODE
+  Connects to a locally running Demucs instance (Meta Research's
+  state-of-the-art source separation model) on the user's own hardware.
+  Designed for M-series Mac deployment. Zero data leaves the device.
+  This is the target production path for the Engineer Advanced profile.
+
+  CLOUD MODE
+  Routes separation requests to a cloud inference endpoint. Designed
+  for users without local GPU/NPU resources. Stem quality matches
+  local Demucs at the cost of latency.
+
+Each separation result carries structured metadata:
+  - processingTimeMs       Actual time spent on separation
+  - confidenceScore        0.0–1.0 model confidence
+  - confidenceBand         'low' / 'medium' / 'high' classification
+  - confidenceReason       Human-readable explanation of confidence
+  - manualFallbackRecommended  Flag for cases the model is uncertain
+
+The four output stems are: vocals, drums, bass, other (harmony/instrumentation).
+
+After separation, an optional NoteTranscriptionService pass extracts pitch,
+velocity, start time, and end time for each event in each stem — enabling
+piano roll visualization and MIDI export.
+
+
+2.2 LUFS METERING AND STREAMING COMPLIANCE
+────────────────────────────────────────────
+The LUFS Metering Service implements the EBU R128 / ITU-R BS.1770 standard
+for broadcast-quality loudness measurement. Measurements produced:
+
+  integratedLUFS    Overall loudness of the entire track
+  shortTermLUFS     Rolling 3-second window
+  momentaryLUFS     Rolling 400ms window
+  loudnessRange     LRA — dynamic range in Loudness Units
+  truePeak          True inter-sample peak in dBTP
+
+Per-platform compliance targets are calculated automatically:
+
+  Platform         Target LUFS    Tolerance    Max True Peak
+  ───────────────  ───────────    ─────────    ─────────────
+  Spotify          -14 LUFS       ±1 LU        -1 dBTP
+  Apple Music      -16 LUFS       ±1 LU        -1 dBTP
+  YouTube          -14 LUFS       ±1 LU        -1 dBTP
+  Tidal            -14 LUFS       ±1 LU        -1 dBTP
+  SoundCloud       -14 LUFS       ±2 LU        -1 dBTP
+  Broadcast        -23 LUFS       ±1 LU        -1 dBTP
+
+A master is flagged as "ready" when it passes the compliance check for all
+selected distribution targets. This replaces the traditional "is it loud
+enough" guesswork with objective, standards-based quality gates.
+
+
+2.3 GENRE-AWARE AUTO MASTERING
+────────────────────────────────
+The AutoMastering Service combines spectral analysis with a genre detection
+heuristic engine. Analysis extracts:
+
+  tonalBalance     Low / low-mid / mid / high-mid / high energy distribution
+  stereoWidth      Per-band stereo image measurement (mid and high)
+  dynamics         Crest factor calculation
+  crestFactor      Peak-to-RMS ratio
+
+Genre detection heuristics (with confidence scores):
+
+  Electronic/EDM   Wide stereo + bright + compressed + heavy bass → 85% conf.
+  Hip-Hop          Heavy bass + medium dynamics + not-too-wide → 80% conf.
+  Rock             Warm/mid-focused + moderate dynamics → 75% conf.
+  Pop              Bright + compressed + balanced (no extremes) → auto
+  General          Fallback for unclassified material
+
+Genre-specific processing presets are then applied: preset-electronic,
+preset-hip-hop, preset-rock, preset-streaming, etc.
+
+Genre profiles are defined with aesthetic targets beyond numbers — each
+profile carries a "vibe", "space", "energy", and reference track list, plus
+a list of common technical mistakes for that genre. These feed the AI
+explanation layer so the platform can tell a hip-hop producer "your low end
+is fighting the kick" instead of "your 60–120Hz band is +4dB."
+
+The platform ships with the following named genre profiles (among others):
+  - OVO / Toronto Sound
+  - Additional profiles for Electronic, Rock, Pop, Hip-Hop, R&B, Latin
+
+
+2.4 ANALOG HARDWARE EMULATION
+───────────────────────────────
+The DSP layer includes Web Audio API–based emulations of classic studio
+hardware. These run entirely in the browser with no plugins required.
+
+  SSL 4000E CHANNEL STRIP
+  Features: Input/output trim, noise gate, 4-band parametric EQ,
+  VCA compressor. Parameters mirror the physical hardware: gate
+  threshold, range, attack, release envelope follower; compressor
+  threshold, ratio, attack, release, knee. Implemented as interconnected
+  Web Audio nodes with manual DSP for gate and compression logic.
+
+  NEVE 1073 PREAMP EMULATION
+  Features: Transformer-based saturation character, 3-band stepped EQ
+  at classic Neve frequencies (80Hz low, 2.5kHz mid, 12kHz high).
+  Input gain range: -6 to +42 dB. Designed to add the harmonic content
+  and analog "glue" the console is known for.
+
+  API 2500 COMPRESSOR
+  Bus compressor emulation. Designed for the "New York" parallel
+  compression approach — adds punch and cohesion to stereo bus and
+  drum bus processing.
+
+  TAPE SATURATION MODULE
+  Analog tape character emulation. Adds harmonic distortion, high-
+  frequency rolloff, and the gentle compression behavior of magnetic
+  tape recording. Used in the finishing chain for warmth.
+
+
+2.5 ADVANCED DSP SERVICES
+───────────────────────────
+Beyond hardware emulation, the following specialized DSP modules are present:
+
+  LUFS Metering Service     EBU R128 loudness measurement (see 2.2)
+  Spectral Analyzer         FFT-based frequency analysis with bin-level
+                            access for visualization
+  Mid-Side Processor        M/S encoding and decoding for stereo width
+                            adjustment and targeted processing
+  Phase Alignment Engine    Cross-stem phase coherence correction —
+                            addresses comb filtering artifacts that arise
+                            during multi-stem reassembly
+  Multiband Validator       Per-band level validation against genre targets
+  Lookahead Limiter         Transparent brick-wall limiting with variable
+                            lookahead window for true peak compliance
+  Pitch Correction Service  Vocal pitch correction
+  AdvancedDSP Module        Oversampling, high-quality resampling
+  WASM Summing Mixer        WebAssembly-based floating point 64-bit
+                            precision summing for the master bus
+
+
+2.6 THE FINISHING CHAIN
+─────────────────────────
+The finishing stage applies the final character decisions before export.
+Four engines compose this stage:
+
+  Macro Dynamics Engine     Controls the overall dynamic shape — whether
+                            the master breathes or sits flat
+  Multiverse Engine         Generates alternate master "versions" at
+                            different loudness targets or with different
+                            EQ curves, allowing A/B comparison
+  Taste Engine              Applies genre-appropriate aesthetic finishing
+                            decisions: air, warmth, width adjustments
+  Zeitgeist Engine          Trend-aware adjustments — compares the track
+                            against current commercial release targets
+                            for the genre
+
+
+================================================================================
+SECTION 3: MULTI-STEM WORKSPACE
+================================================================================
+
+The MultiStemWorkspace is the core production environment for separated
+material. It provides:
+
+  Per-stem playback control    Independent volume, mute, solo per stem
+  Per-stem processing chains   EQ and compression on each stem independently
+  Channel EQ Panel             Parametric equalizer with visual frequency
+                               curve (EQCurveVisualizer component)
+  Waveform visualization       WaveformCanvas with zoom and playhead
+  Spectrogram view             SpectrogramCanvas for frequency-over-time
+                               analysis
+  Piano Roll                   PianoRollCanvas displaying transcribed MIDI
+                               data from NoteTranscriptionService output
+
+The workspace is designed for the Engineer Advanced profile. Artist Fast Path
+users see a simplified single-page view with per-stem level controls only.
+
+
+================================================================================
+SECTION 4: THE ACTION AUTHORITY SYSTEM
+================================================================================
+
+One of Echo Sound Lab's most distinctive architectural features is its
+Action Authority — a policy governance layer that sits between the user
+interface and every audio processing action.
+
+The system is not DRM. It is a professional safety net and audit trail.
+
+4.1 ARCHITECTURE
+─────────────────
+Every significant processing action passes through:
+
+  PolicyEngine          Evaluates action requests against a set of
+                        semantic policies. Determines whether an action
+                        is ALLOWED, DENIED, or requires CONFIRMATION.
+
+  SemanticAnalyzer      Analyzes the intent and context of an action —
+                        not just "what" but "why" and "when."
+
+  CapabilityAuthority   Tracks which capabilities a user has earned or
+                        unlocked through their session, plan tier, or
+                        demonstrated proficiency.
+
+  MerkleAuditLog        Tamper-evident audit trail of every action taken,
+                        denied, or overridden. Each entry is hashed and
+                        chained, making retroactive modification detectable.
+
+  DailyProving          Periodic cryptographic proof-of-integrity checks
+                        on the audit chain.
+
+4.2 WHY THIS EXISTS
+────────────────────
+Professional studios are governed by rules: you don't print a master that
+clips, you don't deliver a mix that isn't phase-coherent, you don't export
+to a format a streaming platform will reject. The Action Authority encodes
+these rules as machine-enforced policies rather than documentation.
+
+For the First Song user, this means the platform catches mistakes before
+they happen. For the Engineer Advanced user, the audit log provides a
+complete record of every decision made in a session — useful for client
+deliverables, compliance, and collaborative review.
+
+4.3 RED GHOST ADVERSARIAL TESTING
+────────────────────────────────────
+The system includes an adversarial test harness (RedGhostDirector) that
+attempts to bypass policies through sequences of actions that individually
+pass policy but collectively violate intent. This tests semantic safety
+under conditions designed to find edge cases.
+
+
+================================================================================
+SECTION 5: DEMO AND ONBOARDING SYSTEM
+================================================================================
+
+5.1 DEMO FACTORY
+─────────────────
+Echo Sound Lab ships with a self-running demo mode built on a GhostUser
+system — a programmatic "virtual user" that drives the interface through
+a scripted scenario to demonstrate the platform's capabilities without
+requiring a real audio file.
+
+Components:
+  GhostUser         Simulates mouse movements, clicks, and interactions
+  DemoDirector      Orchestrates the sequence of demo steps
+  DemoScript        Defines the scenario steps and timing
+  HipHopMasterScenario  A pre-built full-session demo using a hip-hop
+                        reference scenario
+  VirtualCursor     Renders the ghost user's cursor position visually
+
+The demo can be recorded and replayed for sales presentations. It uses
+Mock mode for stem separation, ensuring zero dependency on external services
+during a live demo.
+
+5.2 ONBOARDING TOUR
+────────────────────
+A guided tour panel appears on first session, positioned in the upper-right
+corner of the interface. Each step highlights a specific feature with title
+and contextual body copy. The tour is non-blocking — users can dismiss it
+and return at any time.
+
+
+================================================================================
+SECTION 6: COLLABORATION AND PROJECT MANAGEMENT
+================================================================================
+
+  ProjectManager       Create, name, and manage multiple projects with
+                       cloud persistence via Supabase
+  CollaborationPanel   Real-time session sharing (architecture in place)
+  HistoryTimeline      Per-session undo/redo with visual timeline
+  ProjectTimelineView  Macro view of project history across sessions
+  RenderQueuePanel     Asynchronous batch processing queue
+  CloudProjectService  Supabase-backed project storage and retrieval
+
+
+================================================================================
+SECTION 7: EXPORT AND DELIVERY
+================================================================================
+
+The Export layer handles format encoding and streaming platform delivery
+preparation. The EncoderService manages:
+
+  - WAV (lossless, various bit depths)
+  - MP3 (variable and constant bitrate)
+  - AIFF
+
+Before any export, the LUFS compliance check runs against all selected
+streaming targets. The export is blocked (or warned) if the master does
+not meet the platform's true peak and integrated loudness requirements.
+
+The ReleaseReadinessPanel provides a checklist view of pre-export criteria:
+  - Integrated LUFS within target range
+  - True peak below -1 dBTP
+  - No clipping in any stem
+  - Metadata complete (title, artist, ISRC if available)
+
+
+================================================================================
+SECTION 8: TECHNOLOGY STACK
+================================================================================
+
+  Frontend Framework    React 18 with TypeScript
+  Build System          Vite with PWA (Workbox service worker)
+  Audio Runtime         Web Audio API (native browser)
+  High-Performance DSP  WebAssembly (64-bit float summing mixer)
+  State Management      React Context + custom hooks
+  Authentication        Supabase Auth
+  Database              Supabase (PostgreSQL)
+  Storage               Supabase Storage (project files, stems)
+  Payment Processing    Stripe
+  AI/LLM Integration    Gemini API (mix analysis explanations)
+  Voice Engine          Voice API integration for audio descriptions
+  Deployment            Vercel (edge CDN, serverless functions)
+  Demo Automation       Custom GhostUser + DemoDirector scripting system
+
+The application is a Progressive Web App — it installs to the home screen
+on mobile and desktop, caches critical assets for offline use, and handles
+push notifications for long-running processing jobs.
+
+
+================================================================================
+SECTION 9: PLATFORM INTEGRATIONS
+================================================================================
+
+  Supabase     Auth, Postgres database, file storage
+  Stripe       Subscription billing and one-time purchases
+  Gemini       Google AI for natural language mix analysis and chat
+  Suno API     AI song generation (SongGenerationWizard component)
+  Voice API    Audio description and voice feedback
+
+
+================================================================================
+SECTION 10: CURRENT PRODUCTION STATUS
+================================================================================
+
+WORKING IN PRODUCTION (echo-sound-lab.vercel.app):
+  ✓ Upload flow and stem separation pipeline
+  ✓ Multi-stem workspace (playback, mute/solo, per-stem volume)
+  ✓ Single-stem mastering path (auto master)
+  ✓ Onboarding profile selector (3 lanes)
+  ✓ Genre profile selection
+  ✓ LUFS metering service (calculations complete)
+  ✓ SSL / Neve / API DSP modules (logic implemented)
+  ✓ Demo mode with GhostUser and HipHopMasterScenario
+  ✓ Debug telemetry (error capture, localStorage audit trail)
+  ✓ Auth (Supabase)
+  ✓ Project management (Supabase-backed)
+  ✓ Guided tour panel (position and display fixed)
+
+IMPLEMENTED BUT NOT FULLY SURFACED IN UI:
+  ~ AudioResumeGuard (mobile AudioContext auto-resume — component exists,
+    not wired into main workspace for production yet)
+  ~ AdvancedMeters component (exists, integration into workspace pending)
+  ~ Engineer Advanced profile behavior (selector exists; advanced-mode
+    gating of UI layers partially wired)
+  ~ Per-stem EQ chains in MultiStemWorkspace (component exists; session
+    persistence of per-stem settings incomplete)
+  ~ Export quality controls (bitrate/format chooser in UI pending)
+  ~ PianoRoll visualization (component exists; data pipeline from
+    NoteTranscriptionService to UI not fully connected)
+
+KNOWN GAPS (not yet built):
+  ✗ RMS / LUFS readout in the live workspace (meters exist in service
+    layer; no real-time display in the main UI during playback)
+  ✗ Stereo width visualizer in workspace
+  ✗ Smart stem state map (building instrument labels from confidence
+    scores — partial work reverted to maintain stability)
+  ✗ Undo/redo visible in workspace (HistoryTimeline component exists;
+    not wired to workspace actions)
+  ✗ Mobile experience (AudioResumeGuard not in production path)
+  ✗ Collaboration (architecture in place; real-time not live)
+
+
+================================================================================
+SECTION 11: ROADMAP TO PRODUCTION PARITY
+================================================================================
+
+PHASE 1 — METERING AND FEEDBACK (Estimated: 2 weeks)
+  Wire AdvancedMeters into MultiStemWorkspace for live RMS/LUFS readout
+  during playback. Connect the LUFS service output to a visible HUD element.
+  Add stereo width indicator. These make the platform legible to engineers.
+
+PHASE 2 — MOBILE AND AUDIO CONTEXT (Estimated: 1 week)
+  Integrate AudioResumeGuard into the main app entry path. Handle iOS
+  AudioContext suspended state gracefully. Test on iPhone/iPad.
+
+PHASE 3 — SMART STEM LABELING (Estimated: 1–2 weeks)
+  Reimplement calculateApproxRmsDb, calculateStereoBias, and
+  buildSmartStemStateMap cleanly (without the circular dependency that
+  caused the TDZ crash in the previous attempt). This gives each stem
+  an intelligent label and quality score.
+
+PHASE 4 — ENGINEER PROFILE DIFFERENTIATION (Estimated: 1 week)
+  Gate advanced controls behind the Engineer Advanced profile selection.
+  First Song and Artist Fast Path users see simplified views; Engineer
+  users see full parameter access, hardware emulation controls, and
+  per-stem processing chains.
+
+PHASE 5 — EXPORT QUALITY CONTROLS (Estimated: 1 week)
+  Add bitrate and format selection to the export flow. Wire LUFS
+  compliance check visually at export time. Add per-platform badge
+  (Spotify-ready, Apple Music-ready, etc.) to the master preview.
+
+PHASE 6 — PIANO ROLL AND MIDI EXPORT (Estimated: 2 weeks)
+  Complete the pipeline from NoteTranscriptionService output to the
+  PianoRollCanvas and MIDI file export. This is a differentiated feature
+  no other browser-based mastering tool offers.
+
+PHASE 7 — COLLABORATION (Estimated: 3–4 weeks)
+  Activate real-time session sharing via Supabase realtime subscriptions.
+  Multiple users can view and comment on a session; session owner retains
+  action authority.
+
+
+================================================================================
+SECTION 12: COMPETITIVE LANDSCAPE
+================================================================================
+
+  iZotope Ozone (Desktop)
+  The gold standard for AI mastering. Desktop-only, $499+ license.
+  Echo Sound Lab's LUFS metering and genre-aware mastering directly
+  competes with Ozone's Assistant. Echo Sound Lab adds browser access
+  and stem separation that Ozone lacks.
+
+  LANDR (Web)
+  Automated mastering with distribution. No stem control, no manual
+  processing, no metering visible to the user. Echo Sound Lab's
+  Engineer Advanced profile is categorically more capable.
+
+  Splice Studio / BandLab (Web)
+  Collaboration-focused, basic mixing. Neither offers hardware emulation
+  or standards-compliant LUFS metering. Echo Sound Lab's DSP depth is
+  a clear differentiator.
+
+  Logic Pro (Desktop, Apple Silicon)
+  The reference for professional desktop production. Echo Sound Lab is
+  not trying to replace Logic. The Engineer Advanced onboarding profile
+  is explicitly described as "Logic-style" — targeting Logic users who
+  want browser access or a mastering-specific tool without opening a
+  full DAW session.
+
+
+================================================================================
+SECTION 13: BUSINESS MODEL
+================================================================================
+
+Subscription tiers (implemented via Stripe):
+
+  FREE TIER
+  Upload and master up to 3 tracks per month. Artist Fast Path mode.
+  No stem separation. LUFS report included. Watermarked export.
+
+  ARTIST PLAN
+  Unlimited masters. Full stem separation. All three onboarding profiles.
+  Standard export (WAV/MP3). Cloud project storage.
+
+  ENGINEER PLAN
+  Everything in Artist. Hardware emulation unlocked. Per-stem processing
+  chains. Piano roll / MIDI export. Collaboration sessions. Priority
+  cloud processing.
+
+  STUDIO PLAN (future)
+  Team seats. Custom genre profiles. White-label export. API access for
+  integration with client delivery workflows.
+
+
+================================================================================
+SECTION 14: SECURITY AND DATA
+================================================================================
+
+All audio files are processed in the user's browser where possible.
+Files uploaded for cloud stem separation are stored in Supabase Storage
+with per-user row-level security. No audio data is shared across accounts.
+
+The Action Authority audit log provides a tamper-evident record of all
+processing actions. The MerkleAuditLog chaining ensures that even the
+platform operator cannot retroactively modify a session record without
+detection.
+
+Authentication is handled by Supabase Auth (JWT-based). Stripe handles
+all payment data — Echo Sound Lab never stores card numbers.
+
+
+================================================================================
+APPENDIX A: KEY COMPONENT INVENTORY
+================================================================================
+
+src/components/
+  MultiStemWorkspace.tsx      Core multi-track editing environment
+  AutoMasterPanel.tsx         One-click mastering interface
+  ChannelEQPanel.tsx          Per-channel parametric EQ
+  ParametricEQPanel.tsx       Advanced EQ with curve visualization
+  EQCurveVisualizer.tsx       Frequency response display
+  AdvancedMeters.tsx          RMS/LUFS metering display
+  AnalysisPanel.tsx           Spectral and mix analysis display
+  SpectrogramCanvas.tsx       Time-frequency spectrogram
+  WaveformCanvas.tsx          Waveform rendering with playhead
+  PianoRollCanvas.tsx         MIDI note visualization
+  ReferenceMixingPanel.tsx    A/B comparison against reference tracks
+  ReleaseReadinessPanel.tsx   Pre-export quality checklist
+  RenderQueuePanel.tsx        Async export job queue
+  GenreProfileSelector.tsx    Genre/vibe target selection
+  OnboardingProfileSelector.tsx  Three-lane user profile selection
+  AudioResumeGuard.tsx        Mobile AudioContext recovery
+  LocalPluginRack.tsx         Local VST/AU plugin hosting (future)
+  WAMPluginRack.tsx           Web Audio Module plugin hosting
+  CollaborationPanel.tsx      Real-time session sharing
+  HistoryTimeline.tsx         Session undo/redo visualization
+  ProjectManager.tsx          Cloud project CRUD
+  SettingsPanel.tsx           User preferences and account
+  DebugReportModal.tsx        In-app bug reporting
+
+src/services/dsp/
+  ssl/sslChannelStrip.ts      SSL 4000E emulation
+  neve/neve1073.ts            Neve 1073 preamp emulation
+  api/api2500Compressor.ts    API 2500 bus compressor
+  tape/tapeSaturation.ts      Analog tape character emulation
+  SpectralAnalyzer.ts         FFT analysis engine
+  phaseAlignmentEngine.ts     Cross-stem phase correction
+  QuantumKernel.ts            Core DSP kernel
+
+src/services/
+  stemSeparationService.ts    Demucs integration + mock pipeline
+  autoMastering.ts            Genre detection + auto-master engine
+  lufsMetering.ts             EBU R128 loudness measurement
+  mixAnalysis.ts              Spectral mix signature extraction
+  genreProfiles.ts            Aesthetic target definitions per genre
+  sessionFinisher.ts          Final finishing chain orchestration
+  rawToReleaseEngine.ts       Full pipeline: raw upload → release master
+  historyManager.ts           Undo/redo state management
+  cloudProjectService.ts      Supabase project persistence
+  encoderService.ts           WAV/MP3/AIFF encoding
+  stripeService.ts            Subscription billing
+  geminiService.ts            LLM-based mix analysis explanations
+  debugTelemetryService.ts    Error capture and session diagnostics
+
+src/echo-sound-lab/apl/
+  analyzer.ts                 Audio Processing Language analyzer
+  proposal-engine.ts          AI-driven processing proposal generator
+  signal-intelligence.ts      Signal-aware processing recommendations
+
+
+================================================================================
+END OF WHITE PAPER
+Echo Sound Lab v2.5 — Confidential
+================================================================================

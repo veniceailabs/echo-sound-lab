@@ -10,9 +10,18 @@
  *   </CapabilityProvider>
  */
 
-import React, { createContext, useState, useCallback, ReactNode, useEffect } from 'react';
+import React, { createContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import { CapabilityAuthority, ProcessIdentity } from '../services/CapabilityAuthority';
 import { CapabilityRequest } from '../services/capabilities';
+import CapabilityAccBridge, { ConfirmationToken } from '../services/capabilityAccBridge';
+
+export interface AccRequiredEventDetail {
+  accToken: ConfirmationToken;
+  reason: string;
+  request: CapabilityRequest;
+  confirm: (response: string) => Promise<void>;
+  dismiss: () => void;
+}
 
 export interface CapabilityContextType {
   authority: CapabilityAuthority;
@@ -49,6 +58,12 @@ export function CapabilityProvider({
     request: CapabilityRequest;
     error: Error;
   } | null>(null);
+  const accBridgeRef = useRef<CapabilityAccBridge | null>(null);
+
+  if (!accBridgeRef.current) {
+    const sessionSeed = processIdentity?.launchTimestamp ?? Date.now();
+    accBridgeRef.current = new CapabilityAccBridge(`${appId}-${sessionSeed}`);
+  }
 
   // Bind process identity on mount
   useEffect(() => {
@@ -69,14 +84,61 @@ export function CapabilityProvider({
     ): Promise<T> => {
       try {
         // C6: Verify process identity hasn't changed
-        if (currentProcessIdentity) {
-          authority.assertAllowed(request, currentProcessIdentity);
-        } else {
-          authority.assertAllowed(request);
+        const grant = currentProcessIdentity
+          ? authority.assertAllowed(request, currentProcessIdentity)
+          : authority.assertAllowed(request);
+
+        if (!grant.requiresACC) {
+          return await action();
         }
 
-        // Check passed. Execute action.
-        return await action();
+        if (typeof window === 'undefined') {
+          throw new Error('[ACC_UNAVAILABLE] Active consent requires a browser session.');
+        }
+
+        const accBridge = accBridgeRef.current!;
+        const accToken = await accBridge.issueACC(request, grant);
+
+        return await new Promise<T>((resolve, reject) => {
+          let settled = false;
+
+          const dismiss = () => {
+            if (settled) return;
+            settled = true;
+            accBridge.revokeACC(accToken.acc_event_id);
+            reject(new Error('[ACC_DISMISSED] Active consent was dismissed.'));
+          };
+
+          const confirm = async (response: string) => {
+            if (settled) return;
+
+            const isValid = await accBridge.validateACC(accToken.acc_event_id, response);
+            if (!isValid) {
+              throw new Error('Confirmation did not match the challenge.');
+            }
+
+            settled = true;
+
+            try {
+              const result = await action();
+              resolve(result);
+            } catch (error) {
+              reject(error as Error);
+            }
+          };
+
+          window.dispatchEvent(
+            new CustomEvent<AccRequiredEventDetail>('acc-required', {
+              detail: {
+                accToken,
+                reason: request.reason,
+                request,
+                confirm,
+                dismiss,
+              },
+            })
+          );
+        });
       } catch (error) {
         const err = error as Error;
 
@@ -88,7 +150,11 @@ export function CapabilityProvider({
         }
 
         // ACC required
-        if (err.message.includes('[ACC_REQUIRED]')) {
+        if (
+          err.message.includes('[ACC_REQUIRED]') ||
+          err.message.includes('[ACC_DISMISSED]') ||
+          err.message.includes('[ACC_UNAVAILABLE]')
+        ) {
           setLastDenial({ request, error: err });
           throw err;
         }

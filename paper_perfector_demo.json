@@ -1,0 +1,57 @@
+{
+  "meta": {
+    "title": "Paper Perfector Showcase",
+    "duration": 45,
+    "tone": "Professional, Efficient, Crisp"
+  },
+  "scenes": [
+    {
+      "time": "0:00",
+      "duration": 8,
+      "action": "SHOW_LANDING",
+      "voice": "Formatting academic papers is a waste of human intelligence. Stop fighting with Word.",
+      "text_overlay": "STOP FIGHTING FORMATTING",
+      "notes": "Stand in front of laptop, speak directly to camera. Show Paper Perfector landing page."
+    },
+    {
+      "time": "0:08",
+      "duration": 7,
+      "action": "IMPORT_TEXT",
+      "voice": "This is Paper Perfector. Paste your messy draft directly into the engine.",
+      "text_overlay": "MESSY DRAFT INPUT",
+      "notes": "Paste a messy block of unformatted text into the editor. Show cursor pasting, text appearing."
+    },
+    {
+      "time": "0:15",
+      "duration": 5,
+      "action": "CLICK_THEME_TOGGLE",
+      "voice": "A beautiful, distraction-free environment that respects your eyes.",
+      "text_overlay": "DARK MODE NATIVE",
+      "notes": "Toggle Dark Mode on/off once. Show the smooth transition."
+    },
+    {
+      "time": "0:20",
+      "duration": 10,
+      "action": "ADD_CITATION",
+      "voice": "Citations are handled automatically. MLA, APA, Chicago. No errors.",
+      "text_overlay": "AUTO-CITATIONS",
+      "notes": "Click citation button, add a dummy source (Author: 'Smith', Year: '2023'). Show citation formatted."
+    },
+    {
+      "time": "0:30",
+      "duration": 10,
+      "action": "EXPORT_PDF",
+      "voice": "One click export. Publication ready. Your data never leaves your device.",
+      "text_overlay": "1-CLICK PUBLISH",
+      "notes": "Click Export button, show PDF download/preview. Highlight that it's generated client-side."
+    },
+    {
+      "time": "0:40",
+      "duration": 5,
+      "action": "SHOW_LOGO",
+      "voice": "Venice AI Labs. We build Sovereign Software.",
+      "text_overlay": "VENICE AI LABS",
+      "notes": "Show Venice logo or text on screen. Wrap up confidently."
+    }
+  ]
+}

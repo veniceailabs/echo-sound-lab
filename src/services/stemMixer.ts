@@ -6,6 +6,7 @@
 import { audioEngine } from './audioEngine';
 import { mixAnalysisService } from './mixAnalysis';
 import { referenceAnalyzerV2, AdvancedReferenceAnalysis } from './referenceAnalyzerV2';
+import { applySidechainCompression } from './sidechainCompressor';
 
 export type StemRole = 'lead_vocal' | 'background_vocal' | 'adlibs' | 'beat' | 'bass' | 'drums' | 'melody' | 'fx' | 'other';
 
@@ -30,6 +31,7 @@ export interface StemMixConfig {
   stems: Stem[];
   masterVolume: number;
   referenceAnalysis?: AdvancedReferenceAnalysis;
+  mixState?: StemMixState | null;
 }
 
 export interface MixdownResult {
@@ -37,6 +39,81 @@ export interface MixdownResult {
   peakLevel: number;
   rmsLevel: number;
   clipped: boolean;
+}
+
+export type StemMixKey = 'vocals' | 'drums' | 'bass' | 'other';
+
+export interface StemMixStateEntry {
+  volume_db: number;
+  pan: number;
+  mute: boolean;
+  solo: boolean;
+}
+
+export type StemMixState = Record<StemMixKey, StemMixStateEntry>;
+
+export function createDefaultStemMixState(): StemMixState {
+  return {
+    vocals: { volume_db: 0, pan: 0, mute: false, solo: false },
+    drums: { volume_db: 0, pan: 0, mute: false, solo: false },
+    bass: { volume_db: 0, pan: 0, mute: false, solo: false },
+    other: { volume_db: 0, pan: 0, mute: false, solo: false },
+  };
+}
+
+function normalizeStemMixState(mixState?: Partial<StemMixState> | null): StemMixState {
+  const defaults = createDefaultStemMixState();
+  if (!mixState) return defaults;
+  const entries = Object.entries(defaults) as Array<[StemMixKey, StemMixStateEntry]>;
+  for (const [key, fallback] of entries) {
+    const source = mixState[key];
+    if (!source) continue;
+    defaults[key] = {
+      volume_db: Number.isFinite(source.volume_db) ? source.volume_db : fallback.volume_db,
+      pan: clamp(Number.isFinite(source.pan) ? source.pan : fallback.pan, -1, 1),
+      mute: Boolean(source.mute),
+      solo: Boolean(source.solo),
+    };
+  }
+  return defaults;
+}
+
+function resolveStemMixKey(role: StemRole): StemMixKey {
+  if (role === 'beat' || role === 'drums') return 'drums';
+  if (role === 'bass') return 'bass';
+  if (role === 'lead_vocal' || role === 'background_vocal' || role === 'adlibs') return 'vocals';
+  return 'other';
+}
+
+function cloneAudioBuffer(source: AudioBuffer, context: BaseAudioContext): AudioBuffer {
+  const cloned = context.createBuffer(source.numberOfChannels, source.length, source.sampleRate);
+  for (let ch = 0; ch < source.numberOfChannels; ch += 1) {
+    cloned.getChannelData(ch).set(source.getChannelData(ch));
+  }
+  return cloned;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+export function getConstantPowerPanGains(pan: number): { left: number; right: number } {
+  const normalized = Math.max(-1, Math.min(1, pan));
+  const angle = (normalized + 1) * Math.PI * 0.25;
+  return {
+    left: Math.cos(angle),
+    right: Math.sin(angle),
+  };
+}
+
+export function shouldApplyBassSidechain(
+  stems: Stem[],
+  referenceAnalysis?: AdvancedReferenceAnalysis | null
+): boolean {
+  const triggerStem = stems.find((stem) => stem.role === 'beat' || stem.role === 'drums');
+  const bassTargets = stems.filter((stem) => stem.role === 'bass');
+  if (!triggerStem || bassTargets.length === 0) return false;
+  return Boolean(referenceAnalysis?.sidechain.detected || referenceAnalysis?.overallCharacter.energy === 'aggressive');
 }
 
 class StemMixerService {
@@ -94,6 +171,42 @@ class StemMixerService {
 
     const updated = { ...stem, ...updates };
     this.stems.set(id, updated);
+    return updated;
+  }
+
+  /**
+   * Apply a 4-stem console mix state to the loaded stems.
+   *
+   * This bridges the UI-facing mixer state into the actual mixdown engine and
+   * keeps mute / solo / pan / gain semantics deterministic.
+   */
+  applyMixState(mixState?: Partial<StemMixState> | null): Stem[] {
+    const resolved = normalizeStemMixState(mixState);
+    const soloGroups = new Set<StemMixKey>(
+      (Object.entries(resolved) as Array<[StemMixKey, StemMixStateEntry]>)
+        .filter(([, entry]) => entry.solo)
+        .map(([key]) => key)
+    );
+    const hasSolo = soloGroups.size > 0;
+
+    const updated: Stem[] = [];
+    for (const [id, stem] of this.stems) {
+      const key = resolveStemMixKey(stem.role);
+      const entry = resolved[key];
+      const shouldSolo = hasSolo ? soloGroups.has(key) : entry.solo;
+      const shouldMute = hasSolo ? !shouldSolo : entry.mute;
+
+      const nextStem: Stem = {
+        ...stem,
+        volume: entry.volume_db,
+        pan: entry.pan,
+        muted: shouldMute,
+        solo: shouldSolo,
+      };
+      this.stems.set(id, nextStem);
+      updated.push(nextStem);
+    }
+
     return updated;
   }
 
@@ -246,7 +359,13 @@ class StemMixerService {
     reverbMix?: number;
     delayTimeMs?: number;
     delayFeedback?: number;
+    referenceAnalysis?: AdvancedReferenceAnalysis | null;
+    mixState?: StemMixState | null;
   }): Promise<MixdownResult> {
+    if (config?.mixState) {
+      this.applyMixState(config.mixState);
+    }
+
     const stems = this.getStems().filter(s => !s.muted);
     const hasSolo = stems.some(s => s.solo);
     const activeStems = hasSolo ? stems.filter(s => s.solo) : stems;
@@ -267,6 +386,32 @@ class StemMixerService {
     const masterGain = offlineCtx.createGain();
     masterGain.gain.value = 1;
     masterGain.connect(offlineCtx.destination);
+
+    const renderStems = activeStems.map((stem) => ({
+      ...stem,
+      buffer: cloneAudioBuffer(stem.buffer, offlineCtx),
+    }));
+
+    const referenceAnalysis = config?.referenceAnalysis;
+    if (shouldApplyBassSidechain(renderStems, referenceAnalysis)) {
+      const triggerStem = renderStems.find((stem) => stem.role === 'beat' || stem.role === 'drums');
+      const bassTargets = renderStems.filter((stem) => stem.role === 'bass');
+      if (!triggerStem) {
+        // Defensive guard, should not happen after the routing predicate.
+        throw new Error('Bass sidechain routing selected without a trigger stem');
+      }
+      for (const bassStem of bassTargets) {
+        applySidechainCompression(bassStem.buffer, triggerStem.buffer, {
+          threshold: referenceAnalysis?.sidechain.amount ? -18 - Math.min(6, referenceAnalysis.sidechain.amount) : -20,
+          ratio: referenceAnalysis?.sidechain.pumpFactor && referenceAnalysis.sidechain.pumpFactor > 0.5 ? 5 : 3.5,
+          knee: 4,
+          attackMs: 6,
+          releaseMs: referenceAnalysis?.sidechain.releaseMs ?? 160,
+          lookaheadMs: 3,
+          mix: 0.7,
+        });
+      }
+    }
 
     // Create reverb send bus (simple convolution approximation)
     const reverbGain = offlineCtx.createGain();
@@ -300,7 +445,7 @@ class StemMixerService {
     delayNode.connect(masterGain);
 
     // Process each stem
-    for (const stem of activeStems) {
+    for (const stem of renderStems) {
       const source = offlineCtx.createBufferSource();
       source.buffer = stem.buffer;
 
@@ -309,19 +454,28 @@ class StemMixerService {
       volumeGain.gain.value = Math.pow(10, stem.volume / 20); // dB to linear
 
       // Pan
-      const panner = offlineCtx.createStereoPanner();
-      panner.pan.value = stem.pan;
+      const { left, right } = getConstantPowerPanGains(stem.pan);
+      const splitter = offlineCtx.createChannelSplitter(2);
+      const merger = offlineCtx.createChannelMerger(2);
+      const leftGain = offlineCtx.createGain();
+      const rightGain = offlineCtx.createGain();
+      leftGain.gain.value = left;
+      rightGain.gain.value = right;
 
       // Connect chain
       source.connect(volumeGain);
-      volumeGain.connect(panner);
-      panner.connect(masterGain);
+      volumeGain.connect(splitter);
+      splitter.connect(leftGain, 0);
+      splitter.connect(rightGain, 1);
+      leftGain.connect(merger, 0, 0);
+      rightGain.connect(merger, 0, 1);
+      merger.connect(masterGain);
 
       // Send to reverb
       if (stem.reverbSend > 0) {
         const reverbSendGain = offlineCtx.createGain();
         reverbSendGain.gain.value = stem.reverbSend;
-        volumeGain.connect(reverbSendGain);
+        source.connect(reverbSendGain);
         reverbSendGain.connect(reverbGain);
       }
 
@@ -329,7 +483,7 @@ class StemMixerService {
       if (stem.delaySend > 0) {
         const delaySendGain = offlineCtx.createGain();
         delaySendGain.gain.value = stem.delaySend;
-        volumeGain.connect(delaySendGain);
+        source.connect(delaySendGain);
         delaySendGain.connect(delayGain);
       }
 

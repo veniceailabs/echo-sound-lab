@@ -1,0 +1,15 @@
+{
+  "format": "esl-proof-trainer-preset-manifest",
+  "version": 1,
+  "presets": [
+    {
+      "presetId": "dhb",
+      "label": "DontHoldBack",
+      "artist": "itsjustdra",
+      "summary": "Logic-backed raw vocal session bundle with mastered reference and local validation contract.",
+      "blueprintPath": "/proof-trainer-presets/dhb-proof-trainer-blueprint.json",
+      "logicSnapshotPath": "/proof-trainer-presets/dhb-logic-session.esl-logic-session.json",
+      "artifactBundlePath": "/proof-trainer-presets/dhb-proof-trainer-artifact-bundle.json"
+    }
+  ]
+}

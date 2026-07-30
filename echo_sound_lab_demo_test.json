@@ -1,0 +1,97 @@
+{
+  "meta": {
+    "id": "echo-sound-lab-test",
+    "title": "Echo Sound Lab - TEST (15s)",
+    "duration_target": 15,
+    "style": "cinematic",
+    "useHybridFeatures": true
+  },
+  "voice": {
+    "provider": "auto",
+    "persona": "professional"
+  },
+  "intro": {
+    "enabled": false,
+    "prompt": "Revolutionary AI music studio, waveforms flowing, sound waves visualization, futuristic audio interface, glowing cyan and purple accents, professional creativity workspace, cutting-edge technology aesthetic",
+    "style": "cinematic",
+    "duration": 5,
+    "music": true,
+    "effects": "all",
+    "branding": {
+      "textOverlay": "Echo Sound Lab",
+      "position": "center",
+      "fontSize": 64
+    }
+  },
+  "scenes": [
+    {
+      "id": 1,
+      "time": "0:00",
+      "action": "WAIT",
+      "voiceover": "Echo Sound Lab. AI music and video creation.",
+      "duration": 2
+    },
+    {
+      "id": 2,
+      "time": "0:02",
+      "action": "CLICK",
+      "targetSelector": "[data-testid='upload-tab'], #single-track-tab, .tab-upload, [role='tab']",
+      "voiceover": "Upload your audio.",
+      "duration": 2,
+      "visualEffects": {
+        "highlightSelector": "[data-testid='upload-tab'], #single-track-tab"
+      }
+    },
+    {
+      "id": 3,
+      "time": "0:04",
+      "action": "WAIT",
+      "voiceover": "AI analyzes your audio.",
+      "duration": 2
+    },
+    {
+      "id": 4,
+      "time": "0:06",
+      "action": "CLICK",
+      "targetSelector": "[data-testid='stems-tab'], #multi-stem-tab, .tab-stems, [role='tab']",
+      "voiceover": "Access stem separation.",
+      "duration": 2,
+      "visualEffects": {
+        "highlightSelector": "[data-testid='stems-tab'], #multi-stem-tab"
+      }
+    },
+    {
+      "id": 5,
+      "time": "0:08",
+      "action": "WAIT",
+      "voiceover": "Professional audio tools.",
+      "duration": 2
+    },
+    {
+      "id": 6,
+      "time": "0:10",
+      "action": "SCROLL",
+      "targetSelector": "[data-testid='authority-panel'], .safety-controls, [data-testid='governance'], .action-authority",
+      "voiceover": "Powered by Action Authority. Safe and verified.",
+      "duration": 2,
+      "visualEffects": {
+        "highlightSelector": "[data-testid='authority-panel'], .safety-controls, [data-testid='governance']"
+      }
+    },
+    {
+      "id": 7,
+      "time": "0:12",
+      "action": "WAIT",
+      "voiceover": "The future of creation is here.",
+      "duration": 2
+    }
+  ],
+  "postProduction": {
+    "fadeOutDuration": 1,
+    "credits": {
+      "enabled": false,
+      "text": "Echo Sound Lab",
+      "duration": 1
+    }
+  }
+}

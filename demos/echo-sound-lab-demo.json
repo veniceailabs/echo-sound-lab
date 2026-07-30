@@ -1,0 +1,115 @@
+{
+  "meta": {
+    "id": "echo-sound-lab",
+    "title": "Echo Sound Lab - AI Music & Video Studio (CES EDITION)",
+    "duration_target": 90,
+    "style": "cinematic",
+    "useHybridFeatures": true
+  },
+  "voice": {
+    "provider": "auto",
+    "persona": "professional"
+  },
+  "intro": {
+    "enabled": false,
+    "prompt": "AI music studio, waveforms, sound visualization, futuristic audio interface",
+    "style": "cinematic",
+    "duration": 5,
+    "music": true,
+    "effects": "all"
+  },
+  "scenes": [
+    {
+      "id": 1,
+      "action": "WAIT",
+      "voiceover": "This is Echo Sound Lab. The future of music and video creation, powered by cutting-edge artificial intelligence.",
+      "duration": 3
+    },
+    {
+      "id": 2,
+      "action": "CLICK",
+      "targetSelector": "[data-testid='upload-tab'], .tab-upload, button, [role='tab']",
+      "voiceover": "Start by uploading your audio. Any format, any size. MP3, WAV, FLAC, or any modern audio file.",
+      "duration": 3
+    },
+    {
+      "id": 3,
+      "action": "WAIT",
+      "voiceover": "Our AI analyzes your audio in real-time, understanding every element, every nuance, every creative possibility.",
+      "duration": 3
+    },
+    {
+      "id": 4,
+      "action": "SCROLL",
+      "targetSelector": "[data-testid='upload-area'], .waveform-display, [data-testid='waveform'], main",
+      "voiceover": "Watch as intelligent visualization displays your sound. The AI is already preparing advanced processing options.",
+      "duration": 3
+    },
+    {
+      "id": 5,
+      "action": "CLICK",
+      "targetSelector": "[data-testid='stems-tab'], .tab-stems, button, [role='tab']",
+      "voiceover": "Access professional-grade multi-stem separation. Isolate vocals, drums, bass, and instruments independently.",
+      "duration": 4
+    },
+    {
+      "id": 6,
+      "action": "WAIT",
+      "voiceover": "Each stem processed separately gives you complete creative control. Remix, resample, recreate without limits.",
+      "duration": 3
+    },
+    {
+      "id": 7,
+      "action": "CLICK",
+      "targetSelector": "[data-testid='ai-studio-tab'], .tab-ai, button, [role='tab']",
+      "voiceover": "In AI Studio, generate professional vocals. Clone voices. Create backing tracks. Your imagination is the only limit.",
+      "duration": 4
+    },
+    {
+      "id": 8,
+      "action": "WAIT",
+      "voiceover": "Neural network synthesis gives you capabilities that once took studios days to achieve. Now it takes seconds.",
+      "duration": 3
+    },
+    {
+      "id": 9,
+      "action": "CLICK",
+      "targetSelector": "[data-testid='video-tab'], .tab-video, button, [role='tab']",
+      "voiceover": "Use Video Engine to transform your videos with AI-powered effects and intelligent transitions.",
+      "duration": 4
+    },
+    {
+      "id": 10,
+      "action": "WAIT",
+      "voiceover": "Professional-grade video editing and effects that would normally require specialized knowledge. Automated. Intelligent.",
+      "duration": 3
+    },
+    {
+      "id": 11,
+      "action": "SCROLL",
+      "targetSelector": "[data-testid='authority-panel'], .safety-controls, [data-testid='governance'], main",
+      "voiceover": "All of this is powered by Action Authority. Our revolutionary governance system ensuring every creation is safe, verified, and trustworthy.",
+      "duration": 4
+    },
+    {
+      "id": 12,
+      "action": "WAIT",
+      "voiceover": "Action Authority lets you create with confidence. Your artistic vision protected. Your content verified. Your trust earned.",
+      "duration": 4
+    },
+    {
+      "id": 13,
+      "action": "WAIT",
+      "voiceover": "Echo Sound Lab. Where AI amplifies human creativity. Never lose the magic. The future of creation is here.",
+      "duration": 4
+    }
+  ],
+  "postProduction": {
+    "fadeOutDuration": 2,
+    "credits": {
+      "enabled": true,
+      "text": "Echo Sound Lab - AI-Powered Music & Video Creation Platform",
+      "duration": 3
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { TrackingDesk } from './studio/TrackingDesk';
 import React, { useState, useEffect } from 'react';
 import { VoiceModel, GeneratedSong, HookAsset, AnimateArtRequest } from '../types';
 import { voiceEngineService } from '../services/voiceEngineService';
@@ -5,6 +6,7 @@ import { useRecorder } from '../hooks/useRecorder';
 import { animateArtService } from '../services/animateArtService';
 import { INTEGRATION_FLAGS } from '../config/integrationFlags';
 import { glassCard, glowButton, secondaryButton, sectionHeader, gradientDivider, cn } from '../utils/secondLightStyles';
+import { consolePanel, consoleScreen, consoleButton, consoleToggleActive, ledIndicatorOff, ledIndicatorOn, hardwareLabel } from '../utils/consoleStyles';
 import SongGenerationWizard from './SongGenerationWizard';
 import NativeVisualizer from './NativeVisualizer';
 import type { AudioPlaybackEngine } from '../services/AudioPlaybackEngine';
@@ -92,30 +94,36 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated, onSongOpenSingleTr
     };
 
     return (
-        <div className="w-full space-y-6">
-            <div className={cn(glassCard, 'p-6')}>
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="w-full space-y-8 max-w-7xl mx-auto px-4 sm:px-6 mt-8">
+            <div className={cn(consolePanel, "relative p-8 sm:p-12 overflow-hidden")}>
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                     <div>
-                        <h2 className={cn(sectionHeader, 'text-3xl mb-2')}>AI Studio</h2>
-                        <p className="text-sm text-slate-400">
-                            Voice-first local production suite. Record vocals, choose a style, and build songs on-device.
+                        <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-br from-white to-slate-400 mb-3">AI Studio & Tracking</h2>
+                        <p className="text-sm sm:text-base text-slate-400 font-medium">
+                            Record vocals, apply the <span className="text-orange-400 font-bold uppercase tracking-wider text-xs">Toronto Dark</span> intent, and build tracks.
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-[#0a0c10]/50 p-1.5 rounded-2xl border border-white/5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]">
                         {(['library', 'training', 'generate'] as const).map((tab) => (
                             <button
                                 key={tab}
                                 onClick={() => setView(tab)}
-                                className={cn(
-                                    'px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all',
+                                title={
+                                    tab === 'library'
+                                        ? 'View saved voice models.'
+                                        : tab === 'training'
+                                            ? 'Train a new voice model from clean samples.'
+                                            : 'Generate a new voice-driven song.'
+                                }
+                                className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all duration-300 ${
                                     view === tab
-                                        ? 'bg-orange-500 text-white border border-orange-400/50 shadow-[0_0_20px_rgba(249,115,22,0.2)]'
-                                        : 'bg-slate-800 text-slate-400 border border-slate-700/50 hover:text-blue-300 hover:border-blue-400/40'
-                                )}
+                                        ? 'bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-[0_0_20px_rgba(249,115,22,0.3),inset_0_1px_1px_rgba(255,255,255,0.2)]'
+                                        : 'bg-transparent text-slate-400 hover:text-white hover:bg-white/5'
+                                }`}
                             >
                                 {tab === 'library' && 'Voice Library'}
-                                {tab === 'training' && 'Clone Voice'}
-                                {tab === 'generate' && 'Generate'}
+                                {tab === 'training' && 'Tracking Desk'}
+                                {tab === 'generate' && 'Arrangement'}
                             </button>
                         ))}
                     </div>
@@ -198,6 +206,7 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated, onSongOpenSingleTr
                     <button
                         onClick={handleAnimateArt}
                         disabled={isAnimating}
+                        title={INTEGRATION_FLAGS.ENABLE_ANIMATE_ART ? 'Generate hook visuals locally.' : 'Animate Art is disabled in Sovereign Mode.'}
                         className={cn(
                             glowButton,
                             'px-6 py-3 text-sm',
@@ -294,7 +303,7 @@ const AIStudio: React.FC<AIStudioProps> = ({ onSongGenerated, onSongOpenSingleTr
                                     <div key={hook.id} className="flex items-center justify-between gap-3 bg-slate-950/60 border border-slate-700/50 rounded-xl px-3 py-2">
                                         <div>
                                             <div className="text-xs text-slate-200 font-semibold">{hook.title}</div>
-                                            <div className="text-[10px] text-slate-500">{hook.durationSeconds}s • {hook.status}</div>
+                                            <div className="text-[10px] text-slate-500">{hook.durationSeconds}s {hook.status}</div>
                                         </div>
                                         <button className="text-[10px] uppercase tracking-wider text-sky-300 border border-sky-500/30 px-2 py-1 rounded-full">
                                             Preview

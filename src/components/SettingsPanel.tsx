@@ -3,6 +3,7 @@ import i18n from '../i18n';
 import { EngineMode } from '../types';
 import { useViewport } from '../context/ViewportContext';
 import SystemHealthDiagnostic from './SystemHealthDiagnostic';
+import { FlavorsPanel } from './FlavorsPanel';
 import {
   AccPolicyTemplateName,
   CapabilityPolicyDecision,
@@ -20,6 +21,7 @@ interface SettingsPanelProps {
   appVersion: string;
   themeMode: 'light' | 'dark';
   setThemeMode: (mode: 'light' | 'dark') => void;
+  onResetVisualState?: () => void;
   networkSettings: { ssid: string; proxy: string; isLocal: boolean };
   setNetworkSettings: (settings: { ssid: string; proxy: string; isLocal: boolean }) => void;
   onCopyDebugInfo?: () => Promise<void>;
@@ -29,7 +31,6 @@ interface SettingsPanelProps {
 const modeDescriptions: Record<EngineMode, { title: string; subtitle: string }> = {
   FRIENDLY: { title: 'Friendly mode', subtitle: 'Simplified sliders and guided guidance' },
   ADVANCED: { title: 'Advanced mode', subtitle: 'Full plugin rack, EQ, and meters' },
-  FULL_STUDIO: { title: 'Full Studio', subtitle: 'Auto-Mix with entire custom plug-in suite' },
 };
 
 const policyTemplateDescriptions: Record<AccPolicyTemplateName, { title: string; subtitle: string }> = {
@@ -122,6 +123,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
   appVersion,
   themeMode,
   setThemeMode,
+  onResetVisualState,
   networkSettings,
   setNetworkSettings,
   onCopyDebugInfo,
@@ -261,12 +263,14 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         <div className="flex gap-3">
                           <button
                             onClick={() => setEngineMode(engineMode === 'FRIENDLY' ? 'ADVANCED' : 'FRIENDLY')}
+                            title={engineMode === 'FRIENDLY' ? 'Switch the studio into Advanced mode.' : 'Switch the studio into Friendly mode.'}
                             className="flex-1 px-4 py-2 rounded-xl text-xs uppercase tracking-wider font-bold bg-slate-900/60 border border-orange-500/30 text-orange-300 hover:bg-slate-900"
                           >
                             {engineMode === 'FRIENDLY' ? 'Switch to Advanced' : 'Switch to Friendly'}
                           </button>
                           <button
                             onClick={onResetToOriginal}
+                            title="Reset the current session back to the original unprocessed audio."
                             className="flex-1 px-4 py-2 rounded-xl text-xs uppercase tracking-wider font-bold bg-slate-900/60 border border-slate-700/60 text-slate-200 hover:bg-slate-800"
                           >
                             Reset to original
@@ -275,6 +279,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                         {onReplayFriendlyTour && (
                           <button
                             onClick={onReplayFriendlyTour}
+                            title="Replay the onboarding coach marks."
                             className="w-full px-4 py-3 rounded-xl text-xs uppercase tracking-[0.2em] font-bold bg-slate-900/60 border border-slate-700/60 text-slate-200 hover:bg-slate-800"
                           >
                             Replay studio tour
@@ -290,6 +295,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                               key={template}
                               type="button"
                               onClick={() => setAccPolicyTemplate(template)}
+                              title={policyTemplateDescriptions[template].subtitle}
                               className={`p-3 border rounded-2xl text-left text-sm transition-all ${
                                 accPolicyTemplate === template
                                   ? 'border-cyan-400 bg-cyan-500/10 text-white shadow-[0_10px_30px_rgba(34,211,238,0.15)]'
@@ -333,18 +339,24 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                       </div>
                     )}
                     {section === 'display' && (
-                      <div className="flex gap-3">
-                        {['dark', 'light'].map((mode) => (
+                      <div className="space-y-5">
+                        <div className="flex gap-3">
+                          <div className="flex-1 py-3 rounded-2xl border bg-orange-500/10 border-orange-400 text-white text-sm font-semibold uppercase tracking-wide text-center">
+                            Dark theme
+                          </div>
+                        </div>
+                        <div className="border-t border-white/[0.06] pt-4">
+                          <FlavorsPanel />
+                        </div>
+                        {onResetVisualState && (
                           <button
-                            key={mode}
-                            onClick={() => setThemeMode(mode as 'light' | 'dark')}
-                            className={`flex-1 py-3 rounded-2xl border text-sm font-semibold uppercase tracking-wide ${themeMode === mode
-                              ? 'bg-orange-500/10 border-orange-400 text-white'
-                              : 'bg-white/5 border-white/10 text-slate-300 hover:border-white/40 hover:bg-white/10'}`}
+                            type="button"
+                            onClick={onResetVisualState}
+                            className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-slate-300 hover:border-orange-400/40 hover:bg-orange-500/10 hover:text-orange-200 transition-colors"
                           >
-                            {mode}
+                            Reset visual state
                           </button>
-                        ))}
+                        )}
                       </div>
                     )}
                     {section === 'language' && (
@@ -354,6 +366,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({
                             key={code}
                             onClick={() => handleLanguageChange(code)}
                             disabled={isChanging}
+                            title={`Switch UI language to ${name}.`}
                             className={`p-3 rounded-2xl border transition-all text-left ${currentLanguage === code
                               ? 'border-cyan-500 bg-cyan-500/10'
                               : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'} ${isChanging ? 'opacity-50 cursor-not-allowed' : ''}`}

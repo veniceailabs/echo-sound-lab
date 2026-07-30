@@ -52,9 +52,16 @@ class ExecutionService {
   private consumedNonceKeys = new Set<string>();
   private accGrantUseCountByKey = new Map<string, number>();
 
-  // Toggle this to FALSE to run real commands against Logic Pro
-  // Keep TRUE for development/testing
-  private SIMULATION_MODE: boolean = true;
+  // Default to simulation in development, but allow production to execute the real Logic Pro path.
+  private SIMULATION_MODE: boolean = (() => {
+    if (typeof process !== 'undefined' && process.env.ESL_EXECUTION_SIMULATION != null) {
+      return process.env.ESL_EXECUTION_SIMULATION !== '0';
+    }
+    if (typeof process !== 'undefined' && process.env.NODE_ENV) {
+      return process.env.NODE_ENV !== 'production';
+    }
+    return true;
+  })();
 
   private constructor() {
     // Initialize Merkle Audit Log for cryptographic proof of execution
@@ -160,7 +167,7 @@ class ExecutionService {
         throw new Error(`UNKNOWN_ACTION_TYPE: ${payload.actionType}`);
       }
       const script = scriptGenerator(payload.parameters);
-      if (!AppleScriptActuator.validateScript(script, payload.actionType)) {
+      if (!AppleScriptActuator.validateScript(script)) {
         throw new Error('UNSAFE_SCRIPT_REJECTED');
       }
 

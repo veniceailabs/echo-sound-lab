@@ -1,0 +1,52 @@
+═══════════════════════════════════════════════════════════════════════
+GIG 1: PAPER PERFECTOR
+═══════════════════════════════════════════════════════════════════════
+
+TITLE:
+I will build a secure React document editor with auto-formatting
+
+CATEGORY:
+Programming & Tech > Web Programming > Web Applications
+
+SEARCH TAGS:
+React App, Document Editor, EdTech, SaaS MVP, TypeScript
+
+═══════════════════════════════════════════════════════════════════════
+DESCRIPTION (Copy everything below):
+═══════════════════════════════════════════════════════════════════════
+
+STOP BUILDING EDITORS FROM SCRATCH.
+
+You need a document processing app, but building a text editor that handles citations, formatting, and PDF export takes months. I can deploy a professional-grade engine for you in days.
+
+I am the Lead Architect at Venice AI Labs. I built Paper Perfector, a sovereign, local-first document suite used for academic and professional writing. I will deploy this architecture for your business.
+
+THE CORE ENGINE INCLUDES:
+
+✅ Local-First Architecture: Zero cloud latency. 100% Privacy.
+✅ Universal Import: Ingest HTML, Markdown, DOCX, or messy text.
+✅ Auto-Citation: Built-in logic for APA/MLA/Chicago formats.
+✅ PDF Generation: Client-side rendering (no server costs).
+✅ Dark Mode & Themes: Professional UI out of the box.
+
+PERFECT FOR:
+
+EdTech Startups needing a writing tool.
+Universities needing secure thesis editors.
+Legal Tech firms needing private drafting tools.
+
+WHY VENICE AI LABS?
+
+We don't use "bloatware." We build performant, type-safe (TypeScript) systems that own their data.
+
+Message me to see the live demo video.
+
+PRICING TIERS:
+
+BASIC ($450): The Source Code. I send you the sanitized React/TypeScript repo. You deploy it yourself.
+STANDARD ($1,850): The Deployment. I configure the app, add your logo/branding, and deploy it to Vercel/Netlify for you.
+PREMIUM ($4,500): The Custom SaaS. I re-skin the entire UI, add 2 custom features (e.g., AI co-writer), and integrate your Auth system.
+
+═══════════════════════════════════════════════════════════════════════
+DELIVERY TIME: 3-5 days for STANDARD tier, 7-10 days for PREMIUM
+═══════════════════════════════════════════════════════════════════════

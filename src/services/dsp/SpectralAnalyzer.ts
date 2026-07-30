@@ -35,6 +35,13 @@ export interface SpectralProfile {
   duration: number;               // ms
 }
 
+interface SpectralAnalysisBufferLike {
+  sampleRate: number;
+  length: number;
+  numberOfChannels: number;
+  getChannelData(channel: number): Float32Array;
+}
+
 /**
  * SpectralAnalyzer: Main analysis engine
  */
@@ -43,7 +50,7 @@ export class SpectralAnalyzer {
    * Analyze a complete audio buffer
    * Returns forensic metrics for signal intelligence
    */
-  public static analyze(audioBuffer: AudioBuffer): SpectralProfile {
+  public static analyze(audioBuffer: SpectralAnalysisBufferLike): SpectralProfile {
     const result: SpectralProfile = {
       peakLevel: 0,
       truePeakDB: -Infinity,

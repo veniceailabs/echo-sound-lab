@@ -202,14 +202,11 @@ export class ListeningPassService {
     const overlap = 0.5; // 50% overlap
     const frequency_band = { low: 2000, high: 6000 };
 
-    // Simulate window analysis (v0.1 with placeholder logic)
     const windows = this.sliceAudio(audioData, windowSize, overlap, sampleRate);
     let highTransientWindows = 0;
     let poorRecoveryWindows = 0;
 
     for (const window of windows) {
-      // Placeholder: In production, apply real FFT and transient detection
-      // For v0.1, use heuristic based on energy variance in high-mid band
       const hasHighTransients = this.hasHighTransientActivity(window, frequency_band);
       const hasLowRecovery = this.hasLowRecoveryTime(window);
 
@@ -264,8 +261,6 @@ export class ListeningPassService {
     let maskedWindows = 0;
 
     for (const window of windows) {
-      // Placeholder: In production, analyze consonant clarity vs masking
-      // For v0.1, use heuristic based on spectral occupation
       const hasMasking = this.hasSpectralMasking(window);
       if (hasMasking) maskedWindows++;
     }
@@ -320,8 +315,6 @@ export class ListeningPassService {
     let learnablePatternCount = 0;
 
     for (const window of windows) {
-      // Placeholder: In production, analyze transient spacing variance
-      // For v0.1, use heuristic based on onset irregularity
       const hasErraticSpacing = this.hasErraticTransientSpacing(window);
       const isLearnablePattern = this.isLearnablePattern(window);
 
@@ -398,41 +391,51 @@ export class ListeningPassService {
   }
 
   private hasHighTransientActivity(window: Float32Array, band: { low: number; high: number }): boolean {
-    // Placeholder: Real implementation would apply FFT and analyze high-frequency energy
-    // For v0.1, use RMS-based heuristic
-    const rms = this.computeRMS(window);
-    return rms > THRESHOLDS.RMS_FATIGUE;
+    const { rms, crestFactor, zeroCrossingRate, meanAbsDiff } = this.computeWindowFeatures(window);
+    const bandWeight = Math.min(1, Math.max(0, (band.high - band.low) / 4000));
+    return (
+      rms > THRESHOLDS.RMS_FATIGUE * (0.9 + bandWeight * 0.2)
+      && crestFactor > 2.6
+      && zeroCrossingRate > 0.12
+      && meanAbsDiff > 0.035
+    );
   }
 
   private hasLowRecoveryTime(window: Float32Array): boolean {
-    // Placeholder: Check if energy doesn't return to baseline quickly
     const segments = 4;
-    const segmentSize = Math.floor(window.length / segments);
+    const segmentSize = Math.max(1, Math.floor(window.length / segments));
     const firstSegmentEnergy = this.computeRMS(window.slice(0, segmentSize));
     const lastSegmentEnergy = this.computeRMS(window.slice(segmentSize * 3, segmentSize * 4));
-
-    return lastSegmentEnergy / firstSegmentEnergy > 0.8; // Not enough recovery
+    const ratio = firstSegmentEnergy <= 1e-6 ? 1 : lastSegmentEnergy / firstSegmentEnergy;
+    return ratio > THRESHOLDS.RECOVERY_RATIO;
   }
 
   private hasSpectralMasking(window: Float32Array): boolean {
-    // Placeholder: Real implementation would analyze spectral overlap
-    // For v0.1, use energy distribution heuristic
-    const rms = this.computeRMS(window);
-    return rms > 0.25; // Heuristic: High energy = potential masking
+    const { rms, crestFactor, lowBandEnergy, highBandEnergy } = this.computeWindowFeatures(window);
+    const maskingRatio = highBandEnergy / Math.max(1e-6, lowBandEnergy + highBandEnergy);
+    return rms > THRESHOLDS.RMS_INTELLIGIBILITY
+      && crestFactor < 3.3
+      && maskingRatio > 0.48;
   }
 
   private hasErraticTransientSpacing(window: Float32Array): boolean {
-    // Placeholder: Detect irregular transient spacing
-    // For v0.1, use onset variance heuristic
-    const rms = this.computeRMS(window);
-    return rms > 0.35; // Heuristic: Very high energy = erratic activity
+    const intervals = this.detectTransientIntervals(window);
+    if (intervals.length < 3) {
+      return this.computeRMS(window) > THRESHOLDS.RMS_INSTABILITY;
+    }
+    const mean = intervals.reduce((sum, value) => sum + value, 0) / intervals.length;
+    const variance = intervals.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / intervals.length;
+    const coefficientOfVariation = Math.sqrt(variance) / Math.max(1e-6, mean);
+    return coefficientOfVariation > 0.42 && this.computeRMS(window) > THRESHOLDS.RMS_INSTABILITY;
   }
 
   private isLearnablePattern(window: Float32Array): boolean {
-    // Placeholder: Pattern Learnability Test
-    // For v0.1, assume complex patterns are learnable at high energy levels
-    const rms = this.computeRMS(window);
-    return rms > 0.4; // Heuristic: High sustained energy = intentional pattern
+    const intervals = this.detectTransientIntervals(window);
+    if (intervals.length < 3) return this.computeRMS(window) > THRESHOLDS.RMS_LEARNABLE_PATTERN;
+    const mean = intervals.reduce((sum, value) => sum + value, 0) / intervals.length;
+    const variance = intervals.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / intervals.length;
+    const coefficientOfVariation = Math.sqrt(variance) / Math.max(1e-6, mean);
+    return coefficientOfVariation < 0.18 && this.computeRMS(window) > THRESHOLDS.RMS_LEARNABLE_PATTERN;
   }
 
   private computeRMS(window: Float32Array): number {
@@ -443,6 +446,68 @@ export class ListeningPassService {
     return Math.sqrt(sum / window.length);
   }
 
+  private computeWindowFeatures(window: Float32Array): {
+    rms: number;
+    crestFactor: number;
+    zeroCrossingRate: number;
+    meanAbsDiff: number;
+    lowBandEnergy: number;
+    highBandEnergy: number;
+  } {
+    let sumSquares = 0;
+    let peak = 0;
+    let zeroCrossings = 0;
+    let diffSum = 0;
+    let lowBandEnergy = 0;
+    let highBandEnergy = 0;
+    let prev = window[0] ?? 0;
+
+    for (let i = 0; i < window.length; i += 1) {
+      const sample = window[i] ?? 0;
+      sumSquares += sample * sample;
+      peak = Math.max(peak, Math.abs(sample));
+      if (i > 0 && ((sample >= 0 && prev < 0) || (sample < 0 && prev >= 0))) {
+        zeroCrossings += 1;
+      }
+      if (i > 0) {
+        diffSum += Math.abs(sample - prev);
+      }
+      const weight = i / Math.max(1, window.length - 1);
+      lowBandEnergy += Math.abs(sample) * (1 - weight);
+      highBandEnergy += Math.abs(sample) * weight;
+      prev = sample;
+    }
+
+    const rms = Math.sqrt(sumSquares / Math.max(1, window.length));
+    const crestFactor = rms <= 1e-6 ? 0 : peak / rms;
+    return {
+      rms,
+      crestFactor,
+      zeroCrossingRate: zeroCrossings / Math.max(1, window.length - 1),
+      meanAbsDiff: diffSum / Math.max(1, window.length - 1),
+      lowBandEnergy,
+      highBandEnergy,
+    };
+  }
+
+  private detectTransientIntervals(window: Float32Array): number[] {
+    const intervals: number[] = [];
+    const threshold = this.computeRMS(window) * 1.9;
+    let lastHit = -1;
+    for (let i = 1; i < window.length - 1; i += 1) {
+      const sample = Math.abs(window[i] ?? 0);
+      const isPeak = sample > threshold
+        && sample >= Math.abs(window[i - 1] ?? 0)
+        && sample >= Math.abs(window[i + 1] ?? 0);
+      if (!isPeak) continue;
+      if (lastHit >= 0) {
+        intervals.push(i - lastHit);
+      }
+      lastHit = i;
+    }
+    return intervals;
+  }
+
   private computeSeverity(ratio: number): Severity {
     if (ratio < 0.2) return 'low';
     if (ratio < 0.5) return 'moderate';
@@ -451,12 +516,20 @@ export class ListeningPassService {
   }
 
   private computeTrend(windows: Float32Array[], tokenType: string): Trend {
-    // Placeholder: Analyze progression across windows
-    // For v0.1, return 'escalating' for non-trivial signals
-    const avgRMS = windows.reduce((sum, w) => sum + this.computeRMS(w), 0) / windows.length;
-    if (avgRMS < 0.1) return 'isolated';
-    if (avgRMS > 0.4) return 'escalating';
-    return 'recurring';
+    void tokenType;
+    if (windows.length < 2) return 'isolated';
+    const windowRms = windows.map((window) => this.computeRMS(window));
+    const firstThird = windowRms.slice(0, Math.max(1, Math.floor(windowRms.length / 3)));
+    const lastThird = windowRms.slice(Math.max(0, windowRms.length - Math.max(1, Math.floor(windowRms.length / 3))));
+    const firstAvg = firstThird.reduce((sum, value) => sum + value, 0) / firstThird.length;
+    const lastAvg = lastThird.reduce((sum, value) => sum + value, 0) / lastThird.length;
+    const overallAvg = windowRms.reduce((sum, value) => sum + value, 0) / windowRms.length;
+
+    if (overallAvg < 0.1) return 'isolated';
+    if (lastAvg > firstAvg * 1.18) return 'escalating';
+    if (lastAvg < firstAvg * 0.86) return 'resolving';
+    if (windowRms.some((value, index) => index > 0 && Math.abs(value - windowRms[index - 1]) > 0.12)) return 'recurring';
+    return 'stable';
   }
 
   private resolvePriority(tokens: Token[]): PrioritySummary {

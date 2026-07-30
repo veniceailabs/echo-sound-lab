@@ -1,0 +1,110 @@
+{
+  "format": "esl-proof-trainer-blueprint",
+  "version": 1,
+  "exportedAt": 1782456515773,
+  "blueprintName": "vocal stems",
+  "sessionFolderPath": "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/vocal stems",
+  "referenceMasterPath": "/Users/DRA/Music/PROJECTS/$TILL DREAMIN’ (masters+more)/$TILL DREAMIN’ (Mixed & Mastered)/3. dontHoldback. prod. Kenneth English.wav",
+  "referenceMasterName": "3. dontHoldback. prod. Kenneth English.wav",
+  "referenceStyle": "proof_mix_trainer",
+  "notes": [
+    "Generated from a local ESL Proof Trainer session folder.",
+    "Use this blueprint with the imported session folder and optional Logic snapshot to validate intake before rendering."
+  ],
+  "expectedTracks": [
+    {
+      "relativePath": "Hook Dub_1.wav",
+      "displayName": "Hook Dub_1.wav",
+      "kind": "vocal",
+      "role": "double",
+      "required": true
+    },
+    {
+      "relativePath": "Hook echo_1.wav",
+      "displayName": "Hook echo_1.wav",
+      "kind": "vocal",
+      "role": "harmony",
+      "required": true
+    },
+    {
+      "relativePath": "Hook Full Tone_1.wav",
+      "displayName": "Hook Full Tone_1.wav",
+      "kind": "vocal",
+      "role": "lead",
+      "required": true
+    },
+    {
+      "relativePath": "Hook_1.wav",
+      "displayName": "Hook_1.wav",
+      "kind": "vocal",
+      "role": "lead",
+      "required": true
+    },
+    {
+      "relativePath": "Intro_1.wav",
+      "displayName": "Intro_1.wav",
+      "kind": "other",
+      "role": "intro",
+      "required": false
+    },
+    {
+      "relativePath": "Intro+Outro (Echo)_1.wav",
+      "displayName": "Intro+Outro (Echo)_1.wav",
+      "kind": "other",
+      "role": "support",
+      "required": false
+    },
+    {
+      "relativePath": "Kanye West late registration type beat - Plant roots_1.wav",
+      "displayName": "Kanye West late registration type beat - Plant roots_1.wav",
+      "kind": "beat",
+      "role": "beat",
+      "required": true
+    },
+    {
+      "relativePath": "Verse Take 2_1.wav",
+      "displayName": "Verse Take 2_1.wav",
+      "kind": "vocal",
+      "role": "lead",
+      "required": true
+    }
+  ],
+  "logicSnapshot": {
+    "format": "esl-logic-session-snapshot",
+    "version": 1,
+    "exportedAt": 1782456515540,
+    "sourceApp": "logic-pro",
+    "projectName": "dontHoldback. prod. Kenneth English ",
+    "projectPackageName": "dontHoldback. prod. Kenneth English .logicx",
+    "sourcePackagePath": "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /dontHoldback. prod. Kenneth English .logicx",
+    "logicVersion": "Logic Pro X 11.0.1 (6029)",
+    "bundleVersion": 2,
+    "hasProjectFolder": true,
+    "bpm": 80,
+    "sampleRate": 48000,
+    "frameRateIndex": 1,
+    "trackCount": 9,
+    "timeSignature": {
+      "numerator": 4,
+      "denominator": 4
+    },
+    "keySignature": {
+      "tonic": "C",
+      "scale": "major",
+      "signatureKey": 7
+    },
+    "audioFiles": [
+      "Audio Files/Verse Take 2#02.wav",
+      "Audio Files/dontHoldback. prod. Kenneth English _4#03.wav",
+      "Audio Files/Hook Dub#06.wav",
+      "Audio Files/Kanye West late registration type beat - Plant roots.wav",
+      "Audio Files/dontHoldback. prod. Kenneth English _3#03.wav",
+      "Audio Files/dontHoldback. prod. Kenneth English _1#04.wav"
+    ],
+    "unusedAudioFiles": [
+      "Audio Files/Untitled 1_1#01.wav"
+    ],
+    "hasGrid": false,
+    "isTimeCodeBased": false
+  }
+}

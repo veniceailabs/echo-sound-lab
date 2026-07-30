@@ -18,16 +18,23 @@ export class MixAnalysisService implements IMixAnalysisService {
     analyzeStaticMetrics(bufferOverride?: AudioBuffer | null): AudioMetrics {
         const buffer = bufferOverride;
         if (!buffer) return { rms: 0, peak: 0, duration: 0, spectralCentroid: 0, spectralRolloff: 0, crestFactor: 0 };
-        const data = buffer.getChannelData(0);
         let sumSq = 0;
         let peakVal = 0;
-        for (let i = 0; i < data.length; i++) {
-            const s = data[i];
-            sumSq += s * s;
-            if (Math.abs(s) > peakVal) peakVal = Math.abs(s);
+        let totalSamples = 0;
+
+        for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+            const data = buffer.getChannelData(ch);
+            totalSamples += data.length;
+            for (let i = 0; i < data.length; i++) {
+                const s = data[i];
+                sumSq += s * s;
+                const abs = Math.abs(s);
+                if (abs > peakVal) peakVal = abs;
+            }
         }
-        const rms = Math.sqrt(sumSq / data.length);
-        const crestFactor = rms > 0 ? 20 * Math.log10(peakVal / rms) : 0;
+
+        const rms = totalSamples > 0 ? Math.sqrt(sumSq / totalSamples) : 0;
+        const crestFactor = rms > 0 ? 20 * Math.log10(Math.max(peakVal / rms, 1e-9)) : 0;
         // Convert both to dBFS (20 * log10(linear))
         const rmsDb = rms > 0 ? 20 * Math.log10(rms) : -96;
         const peakDb = peakVal > 0 ? 20 * Math.log10(peakVal) : -96;

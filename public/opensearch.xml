@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+  <ShortName>Echo Sound Lab</ShortName>
+  <Description>Free AI audio mastering online — LUFS targeting, genre EQ, stem separation</Description>
+  <Tags>audio mastering LUFS online free AI music production</Tags>
+  <Contact>hello@echosoundlab.com</Contact>
+  <Url type="text/html" template="https://echosoundlab.com/?q={searchTerms}" />
+  <Url type="application/opensearchdescription+xml" rel="self" template="https://echosoundlab.com/opensearch.xml" />
+  <Image height="16" width="16" type="image/x-icon">https://echosoundlab.com/favicon.ico</Image>
+  <Image height="64" width="64" type="image/png">https://echosoundlab.com/icon-64.png</Image>
+  <InputEncoding>UTF-8</InputEncoding>
+  <OutputEncoding>UTF-8</OutputEncoding>
+  <Language>en-US</Language>
+</OpenSearchDescription>

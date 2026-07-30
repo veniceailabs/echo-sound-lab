@@ -5,7 +5,7 @@ import { ProposalCard } from './ProposalCard';
 interface APLProposalPanelProps {
   proposals: APLProposal[];
   isScanning?: boolean;
-  dataSource?: 'real' | 'demo';
+  dataSource?: 'real' | 'unavailable';
   dataSourceReason?: string | null;
   onApplyDirect?: (proposalId: string) => void;
   onAuthorizeGated?: (proposalId: string) => void;
@@ -27,9 +27,9 @@ export const APLProposalPanel: React.FC<APLProposalPanelProps> = ({
           Intelligence Feed
         </h3>
         <div className="flex items-center gap-2">
-          {dataSource === 'demo' && (
+          {dataSource !== 'real' && (
             <span className="bg-amber-500/10 text-amber-300 text-[9px] px-2 py-0.5 rounded-full border border-amber-500/20 font-mono font-bold">
-              DEMO DATA
+              ANALYSIS UNAVAILABLE
             </span>
           )}
           <span className="bg-blue-500/10 text-blue-400 text-[9px] px-2 py-0.5 rounded-full border border-blue-500/20 font-mono font-bold">
@@ -38,13 +38,13 @@ export const APLProposalPanel: React.FC<APLProposalPanelProps> = ({
         </div>
       </div>
 
-      {dataSource === 'demo' && (
+      {dataSource !== 'real' && (
         <div className="border-b border-amber-500/10 bg-amber-500/10 px-4 py-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300">
-            Demo Proposals Active
+            No Proposal Feed
           </p>
           <p className="mt-1 text-[11px] leading-relaxed text-amber-100/80">
-            {dataSourceReason || 'Real APL analysis was unavailable, so the feed is showing mock proposals for interface preview only.'}
+            {dataSourceReason || 'Real APL analysis was unavailable for this file, so no proposal cards are being shown.'}
           </p>
         </div>
       )}

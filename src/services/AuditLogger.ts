@@ -35,10 +35,11 @@ export type AuditEventType =
   | 'CAPABILITY_GRANTS_CLEARED'
   | 'ACC_TOKENS_INVALIDATED'
   | 'SESSION_END_REQUESTED'
-  | 'SESSION_INACTIVE';
+  | 'SESSION_INACTIVE'
+  | string;
 
 export interface AuditEvent {
-  type: AuditEventType;
+  type: string;
   timestamp: number; // milliseconds since epoch
   data: Record<string, any>;
   sequence: number; // ordering guarantee
@@ -54,7 +55,7 @@ export class AuditLogger {
    * Timestamps are absolute epoch time.
    * Sequence is strictly monotonic.
    */
-  emit(type: AuditEventType, data: Record<string, any> = {}): AuditEvent {
+  emit(type: string, data: Record<string, any> = {}): AuditEvent {
     const event: AuditEvent = {
       type,
       timestamp: Date.now(),
@@ -80,28 +81,28 @@ export class AuditLogger {
   /**
    * Get events of a specific type.
    */
-  getEventsByType(type: AuditEventType): AuditEvent[] {
+  getEventsByType(type: string): AuditEvent[] {
     return this.events.filter(e => e.type === type);
   }
 
   /**
    * Check if an event type occurred.
    */
-  hasEvent(type: AuditEventType): boolean {
+  hasEvent(type: string): boolean {
     return this.events.some(e => e.type === type);
   }
 
   /**
    * Check if a forbidden event occurred.
    */
-  hasForbiddenEvent(type: AuditEventType): boolean {
+  hasForbiddenEvent(type: string): boolean {
     return this.hasEvent(type);
   }
 
   /**
    * Get event count for a type.
    */
-  countEvents(type: AuditEventType): number {
+  countEvents(type: string): number {
     return this.events.filter(e => e.type === type).length;
   }
 

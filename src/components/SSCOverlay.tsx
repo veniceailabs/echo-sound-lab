@@ -24,8 +24,8 @@ export const SSCOverlay: React.FC<SSCOverlayProps> = ({ isVisible, scan, onClose
 
   return (
     <div className="fixed inset-0 z-[95] bg-black/70 backdrop-blur-sm">
-      <div className="absolute inset-6 bg-slate-950/95 border border-slate-700/60 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-800/60 flex items-center justify-between bg-slate-950/80">
+      <div className="absolute inset-0 sm:inset-6 bg-slate-950/95 border border-slate-700/60 rounded-none sm:rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col">
+        <div className="px-4 sm:px-6 py-4 border-b border-slate-800/60 flex items-center justify-between bg-slate-950/80 pt-[calc(16px+var(--esl-safe-top))] sm:pt-4">
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full bg-slate-600 border border-slate-500" />
             <div>
@@ -49,11 +49,12 @@ export const SSCOverlay: React.FC<SSCOverlayProps> = ({ isVisible, scan, onClose
           </div>
         </div>
 
-        <div className="px-6 py-4 border-b border-slate-800/60 text-[11px] uppercase tracking-widest text-slate-500">
+        <div className="px-4 sm:px-6 py-4 border-b border-slate-800/60 text-[11px] uppercase tracking-widest text-slate-500">
           Actionability: {scan.session.actionability}
         </div>
 
-        <div className="grid grid-cols-12 gap-4 p-6 overflow-y-auto h-[calc(100%-140px)]">
+        <div className="flex-1 min-h-0 overflow-y-auto pb-[calc(16px+var(--esl-safe-bottom))] sm:pb-6">
+          <div className="grid grid-cols-12 gap-4 p-4 sm:p-6">
           <section className="col-span-12 lg:col-span-5 space-y-4">
             <div className="bg-slate-900/50 rounded-2xl border border-slate-800/60 p-4">
               <p className="text-xs uppercase tracking-widest text-slate-500 mb-2">Session</p>
@@ -131,6 +132,7 @@ export const SSCOverlay: React.FC<SSCOverlayProps> = ({ isVisible, scan, onClose
               </div>
             )}
           </section>
+          </div>
         </div>
       </div>
     </div>

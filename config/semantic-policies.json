@@ -1,0 +1,55 @@
+{
+  "version": "1.0.0",
+  "coreRules": {
+    "piiDetection": true,
+    "externalApiDetection": true,
+    "productionDataProtection": true
+  },
+  "customRules": [
+    {
+      "id": "custom.apikey-detection",
+      "name": "API Key Exposure Detection",
+      "checkFields": ["parameters", "codeContext", "dataContext"],
+      "pattern": "(api[_-]?key|secret[_-]?key|auth[_-]?token)\\s*[:=]\\s*['\"][a-zA-Z0-9\\-_.]{20,}['\"]",
+      "violationType": "PII_EXPOSURE",
+      "severity": "CRITICAL",
+      "reason": "API key or secret exposed in code or parameters",
+      "suggestedFix": "Move credentials to environment variables or secrets manager",
+      "enabled": true
+    },
+    {
+      "id": "custom.prod-db-drop",
+      "name": "Production Database Drop Protection",
+      "checkFields": ["codeContext", "parameters"],
+      "pattern": "drop\\s+(database|schema|table)\\s+(?:prod|production|live)",
+      "violationType": "PRODUCTION_DATA_MODIFICATION",
+      "severity": "CRITICAL",
+      "reason": "Attempting to drop production database",
+      "suggestedFix": "Only perform destructive operations on test/dev databases",
+      "enabled": true
+    },
+    {
+      "id": "custom.gdpr-email",
+      "name": "GDPR Email Pattern Detection",
+      "checkFields": ["dataContext", "parameters"],
+      "pattern": "\\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}\\b",
+      "violationType": "PII_EXPOSURE",
+      "severity": "HIGH",
+      "reason": "Email address detected (GDPR sensitive data)",
+      "suggestedFix": "Anonymize email or implement data minimization",
+      "enabled": true
+    }
+  ],
+  "exemptions": {
+  },
+  "performance": {
+    "timeoutMs": 50,
+    "maxPatternComplexity": 50,
+    "cacheMaxSize": 100
+  },
+  "logging": {
+    "logEvaluations": true,
+    "logViolationsOnly": false,
+    "logErrors": true
+  }
+}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { wamPluginService, WAMPluginStatus } from '../services/wamPluginService';
+import { wamPluginService, WAMPluginStatus, wamSlotManager, WAMSlot, StemName } from '../services/wamPluginService';
 import { audioEngine } from '../services/audioEngine';
 
 interface WAMPluginRackProps {
@@ -27,6 +27,62 @@ export const WAMPluginRack: React.FC<WAMPluginRackProps> = ({ onPluginChange }) 
   const [isLoadingUI, setIsLoadingUI] = useState(false);
   const [retryingPluginId, setRetryingPluginId] = useState<string | null>(null);
   const pluginUIRef = useRef<HTMLDivElement>(null);
+
+  // Slot Manager state
+  const [masterSlots, setMasterSlots] = useState<[WAMSlot, WAMSlot, WAMSlot]>(
+    wamSlotManager.getMasterSlots()
+  );
+  const [stemInserts, setStemInserts] = useState<Record<StemName, WAMSlot>>(
+    wamSlotManager.getStemInserts()
+  );
+  const [slotLoadingIndex, setSlotLoadingIndex] = useState<number | null>(null);
+  const [stemLoadingStem, setStemLoadingStem] = useState<StemName | null>(null);
+  const [selectedSlotPlugin, setSelectedSlotPlugin] = useState<{ type: 'master' | 'stem'; index: number | StemName } | null>(null);
+
+  const refreshSlots = useCallback(() => {
+    setMasterSlots(wamSlotManager.getMasterSlots());
+    setStemInserts(wamSlotManager.getStemInserts());
+  }, []);
+
+  const handleLoadIntoMasterSlot = async (slotIndex: 0 | 1 | 2, pluginId: string) => {
+    setSlotLoadingIndex(slotIndex);
+    const ok = await wamSlotManager.loadPluginIntoMasterSlot(slotIndex, pluginId);
+    refreshSlots();
+    setSlotLoadingIndex(null);
+    if (ok) onPluginChange?.();
+  };
+
+  const handleUnloadMasterSlot = async (slotIndex: 0 | 1 | 2) => {
+    await wamSlotManager.unloadMasterSlot(slotIndex);
+    refreshSlots();
+    onPluginChange?.();
+  };
+
+  const handleBypassMasterSlot = (slotIndex: 0 | 1 | 2, bypassed: boolean) => {
+    wamSlotManager.bypassMasterSlot(slotIndex, bypassed);
+    refreshSlots();
+  };
+
+  const handleLoadIntoStemInsert = async (stem: StemName, pluginId: string) => {
+    setStemLoadingStem(stem);
+    const ok = await wamSlotManager.loadPluginIntoStemInsert(stem, pluginId);
+    refreshSlots();
+    setStemLoadingStem(null);
+    if (ok) onPluginChange?.();
+  };
+
+  const handleUnloadStemInsert = async (stem: StemName) => {
+    await wamSlotManager.unloadStemInsert(stem);
+    refreshSlots();
+    onPluginChange?.();
+  };
+
+  const handleBypassStemInsert = (stem: StemName, bypassed: boolean) => {
+    wamSlotManager.bypassStemInsert(stem, bypassed);
+    refreshSlots();
+  };
+
+  const stemNames: StemName[] = ['vocals', 'drums', 'bass', 'other'];
 
   // Refresh plugin list
   const refreshPlugins = useCallback(() => {
@@ -89,10 +145,10 @@ export const WAMPluginRack: React.FC<WAMPluginRackProps> = ({ onPluginChange }) 
         setLoadError(
           `Failed to load ${pluginInfo?.name || 'plugin'}.\n\n` +
           `Common causes:\n` +
-          `â€¢ Plugin server is offline or unreachable\n` +
-          `â€¢ CORS policy blocking the plugin\n` +
-          `â€¢ Plugin code has errors or incompatible format\n` +
-          `â€¢ Network connectivity issues\n\n` +
+          `â€Plugin server is offline or unreachable\n` +
+          `â€CORS policy blocking the plugin\n` +
+          `â€Plugin code has errors or incompatible format\n` +
+          `â€Network connectivity issues\n\n` +
           `Try: Refresh the plugin list or check browser console for detailed error logs.`
         );
       }
@@ -244,6 +300,28 @@ export const WAMPluginRack: React.FC<WAMPluginRackProps> = ({ onPluginChange }) 
     }
   };
 
+  const availablePlugins = plugins.filter(p => p.availability === 'available');
+
+  const SlotDropdown: React.FC<{
+    currentPluginId: string | null;
+    onSelect: (id: string) => void;
+    loading: boolean;
+  }> = ({ currentPluginId, onSelect, loading }) => (
+    <select
+      value={currentPluginId ?? ''}
+      onChange={e => e.target.value && onSelect(e.target.value)}
+      disabled={loading}
+      className="w-full text-xs bg-black/40 text-slate-300 border border-white/10 rounded-lg px-2 py-1.5 mt-2 disabled:opacity-50"
+    >
+      <option value="">â€Select plugin â€”</option>
+      {plugins.map(p => (
+        <option key={p.id} value={p.id} disabled={p.availability === 'unavailable'}>
+          {p.name} {p.availability === 'unavailable' ? '(offline)' : p.availability === 'unknown' ? '(?)' : ''}
+        </option>
+      ))}
+    </select>
+  );
+
   return (
     <div className="space-y-4">
       {/* Header - Second Light OS Style */}
@@ -274,6 +352,125 @@ export const WAMPluginRack: React.FC<WAMPluginRackProps> = ({ onPluginChange }) 
         </div>
       </div>
 
+      {/* ===== MASTER RACK â€3 slots ===== */}
+      <div>
+        <p className="text-[10px] uppercase tracking-[0.28em] text-orange-300 mb-2">Master Rack</p>
+        <div className="grid grid-cols-3 gap-3">
+          {([0, 1, 2] as const).map(slotIndex => {
+            const slot = masterSlots[slotIndex];
+            const isSlotLoading = slotLoadingIndex === slotIndex;
+            return (
+              <div
+                key={slotIndex}
+                className={`rounded-xl p-3 border ${slot.pluginId
+                  ? 'bg-cyan-500/10 border-cyan-500/30'
+                  : 'bg-white/[0.03] border-dashed border-white/10'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500">Slot {slotIndex + 1}</span>
+                  {slot.pluginId && (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleBypassMasterSlot(slotIndex, !slot.bypassed)}
+                        className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${slot.bypassed
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                        }`}
+                      >
+                        {slot.bypassed ? 'BP' : 'ON'}
+                      </button>
+                      <button
+                        onClick={() => handleUnloadMasterSlot(slotIndex)}
+                        className="text-red-400 hover:text-red-300 text-[10px] px-1"
+                      >
+                        âœ•
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {slot.pluginId ? (
+                  <p className="text-xs font-semibold text-slate-200 truncate">
+                    {plugins.find(p => p.id === slot.pluginId)?.name ?? slot.pluginId}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-600">Empty</p>
+                )}
+                <SlotDropdown
+                  currentPluginId={slot.pluginId}
+                  onSelect={id => handleLoadIntoMasterSlot(slotIndex, id)}
+                  loading={isSlotLoading}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ===== STEM INSERT RACK â€4 rows ===== */}
+      <div>
+        <p className="text-[10px] uppercase tracking-[0.28em] text-sky-300 mb-2">Stem Inserts</p>
+        <div className="space-y-2">
+          {stemNames.map(stem => {
+            const slot = stemInserts[stem];
+            const isStemLoading = stemLoadingStem === stem;
+            return (
+              <div
+                key={stem}
+                className={`rounded-xl p-3 border flex items-center gap-3 ${slot.pluginId
+                  ? 'bg-purple-500/10 border-purple-500/30'
+                  : 'bg-white/[0.03] border-dashed border-white/10'
+                }`}
+              >
+                <span className="text-xs font-semibold text-slate-400 w-12 capitalize flex-shrink-0">{stem}</span>
+                <div className="flex-1 min-w-0">
+                  {slot.pluginId ? (
+                    <p className="text-xs font-semibold text-slate-200 truncate">
+                      {plugins.find(p => p.id === slot.pluginId)?.name ?? slot.pluginId}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-600">No insert</p>
+                  )}
+                  <select
+                    value={slot.pluginId ?? ''}
+                    onChange={e => e.target.value && handleLoadIntoStemInsert(stem, e.target.value)}
+                    disabled={isStemLoading}
+                    className="w-full text-xs bg-black/40 text-slate-300 border border-white/10 rounded-lg px-2 py-1 mt-1 disabled:opacity-50"
+                  >
+                    <option value="">â€Select plugin â€”</option>
+                    {plugins.map(p => (
+                      <option key={p.id} value={p.id} disabled={p.availability === 'unavailable'}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {slot.pluginId && (
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => handleBypassStemInsert(stem, !slot.bypassed)}
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${slot.bypassed
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                      }`}
+                    >
+                      {slot.bypassed ? 'BP' : 'ON'}
+                    </button>
+                    <button
+                      onClick={() => handleUnloadStemInsert(stem)}
+                      className="text-red-400 hover:text-red-300 text-[10px] px-1"
+                    >
+                      âœ•
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ===== SINGLE PLUGIN LEGACY SECTION ===== */}
       {/* Active Plugin Section */}
       {activePluginId ? (
         <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/5 rounded-xl p-4 border border-green-500/30 backdrop-blur-sm shadow-[0_0_20px_rgba(34,197,94,0.1)]">

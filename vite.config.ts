@@ -20,49 +20,7 @@ export default defineConfig(({ mode }) => {
         sourcemap: false,
         rollupOptions: {
           output: {
-            manualChunks(id) {
-              if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
-                return 'vendor-react';
-              }
-              if (id.includes('node_modules/framer-motion')) {
-                return 'vendor-motion';
-              }
-              if (
-                id.includes('@webaudiomodules/api') ||
-                id.includes('@webaudiomodules/sdk') ||
-                id.includes('@breezystack/lamejs')
-              ) {
-                return 'vendor-audio';
-              }
-              if (id.includes('/src/components/demo/') || id.includes('/src/services/demo/')) {
-                return 'feature-demo';
-              }
-              if (
-                id.includes('/src/components/AIStudio') ||
-                id.includes('/src/components/APL/') ||
-                id.includes('/src/services/AIAgentService') ||
-                id.includes('/src/services/APLAnalysisService') ||
-                id.includes('/src/services/geminiService')
-              ) {
-                return 'feature-ai';
-              }
-              if (
-                id.includes('/src/components/HistoryTimeline') ||
-                id.includes('/src/services/historyManager') ||
-                id.includes('/src/services/sessionManager')
-              ) {
-                return 'feature-history';
-              }
-              if (
-                id.includes('/src/services/AudioPlaybackEngine') ||
-                id.includes('/src/services/OfflineRenderService') ||
-                id.includes('/src/services/AssetRegistry') ||
-                id.includes('/src/services/ProvenanceLedger')
-              ) {
-                return 'feature-engine';
-              }
-              return undefined;
-            },
+            // Let Vite handle chunking automatically to prevent load order issues
           },
         },
       },

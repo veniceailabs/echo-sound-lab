@@ -11,33 +11,106 @@
     "test:unit": "vitest run --config vitest.config.ts",
     "test:watch": "vitest --config vitest.config.ts",
     "test:e2e": "playwright test",
+    "test:e2e:sprint4": "playwright test tests/e2e/Sprint4.gate.spec.ts",
     "ci:determinism": "vitest run --config vitest.config.ts src/tests/deterministicReplayHarness.test.ts src/tests/proposalEngineDeterminism.test.ts src/tests/timelineDeterminismActions.test.ts src/tests/timeTravelReplay.test.ts src/tests/timeTravelSnapshotCache.test.ts src/tests/branchContextSwitch.test.ts src/tests/deterministicMerge.test.ts src/tests/pluginInsertDeterminism.test.ts",
     "typecheck:repo": "tsc --noEmit",
-    "ci:secret-scan": "node scripts/ci/secret-scan.mjs"
+    "ci:secret-scan": "node scripts/ci/secret-scan.mjs",
+    "qa:reference-profile": "node scripts/qa/generate-reference-profile.mjs",
+    "deploy:vercel-snapshot": "node scripts/deploy/create-vercel-snapshot.mjs",
+    "dev:desktop": "concurrently \"vite\" \"wait-on tcp:5173 && cross-env NODE_ENV=development electron .\"",
+    "build:desktop": "vite build && electron-builder"
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
     "@google/genai": "^1.31.0",
+    "@supabase/supabase-js": "^2.100.1",
     "@webaudiomodules/api": "^2.0.0-alpha.6",
     "@webaudiomodules/sdk": "^0.0.12",
+    "clsx": "^2.1.1",
     "demucs": "^1.0.0",
     "framer-motion": "^12.23.25",
     "i18next": "^25.8.18",
+    "jszip": "^3.10.1",
     "mp3-mediarecorder": "^4.0.5",
+    "playwright": "^1.61.1",
     "puppeteer": "^24.34.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "react-i18next": "^16.5.8"
+    "react-i18next": "^16.5.8",
+    "stripe": "^22.0.2",
+    "tailwind-merge": "^3.6.0",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
+    "@tauri-apps/cli": "^2.11.4",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^10.0.3",
+    "cross-env": "^10.1.0",
+    "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vitest": "^1.6.0"
+    "vitest": "^1.6.0",
+    "wait-on": "^9.0.10"
+  },
+  "main": "electron/main.js",
+  "build": {
+    "appId": "com.echosoundlab.desktop",
+    "productName": "Echo Sound Lab",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "native/lib/**/*",
+      "native/build/Release/*.node"
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "icon": "public/icon-512.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Echo Sound Lab records audio from your microphone and audio interface.",
+        "NSAudioCaptureUsageDescription": "Echo Sound Lab captures audio for recording and mastering."
+      }
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    },
+    "asarUnpack": [
+      "native/build/Release/*.node",
+      "native/lib/**/*"
+    ],
+    "npmRebuild": false
   }
 }

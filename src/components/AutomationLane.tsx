@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReplayAutomationLane, ReplayTrackState } from '../services/deterministicReplayService';
 import { pluginRegistry } from '../services/plugins/pluginRegistry';
 
@@ -9,7 +9,9 @@ interface AutomationLaneProps {
   laneWidth: number;
   isReadOnly?: boolean;
   onAddPoint: (trackId: string, parameter: string, timeSec: number, value: number) => void;
+  onSetPoint?: (trackId: string, parameter: string, pointId: string, timeSec: number, value: number) => void;
   showPlayhead?: boolean;
+  compareLanes?: ReplayAutomationLane[];
 }
 
 interface AutomationTarget {
@@ -33,6 +35,15 @@ function snapToStep(value: number, step: number): number {
   return Math.round(value / step) * step;
 }
 
+function humanizeParameterName(parameter: string): string {
+  return parameter
+    .replace(/^plugin:/, '')
+    .replace(/[:_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
 function getYForValue(value: number, target: AutomationTarget): number {
   const range = Math.max(0.000001, target.max - target.min);
   const normalized = clamp((value - target.min) / range, 0, 1);
@@ -53,9 +64,17 @@ function AutomationLaneComponent({
   laneWidth,
   isReadOnly = false,
   onAddPoint,
+  onSetPoint,
   showPlayhead = false,
+  compareLanes = [],
 }: AutomationLaneProps) {
   const [selectedTargetId, setSelectedTargetId] = useState<string>(lanes[0]?.parameter || 'volumeDb');
+  const laneBodyRef = useRef<HTMLDivElement | null>(null);
+  const dragPointRef = useRef<{ pointId: string; parameter: string; startClientX: number; startClientY: number } | null>(null);
+
+  const endDrag = useCallback(() => {
+    dragPointRef.current = null;
+  }, []);
 
   const automationTargets = useMemo<AutomationTarget[]>(() => {
     const baseTargets: AutomationTarget[] = [
@@ -77,6 +96,49 @@ function AutomationLaneComponent({
         defaultValue: 0,
       },
     ];
+
+    if (track.kind === 'master') {
+      baseTargets.push(
+        {
+          id: 'master:normalizedTargetLUFS',
+          label: 'Master Target LUFS',
+          min: -24,
+          max: -6,
+          step: 0.1,
+          defaultValue: -14,
+          unit: 'LUFS',
+        },
+        {
+          id: 'master:limiterThresholdDb',
+          label: 'Master Limiter Threshold',
+          min: -12,
+          max: 0,
+          step: 0.1,
+          defaultValue: -0.1,
+          unit: 'dB',
+        }
+      );
+    }
+
+    const sendTargets: AutomationTarget[] = (track.sends || []).flatMap((send) => ([
+      {
+        id: `send:${send.sendId}:levelDb`,
+        label: `Send ${send.targetTrackId === 'master' ? 'Master' : send.targetTrackId} Level`,
+        min: -60,
+        max: 12,
+        step: 0.1,
+        defaultValue: send.levelDb,
+        unit: 'dB',
+      },
+      {
+        id: `send:${send.sendId}:enabled`,
+        label: `Send ${send.targetTrackId === 'master' ? 'Master' : send.targetTrackId} Enable`,
+        min: 0,
+        max: 1,
+        step: 1,
+        defaultValue: send.enabled ? 1 : 0,
+      },
+    ]));
 
     const pluginTargets: AutomationTarget[] = [];
     for (const insert of track.inserts || []) {
@@ -101,8 +163,26 @@ function AutomationLaneComponent({
         });
       }
     }
-    return [...baseTargets, ...pluginTargets];
-  }, [track.inserts]);
+    const knownTargetIds = new Set([...baseTargets, ...sendTargets, ...pluginTargets].map((target) => target.id));
+    const customTargets: AutomationTarget[] = [];
+    for (const lane of lanes) {
+      if (knownTargetIds.has(lane.parameter)) continue;
+      if (customTargets.some((target) => target.id === lane.parameter)) continue;
+      const values = lane.points.map((point) => point.value);
+      const minValue = values.length > 0 ? Math.min(...values) : 0;
+      const maxValue = values.length > 0 ? Math.max(...values) : 1;
+      const spread = Math.max(0.1, maxValue - minValue);
+      customTargets.push({
+        id: lane.parameter,
+        label: `APL ${humanizeParameterName(lane.parameter)}`,
+        min: Number((minValue - spread * 0.25).toFixed(3)),
+        max: Number((maxValue + spread * 0.25).toFixed(3)),
+        step: Math.abs(maxValue) >= 1 || Math.abs(minValue) >= 1 ? 0.1 : 0.01,
+        defaultValue: lane.points[0]?.value ?? 0,
+      });
+    }
+    return [...baseTargets, ...sendTargets, ...pluginTargets, ...customTargets];
+  }, [lanes, track.inserts, track.sends]);
 
   useEffect(() => {
     if (automationTargets.length === 0) return;
@@ -131,6 +211,13 @@ function AutomationLaneComponent({
       points: [],
     };
   }, [lanes, selectedTarget, track.trackId]);
+  const compareLane = useMemo(() => compareLanes.find((lane) => lane.parameter === selectedLane.parameter), [compareLanes, selectedLane.parameter]);
+  const comparePointsById = useMemo(() => new Map((compareLane?.points || []).map((point) => [point.pointId, point])), [compareLane]);
+  const compareLaneStatus = compareLane
+    ? compareLane.trackId !== selectedLane.trackId || compareLane.parameter !== selectedLane.parameter || compareLane.points.length !== selectedLane.points.length
+      ? 'changed'
+      : 'unchanged'
+    : 'added';
 
   const sortedPoints = useMemo(() => {
     return [...selectedLane.points].sort((a, b) => (a.timeSec === b.timeSec ? a.value - b.value : a.timeSec - b.timeSec));
@@ -152,11 +239,53 @@ function AutomationLaneComponent({
     onAddPoint(track.trackId, selectedTarget.id, Number(timeSec.toFixed(3)), value);
   };
 
+  const beginPointDrag = useCallback((event: React.PointerEvent, parameter: string, pointId: string) => {
+    if (isReadOnly || !onSetPoint) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const bounds = laneBodyRef.current?.getBoundingClientRect() || null;
+    if (!bounds) return;
+    dragPointRef.current = {
+      pointId,
+      parameter,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+    };
+    const activeTarget = automationTargets.find((target) => target.id === parameter) || selectedTarget;
+    const handleMove = (moveEvent: PointerEvent) => {
+      const drag = dragPointRef.current;
+      if (!drag || !activeTarget) return;
+      const timeSec = Math.max(0, (moveEvent.clientX - bounds.left) / pxPerSec);
+      const localY = clamp(moveEvent.clientY - bounds.top, 0, bounds.height);
+      const value = getValueForY(localY, activeTarget);
+      onSetPoint(track.trackId, parameter, pointId, Number(timeSec.toFixed(3)), value);
+    };
+    const handleUp = (upEvent: PointerEvent) => {
+      handleMove(upEvent);
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointercancel', handleUp);
+      endDrag();
+    };
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointercancel', handleUp);
+  }, [automationTargets, endDrag, isReadOnly, onSetPoint, pxPerSec, selectedTarget, track.trackId]);
+
   return (
-    <div className="rounded-xl border border-white/10 bg-slate-950/50 p-2">
+    <div ref={laneBodyRef} className="rounded-xl border border-white/10 bg-slate-950/50 p-2">
       <div className="mb-2 flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Automation</p>
         <div className="flex items-center gap-1">
+          {compareLane && (
+            <span className={`rounded-full border px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] ${
+              compareLaneStatus === 'changed'
+                ? 'border-amber-300/50 bg-amber-500/15 text-amber-100'
+                : 'border-white/10 bg-white/[0.04] text-slate-300'
+            }`}>
+              {compareLaneStatus}
+            </span>
+          )}
           <select
             value={selectedTarget?.id || 'volumeDb'}
             onChange={(event) => setSelectedTargetId(event.target.value)}
@@ -233,12 +362,39 @@ function AutomationLaneComponent({
         {sortedPoints.map((point) => {
           const left = clamp(point.timeSec * pxPerSec, 0, laneWidth);
           const top = selectedTarget ? getYForValue(point.value, selectedTarget) : AUTOMATION_LANE_HEIGHT_PX / 2;
+          const comparePoint = comparePointsById.get(point.pointId);
+          const pointStatus = comparePoint
+            ? comparePoint.timeSec !== point.timeSec || comparePoint.value !== point.value || comparePoint.curve !== point.curve
+              ? 'changed'
+              : 'unchanged'
+            : 'added';
           return (
             <div
               key={point.pointId}
-              className="absolute z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-200/80 bg-cyan-400/60"
+              className={`absolute z-10 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border ${
+                pointStatus === 'changed'
+                  ? 'border-amber-200/80 bg-amber-400/70'
+                  : pointStatus === 'added'
+                    ? 'border-emerald-200/80 bg-emerald-400/70'
+                    : 'border-cyan-200/80 bg-cyan-400/60'
+              }`}
               style={{ left: `${left}px`, top: `${top}px` }}
               title={`${selectedLane.parameter} ${point.value.toFixed(3)} @ ${point.timeSec.toFixed(3)}s`}
+              onPointerDown={(event) => beginPointDrag(event, selectedLane.parameter, point.pointId)}
+            />
+          );
+        })}
+        {compareLane && compareLane.points.map((point) => {
+          const activePoint = selectedLane.points.find((entry) => entry.pointId === point.pointId);
+          if (activePoint) return null;
+          const left = clamp(point.timeSec * pxPerSec, 0, laneWidth);
+          const top = selectedTarget ? getYForValue(point.value, selectedTarget) : AUTOMATION_LANE_HEIGHT_PX / 2;
+          return (
+            <div
+              key={`compare-${point.pointId}`}
+              className="absolute z-[5] h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-fuchsia-200/80 bg-fuchsia-400/50"
+              style={{ left: `${left}px`, top: `${top}px` }}
+              title={`Compare point ${point.value.toFixed(3)} @ ${point.timeSec.toFixed(3)}s`}
             />
           );
         })}

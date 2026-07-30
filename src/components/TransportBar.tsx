@@ -47,6 +47,7 @@ export default function TransportBar({
             type="button"
             onClick={onPlay}
             disabled={isBusy || isPlaying}
+            title={isPlaying ? 'Playback is already running.' : 'Start playback.'}
             className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-200 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t('transport.play', { defaultValue: 'Play' })}
@@ -55,6 +56,7 @@ export default function TransportBar({
             type="button"
             onClick={onPause}
             disabled={isBusy || !isPlaying}
+            title={!isPlaying ? 'Playback is paused.' : 'Pause playback.'}
             className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-200 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t('transport.pause', { defaultValue: 'Pause' })}
@@ -63,14 +65,17 @@ export default function TransportBar({
             type="button"
             onClick={onStop}
             disabled={isBusy || (safeCurrent <= 0 && !isPlaying)}
+            title="Stop playback and return to the beginning."
             className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-red-200 hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t('transport.stop', { defaultValue: 'Stop' })}
           </button>
           <button
             type="button"
+            data-testid="timeline-export-wav"
             onClick={onExportWav}
             disabled={isBusy || isExporting || !onExportWav}
+            title={isExporting ? 'Rendering a signed export…' : 'Export a provenance-sealed WAV.'}
             className="rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-cyan-200 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isExporting
@@ -79,7 +84,7 @@ export default function TransportBar({
           </button>
         </div>
 
-        <div className="font-mono text-xs text-slate-300">
+        <div data-testid="timeline-transport-time" className="font-mono text-xs text-slate-300">
           {formatTransportTime(safeCurrent)} / {formatTransportTime(safeDuration)}
         </div>
 

@@ -105,10 +105,38 @@ function getConflictKey(proposal: APLProposal): string | null {
       const timeSec = Number(getNumberParam(params, 'timeSec', 0).toFixed(3));
       return `auto:${trackId}:${parameter}:${timeSec}`;
     }
+    case 'ADD_MIDI_NOTE':
+    case 'SET_MIDI_NOTE':
+    case 'REMOVE_MIDI_NOTE': {
+      const noteId = getStringParam(params, 'noteId', '');
+      const pitch = getNumberParam(params, 'pitch', 60);
+      const timeSec = Number(getNumberParam(params, 'startTimeSec', 0).toFixed(3));
+      return noteId ? `midi:${trackId}:${noteId}` : `midi:${trackId}:${pitch}:${timeSec}`;
+    }
     case 'MOVE_REGION':
-    case 'SPLIT_REGION': {
+    case 'SPLIT_REGION':
+    case 'TRIM_REGION':
+    case 'SLIP_REGION':
+    case 'APPLY_CROSSFADE': {
       const regionId = getStringParam(params, 'regionId', '');
       return regionId ? `region:${regionId}` : null;
+    }
+    case 'SET_REGION_GAIN': {
+      const regionId = getStringParam(params, 'regionId', '');
+      return regionId ? `region:${regionId}:gain` : null;
+    }
+    case 'REORDER_COMP_LANE_TAKE': {
+      const laneId = getStringParam(params, 'laneId', '');
+      const regionId = getStringParam(params, 'regionId', '');
+      return laneId && regionId ? `comp:${laneId}:${regionId}:order` : null;
+    }
+    case 'RENAME_COMP_LANE': {
+      const laneId = getStringParam(params, 'laneId', '');
+      return laneId ? `comp:${laneId}:rename` : null;
+    }
+    case 'COLLAPSE_COMP_LANE_TO_ACTIVE': {
+      const laneId = getStringParam(params, 'laneId', '');
+      return laneId ? `comp:${laneId}:collapse` : null;
     }
     case 'ADD_TRACK': {
       const addTrackId = getStringParam(params, 'trackId', trackId);
@@ -128,6 +156,18 @@ function getConflictKey(proposal: APLProposal): string | null {
       const manifestId = getStringParam(params, 'manifestId', 'plugin');
       const instanceId = getStringParam(params, 'instanceId', manifestId);
       return `plugin:add:${trackId}:${instanceId}`;
+    }
+    case 'SET_TRACK_ROUTING': {
+      return `routing:${trackId}:${getStringParam(params, 'outputBusId', 'master')}`;
+    }
+    case 'SET_TRACK_SEND': {
+      const sendId = getStringParam(params, 'sendId', '');
+      const targetTrackId = getStringParam(params, 'targetTrackId', 'master');
+      return `send:${trackId}:${sendId || targetTrackId}`;
+    }
+    case 'REMOVE_TRACK_SEND': {
+      const sendId = getStringParam(params, 'sendId', '');
+      return `send:${trackId}:${sendId}:remove`;
     }
     case 'REMOVE_PLUGIN':
     case 'REORDER_PLUGIN': {

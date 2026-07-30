@@ -68,6 +68,7 @@ function HistoryScrubberComponent({
             type="button"
             onClick={() => onBranchFromState?.(currentIndex)}
             disabled={!canBranchFromState || isBusy || !onBranchFromState}
+            title={canBranchFromState ? 'Fork a new branch from the current historical state.' : 'Scrub backwards to enable branching.'}
             className="rounded border border-fuchsia-400/30 bg-fuchsia-500/10 px-2.5 py-1.5 text-[11px] uppercase tracking-[0.12em] text-fuchsia-100 hover:bg-fuchsia-500/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('history.branchFromHere', { defaultValue: 'Branch from Here' })}
@@ -76,6 +77,7 @@ function HistoryScrubberComponent({
             type="button"
             onClick={onJumpLatest}
             disabled={currentIndex === totalSteps || isBusy}
+            title="Jump back to the latest state."
             className="rounded border border-white/15 bg-slate-900 px-2.5 py-1.5 text-[11px] uppercase tracking-[0.12em] text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('history.latest', { defaultValue: 'Latest' })}
@@ -84,6 +86,7 @@ function HistoryScrubberComponent({
             type="button"
             onClick={() => onRestoreToIndex(currentIndex)}
             disabled={!isPreviewMode || isBusy}
+            title={isPreviewMode ? 'Restore the scrubbed state and truncate later history.' : 'Restore only works in preview mode.'}
             className="rounded border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] uppercase tracking-[0.12em] text-amber-200 hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {t('history.restore', { defaultValue: 'Restore' })}

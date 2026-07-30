@@ -1,5 +1,8 @@
 import { AudioMetrics, ProcessingConfig, ProcessingMode, Stem, EQSettings, LiveProcessingConfig, MixSignature, MixIntent, VeniceColorPreset, TransientShaperConfig, DeEsserConfig, SaturationConfig, ReverbConfig, StereoImagerConfig, DynamicEQConfig, DynamicEQBand, CompressionPreset, LimiterConfig, PitchCorrectionConfig, SSCScan, SSCScanEntry, SSCConfidenceLevel } from '../types';
-import { advancedDspService } from './advancedDsp';
+import { eliteProfiles } from './finishing/eliteEngineerProfiles';
+import { buildPremasterCheckpoint, PremasterCheckpoint } from './premasterCheckpointService';
+import type { VocalAnalysisPipelineContext } from './vocal/vocalAnalysisPipeline';
+import { advancedDspService, AnalogSaturationEngine } from './advancedDsp';
 import { mixAnalysisService } from './mixAnalysis';
 import { wamPluginService, WAMPluginInfo } from './wamPluginService';
 import { localPluginService } from './localPluginService';
@@ -7,10 +10,16 @@ import { CustomProcessingChain } from './customDsp';
 import { perceptualDiffHarness } from './perceptualDiffHarness';
 import { pitchCorrectionService } from './pitchCorrectionService';
 import { applyGateExpander, applySoftClipper, applyTruePeakLimiter } from './postProcessing';
+import {
+  applyGainToBuffer,
+  evaluateRenderSafety,
+} from './audioSafety';
 
+export type MasteringQualityMode = 'speed' | 'balanced' | 'fidelity';
 const clamp = (val: number, min: number, max: number) => Math.min(max, Math.max(min, val));
 const dbToLinear = (db: number) => Math.pow(10, db / 20);
 const PROCESSING_ORDER = 'Input Trim -> Pitch -> De-Esser -> Dynamic EQ -> Static EQ -> Compression -> Makeup -> Saturation -> Transient -> Stereo Imager -> Motion Reverb -> Limiter -> Output Trim -> External Plugins -> Wet Gain';
+
 const isCompressionActive = (config?: Partial<CompressionPreset>) => {
   if (!config) return false;
   const ratio = config.ratio ?? 1;
@@ -36,14 +45,17 @@ const getStereoWidth = (config?: StereoImagerConfig) => {
 const normalizeStereoImagerConfig = (config?: StereoImagerConfig): StereoImagerConfig | undefined => {
   if (!config) return undefined;
   const width = getStereoWidth(config);
-  const crossovers = Array.isArray(config.crossovers) && config.crossovers.length === 2
-    ? config.crossovers
+  const normalizedCrossovers: [number, number] = Array.isArray(config.crossovers) && config.crossovers.length === 2
+    ? [
+        Number.isFinite(config.crossovers[0]) ? config.crossovers[0] : 300,
+        Number.isFinite(config.crossovers[1]) ? config.crossovers[1] : 5000,
+      ]
     : [300, 5000];
   return {
     lowWidth: width,
     midWidth: width,
     highWidth: width,
-    crossovers,
+    crossovers: normalizedCrossovers,
     vocalShield: config.vocalShield
       ? {
           enabled: !!config.vocalShield.enabled,
@@ -54,8 +66,62 @@ const normalizeStereoImagerConfig = (config?: StereoImagerConfig): StereoImagerC
       : undefined,
   };
 };
+const applyEliteHeuristics = (config: ProcessingConfig): ProcessingConfig => {
+  const profileId = config.eliteProfile;
+  if (!profileId || profileId === 'none') return config;
+  
+  const profile = eliteProfiles[profileId];
+  if (!profile) return config;
+
+  const out = { ...config };
+  
+  if (profile.heuristics.midSideSaturationSideBoostDb) {
+     out.saturation = out.saturation || { amount: 0, mode: 'tube' };
+     out.saturation.amount = Math.max(out.saturation.amount, 0.4); 
+     out.stereoWidener = out.stereoWidener || { width: 1.0 };
+     out.stereoWidener.width += (profile.heuristics.midSideSaturationSideBoostDb * 0.1);
+  }
+
+  if (profile.heuristics.glueCompression) {
+     out.compression = out.compression || {};
+     out.compression.threshold = profile.heuristics.glueCompression.thresholdDb;
+     out.compression.ratio = profile.heuristics.glueCompression.ratio;
+     out.compression.attack = profile.heuristics.glueCompression.attackMs;
+     out.compression.release = profile.heuristics.glueCompression.releaseMs;
+  }
+
+  out.eq = out.eq || { low: 0, mid: 0, high: 0, bands: [] };
+  const customBands = [...(out.eq.bands || [])];
+
+  if (profile.heuristics.lpfInstrumentalFreqHz) {
+     customBands.push({ type: 'lowpass', frequency: profile.heuristics.lpfInstrumentalFreqHz, gain: 0, q: 0.7 });
+  }
+
+  if (profile.heuristics.vocalPocketCutDb && profile.heuristics.vocalPocketFreqHz) {
+     customBands.push({ type: 'peaking', frequency: profile.heuristics.vocalPocketFreqHz, gain: profile.heuristics.vocalPocketCutDb, q: 2.0 });
+  }
+
+  if (profile.heuristics.subMonoAnchorFreqHz) {
+     customBands.push({ type: 'lowshelf', frequency: profile.heuristics.subMonoAnchorFreqHz, gain: 2.0, q: 1.0 });
+     out.stereoImager = out.stereoImager || { lowWidth: 1, midWidth: 1, highWidth: 1, crossovers: [200, 2000] };
+     out.stereoImager.lowWidth = 0;
+     out.stereoImager.crossovers[0] = profile.heuristics.subMonoAnchorFreqHz;
+  }
+
+  out.eq.bands = customBands;
+
+  if (profile.heuristics.targetLufs) {
+     out.targetGainDb = out.targetGainDb || 0;
+     const lufsDelta = -14 - profile.heuristics.targetLufs; 
+     out.inputTrimDb = (out.inputTrimDb || 0) + lufsDelta;
+  }
+
+  return out;
+};
+
 const sanitizeProcessingConfig = (config: ProcessingConfig): ProcessingConfig => {
-  const sanitized: ProcessingConfig = { ...config };
+  let sanitized = applyEliteHeuristics(config);
+  sanitized = { ...sanitized };
   if ('multibandCompression' in sanitized) {
     delete sanitized.multibandCompression;
   }
@@ -101,7 +167,7 @@ interface LiveNodes {
   staticEQ?: BiquadFilterNode[];
   mainComp?: DynamicsCompressorNode;
   compMakeupGain?: GainNode;
-  saturation?: ReturnType<typeof advancedDspService.createSaturation> | null;
+  saturation?: ReturnType<typeof advancedDspService.createSaturation> | AnalogSaturationEngine | null;
   transientShaper?: ReturnType<typeof advancedDspService.createTransientShaper> | null;
   stereoImager?: ReturnType<typeof advancedDspService.createStereoImager> | null;
   outputLimiter?: DynamicsCompressorNode;
@@ -129,6 +195,32 @@ interface ActiveProcessingFlags {
   wamPlugins: boolean;
 }
 
+export interface AudioEngineSnapshot {
+  sampleRate: number;
+  isPlaying: boolean;
+  isBypassed: boolean;
+  currentConfig: LiveProcessingConfig;
+  activeFlags: ActiveProcessingFlags;
+  chainSignature: string | null;
+  masteringQualityMode: MasteringQualityMode;
+  recommendedRenderPath: 'custom-dsp' | 'web-audio' | 'native';
+  renderPathReason: string;
+  warnings: string[];
+  latency: {
+    baseLatencyMs: number | null;
+    outputLatencyMs: number | null;
+    latencyHint: string | null;
+  };
+  routingGraph: {
+    nodeCount: number;
+    edgeCount: number;
+    pluginCount: number;
+    playbackMode: 'native' | 'buffer' | 'hybrid';
+    rawPlaybackEnabled: boolean;
+    processedPlaybackEnabled: boolean;
+  };
+}
+
 export class AudioEngine {
   private audioContext: AudioContext;
   private analyser: AnalyserNode;
@@ -151,6 +243,7 @@ export class AudioEngine {
   private activeChainSignature: string | null = null;
   private liveChainInput: AudioNode | null = null;
   private engineMode: 'FRIENDLY' | 'ADVANCED' = 'FRIENDLY'; // Stage Architecture mode
+  private masteringQualityMode: MasteringQualityMode = 'balanced';
 
   private startedAt: number = 0;
   private pausedAt: number = 0;
@@ -167,6 +260,7 @@ export class AudioEngine {
   private rawObjectUrl: string | null = null;
   private rawElementSource: MediaElementAudioSourceNode | null = null;
   private rawElementGain: GainNode | null = null;
+  private preferNativePlayback: boolean = false;
 
   // Stem preview state
   private isStemPreviewMode: boolean = false;
@@ -391,7 +485,7 @@ export class AudioEngine {
   }
 
   private shouldUseNativePlayback(): boolean {
-    return !!this.rawElement && !this.processedBuffer && !this.hasActiveLiveProcessing();
+    return this.preferNativePlayback && !!this.rawElement && !this.processedBuffer && !this.hasActiveLiveProcessing();
   }
 
   private connectAnalyserTap(source: AudioNode) {
@@ -405,6 +499,51 @@ export class AudioEngine {
   private setMonitorMix(dry: number, wet: number) {
     this.dryGain.gain.value = dry;
     this.wetGain.gain.value = wet;
+  }
+
+  private startBufferPlayback(startOffset: number) {
+    if (!this.buffer) {
+      throw new Error('No audio buffer loaded');
+    }
+
+    this.stopSource();
+
+    this.source = this.audioContext.createBufferSource();
+    this.source.buffer = this.buffer;
+    this.source.channelCountMode = 'explicit';
+    this.source.channelInterpretation = 'speakers';
+
+    const hasLiveProcessing = this.hasActiveLiveProcessing();
+    const useLiveChain = hasLiveProcessing && !this.processedBuffer;
+
+    if (useLiveChain) {
+      this.applyProcessingConfig(this.currentConfig);
+      this.source.connect(this.masterInput);
+      this.connectAnalyserTap(this.source);
+      this.setMonitorMix(0, 1);
+      this.connectMasterInputToChain();
+    } else {
+      this.source.connect(this.audioContext.destination);
+      this.connectAnalyserTap(this.source);
+      this.setMonitorMix(1, 0);
+    }
+
+    if (startOffset >= this.buffer.duration) {
+      this.pausedAt = 0;
+      this.source.start(0, 0);
+      this.startedAt = this.audioContext.currentTime;
+    } else {
+      this.source.start(0, startOffset);
+      this.startedAt = this.audioContext.currentTime - startOffset;
+    }
+
+    this.isPlaying = true;
+
+    this.source.onended = () => {
+      if (this.isPlaying && this.buffer && this.getCurrentTime() >= this.buffer.duration - 0.1) {
+        this.resetPlaybackState();
+      }
+    };
   }
 
   private hasActiveLiveProcessing(): boolean {
@@ -505,8 +644,11 @@ export class AudioEngine {
 
     const wavSampleRate = this.getWavSampleRate(arrayBuffer);
     if (wavSampleRate) {
-      console.log(`[audioEngine] WAV sample rate detected: ${wavSampleRate}Hz`);
-      await this.reinitializeAudioContext(wavSampleRate);
+      // Stability note:
+      // Reinitializing AudioContext to match file sample-rate is fragile in Safari/iOS and can break
+      // native playback (HTMLMediaElement -> MediaElementSourceNode) with InvalidStateError.
+      // Web Audio resamples automatically for playback, and OfflineAudioContext is already sample-rate aware.
+      console.log(`[audioEngine] WAV sample rate detected: ${wavSampleRate}Hz (no AudioContext reinit; WebAudio will resample)`);
     }
 
     if (this.audioContext.state === 'suspended') await this.audioContext.resume();
@@ -552,6 +694,7 @@ export class AudioEngine {
     this.buffer = buffer;
     if (!buffer) {
       this.clearNativePlayback();
+      this.preferNativePlayback = false;
     }
   }
 
@@ -560,6 +703,7 @@ export class AudioEngine {
     if (buffer) {
       this.stopNativePlayback();
       this.buffer = buffer;
+      this.preferNativePlayback = false;
     }
   }
 
@@ -622,9 +766,9 @@ export class AudioEngine {
       this.exitStemPreviewMode();
     }
 
-    if (!this.buffer) return;
-
-    this.stopSource();
+    if (!this.buffer) {
+      throw new Error('No audio buffer loaded');
+    }
 
     if (this.shouldUseNativePlayback()) {
       const startOffset = offset !== undefined ? offset : this.pausedAt;
@@ -632,56 +776,30 @@ export class AudioEngine {
         this.rawElement.currentTime = Math.max(0, Math.min(startOffset, this.rawElement.duration || startOffset));
         try {
           await this.rawElement.play();
+          this.isPlaying = true;
+          this.pausedAt = startOffset;
+          this.startedAt = this.audioContext.currentTime - startOffset;
+          this.stopSource();
+          return;
         } catch (e) {
+          // Important: don't claim "playing" if iOS blocks playback.
+          this.isPlaying = false;
           console.warn('[audioEngine] Native playback failed', e);
+          this.stopNativePlayback();
+          try {
+            this.startBufferPlayback(startOffset);
+            console.info('[audioEngine] Fell back to Web Audio buffer playback after native media playback failed');
+            return;
+          } catch (fallbackError) {
+            console.warn('[audioEngine] Buffer playback fallback failed', fallbackError);
+            throw e;
+          }
         }
-        this.isPlaying = true;
       }
       return;
     }
 
-    // Create buffer source
-    this.source = this.audioContext.createBufferSource();
-    this.source.buffer = this.buffer;
-    this.source.channelCountMode = 'explicit';
-    this.source.channelInterpretation = 'speakers';
-
-    const hasLiveProcessing = this.hasActiveLiveProcessing();
-    const useLiveChain = hasLiveProcessing && !this.processedBuffer;
-
-    if (useLiveChain) {
-      this.applyProcessingConfig(this.currentConfig);
-      this.source.connect(this.masterInput);
-      this.connectAnalyserTap(this.source);
-      this.setMonitorMix(0, 1);
-      this.connectMasterInputToChain();
-    } else {
-      // Raw audio playback
-      // Audio graph: source -> destination (no gain nodes)
-      // Analyzer is a parallel tap, not inline
-      this.source.connect(this.audioContext.destination);
-      this.connectAnalyserTap(this.source);
-      this.setMonitorMix(1, 0);
-    }
-
-    const startOffset = offset !== undefined ? offset : this.pausedAt;
-
-    if (startOffset >= this.buffer.duration) {
-      this.pausedAt = 0;
-      this.source.start(0, 0);
-      this.startedAt = this.audioContext.currentTime;
-    } else {
-    this.source.start(0, startOffset);
-    this.startedAt = this.audioContext.currentTime - startOffset;
-    }
-
-    this.isPlaying = true;
-
-    this.source.onended = () => {
-      if (this.isPlaying && this.buffer && this.getCurrentTime() >= this.buffer.duration - 0.1) {
-        this.resetPlaybackState();
-      }
-    };
+    this.startBufferPlayback(offset !== undefined ? offset : this.pausedAt);
   }
 
   pause() {
@@ -796,6 +914,115 @@ export class AudioEngine {
     return parts.join('|');
   }
 
+  private resolveRenderPath(config: ProcessingConfig): {
+    path: 'custom-dsp' | 'web-audio' | 'native';
+    reason: string;
+  } {
+    if (!this.buffer && this.rawElement && !this.hasActiveLiveProcessing()) {
+      return {
+        path: 'native',
+        reason: 'No processing is active, so the native player keeps playback simplest and fastest.',
+      };
+    }
+
+    const hasPitch = isPitchCorrectionActive(config.pitch);
+    const hasMotion = isMotionReverbActive(config.motionReverb);
+    const hasComplexLimiter = !!(config.limiter?.enabled && (config.limiter.ratio ?? 1) > 4);
+    const hasHeavyChain = [
+      hasPitch,
+      hasMotion,
+      isStereoImagerActive(config.stereoImager),
+      isDynamicEqActive(config.dynamicEq),
+    ].filter(Boolean).length >= 2;
+
+    if (this.masteringQualityMode === 'speed') {
+      return {
+        path: 'custom-dsp',
+        reason: 'Speed mode favors the deterministic custom DSP path for lower overhead.',
+      };
+    }
+
+    if (this.masteringQualityMode === 'fidelity' && (hasPitch || hasMotion || hasComplexLimiter || hasHeavyChain)) {
+      return {
+        path: 'web-audio',
+        reason: 'Fidelity mode prefers native worklets for pitch, motion, and complex limiter behavior.',
+      };
+    }
+
+    if (hasPitch || hasMotion || hasComplexLimiter) {
+      return {
+        path: 'web-audio',
+        reason: 'The active chain includes pitch or time-based processing that benefits from the Web Audio path.',
+      };
+    }
+
+    return {
+      path: 'custom-dsp',
+      reason: this.masteringQualityMode === 'fidelity'
+        ? 'The custom DSP path is sufficient for this chain and keeps rendering deterministic.'
+        : 'Balanced mode uses the custom DSP path for a fast, deterministic render.',
+    };
+  }
+
+  getEngineSnapshot(): AudioEngineSnapshot {
+    const activeFlags = this.getActiveProcessingFlags(this.currentConfig);
+    const chainSignature = this.buildChainSignature(this.currentConfig, activeFlags);
+    const renderPath = this.resolveRenderPath(this.currentConfig);
+    const warnings: string[] = [];
+    const latency = {
+      baseLatencyMs: typeof this.audioContext.baseLatency === 'number' ? Number((this.audioContext.baseLatency * 1000).toFixed(2)) : null,
+      outputLatencyMs: typeof (this.audioContext as AudioContext & { outputLatency?: number }).outputLatency === 'number'
+        ? Number((((this.audioContext as AudioContext & { outputLatency?: number }).outputLatency as number) * 1000).toFixed(2))
+        : null,
+      latencyHint: (this.audioContext as AudioContext & { latencyHint?: string }).latencyHint || null,
+    };
+    const routingGraph = {
+      nodeCount: this.connectionNodes.size,
+      edgeCount: this.connectionEdges.size,
+      pluginCount: this.wamPluginChain.length + localPluginService.getActiveInstances().length,
+      playbackMode: this.shouldUseNativePlayback()
+        ? 'native'
+        : this.processedBuffer || this.buffer
+          ? 'buffer'
+          : 'hybrid',
+      rawPlaybackEnabled: Boolean(this.rawElement),
+      processedPlaybackEnabled: Boolean(this.processedBuffer || this.buffer),
+    } as const;
+
+    if (!this.buffer && !this.rawElement) {
+      warnings.push('No source buffer is loaded.');
+    }
+    if (!Object.values(activeFlags).some(Boolean)) {
+      warnings.push('No processing stages are active.');
+    }
+    if (activeFlags.pitchCorrection && !this.currentConfig.pitch?.enabled) {
+      warnings.push('Pitch correction is flagged active but the configuration is incomplete.');
+    }
+
+    return {
+      sampleRate: this.audioContext.sampleRate,
+      isPlaying: this.isPlaying,
+      isBypassed: this.isBypassed,
+      currentConfig: this.currentConfig,
+      activeFlags,
+      chainSignature,
+      masteringQualityMode: this.masteringQualityMode,
+      recommendedRenderPath: renderPath.path,
+      renderPathReason: renderPath.reason,
+      warnings,
+      latency,
+      routingGraph,
+    };
+  }
+
+  setMasteringQualityMode(mode: MasteringQualityMode): void {
+    this.masteringQualityMode = mode;
+  }
+
+  getMasteringQualityMode(): MasteringQualityMode {
+    return this.masteringQualityMode;
+  }
+
   applyProcessingConfig(config: LiveProcessingConfig) {
     const sanitized = sanitizeProcessingConfig(config as ProcessingConfig) as LiveProcessingConfig;
     // Store current config
@@ -848,7 +1075,17 @@ export class AudioEngine {
         compMakeupGain: active.compression ? ctx.createGain() : undefined,
         outputLimiter: active.limiter ? ctx.createDynamicsCompressor() : undefined,
         outputTrim: active.outputTrim ? ctx.createGain() : undefined,
-        saturation: active.saturation ? advancedDspService.createSaturation(ctx, config.saturation as SaturationConfig) : undefined,
+        saturation: active.saturation
+          ? (() => {
+              const satCfg = config.saturation as SaturationConfig;
+              if (satCfg.type === 'tape' || satCfg.type === 'tube' || satCfg.type === 'console') {
+                const engine = new AnalogSaturationEngine(ctx, satCfg.amount, satCfg.mix ?? 1);
+                engine.setType(satCfg.type);
+                return engine;
+              }
+              return advancedDspService.createSaturation(ctx, satCfg);
+            })()
+          : undefined,
         transientShaper: active.transient ? advancedDspService.createTransientShaper(ctx, config.transientShaper as TransientShaperConfig) : undefined,
         stereoImager: active.stereoImager ? advancedDspService.createStereoImager(ctx, stereoConfig as StereoImagerConfig) : undefined,
         deEsser: active.deEsser ? advancedDspService.createDeEsser(ctx, config.deEsser as DeEsserConfig) : undefined,
@@ -1143,10 +1380,44 @@ export class AudioEngine {
     }
   }
 
-  async renderProcessedAudio(config: ProcessingConfig): Promise<AudioBuffer> {
+  /**
+   * Analyze the loaded vocal buffer through all 6 analysis services and return
+   * an optimized ProcessingConfig that can be fed directly to renderProcessedAudio().
+   *
+   * This is the bridge between the static analysis layer (vocalProfiler,
+   * compressionStackLogic, presenceAirTuning, etc.) and the real DSP engine.
+   * Previously these services produced analysis structs that nothing acted on —
+   * now their recommendations drive the actual processing chain.
+   *
+   * @param genre   Genre context ('hip_hop' | 'trap' | 'pop' | 'rnb' | 'rock' …)
+   * @param buffer  Optional — if omitted, uses the currently loaded buffer
+   */
+  async analyzeVocalForConfig(
+    genre: string = 'hip_hop',
+    buffer?: AudioBuffer,
+    analysisContext?: VocalAnalysisPipelineContext,
+  ): Promise<{
+    config: ProcessingConfig;
+    summary: string[];
+  }> {
+    const targetBuffer = buffer ?? this.originalBuffer ?? this.buffer;
+    if (!targetBuffer) throw new Error('No audio buffer loaded for vocal analysis');
+
+    try {
+      const { runVocalAnalysisPipeline } = await import('./vocal/vocalAnalysisPipeline');
+      const result = await runVocalAnalysisPipeline(targetBuffer, genre, analysisContext);
+      console.log('[audioEngine] Vocal analysis complete:', result.summary);
+      return { config: result.config, summary: result.summary };
+    } catch (err) {
+      console.warn('[audioEngine] Vocal analysis failed — returning empty config:', err);
+      return { config: {}, summary: ['Vocal analysis unavailable'] };
+    }
+  }
+
+  async renderProcessedAudio(config: ProcessingConfig, sourceBufferOverride?: AudioBuffer): Promise<AudioBuffer> {
     const sanitized = sanitizeProcessingConfig(config);
     // CRITICAL: Always process from original to prevent cumulative degradation
-    const sourceBuffer = this.originalBuffer || this.buffer;
+    const sourceBuffer = sourceBufferOverride || this.originalBuffer || this.buffer;
     if (!sourceBuffer) throw new Error("No buffer to render.");
 
     // CRITICAL: If no actual processing is being applied, return original unmodified
@@ -1176,9 +1447,25 @@ export class AudioEngine {
     const sessionId = `render-${Date.now()}`;
     perceptualDiffHarness.startSession(sessionId, beforeMetrics);
 
-    // BETA: Use Web Audio API (custom DSP chain has NaN bug, producing silence on all samples)
-    // TODO: Fix custom DSP processors post-BETA
-    const outputBuffer = await this.renderWithWebAudio(sourceBuffer, sanitized);
+    const useWebAudio = this.resolveRenderPath(sanitized).path === 'web-audio';
+
+    // Use the custom DSP chain for deterministic mastering.
+    // Fall back to the Web Audio render path when we want native worklet-based pitch or motion behavior.
+    const outputBuffer = useWebAudio
+      ? await this.renderWithWebAudio(sourceBuffer, sanitized)
+      : await this.renderWithCustomDSP(sourceBuffer, sanitized);
+    const safety = evaluateRenderSafety(outputBuffer, sanitized.truePeakLimiter?.ceiling ?? -0.3);
+    let clampedSamples = 0;
+    if (safety.gainReductionDb > 0) {
+      const gainLinear = dbToLinear(-safety.gainReductionDb);
+      clampedSamples = applyGainToBuffer(outputBuffer, gainLinear);
+      console.warn('[audioEngine] Render safety trim applied:', {
+        peakDbfs: safety.peakDbfs.toFixed(2),
+        ceilingDbfs: safety.ceilingDbfs.toFixed(2),
+        gainReductionDb: safety.gainReductionDb.toFixed(2),
+        clampedSamples,
+      });
+    }
 
     // PERCEPTUAL DIFF HARNESS: Capture AFTER metrics and analyze
     const afterMetrics = mixAnalysisService.analyzeStaticMetrics(outputBuffer);
@@ -1222,7 +1509,11 @@ export class AudioEngine {
           frequency: b.frequency,
           q: b.q,
           threshold: b.threshold,
-          ratio: b.type === 'compress' ? b.gain : 1.0 / b.gain
+          ratio: Number.isFinite(b.gain)
+            ? (b.mode === 'compress'
+              ? Math.max(1.01, b.gain)
+              : Math.min(0.99, 1.0 / Math.max(b.gain, 1.01)))
+            : 1.0
         }));
 
       if (enabledBands.length > 0) {
@@ -1256,11 +1547,21 @@ export class AudioEngine {
       );
     }
 
+    // Configure pitch correction last among tonal stages so it sees a stable signal.
+    if (config.pitch?.enabled) {
+      chain.setPitchCorrection(config.pitch);
+    }
+
     // Configure Saturation
     if (config.saturation && config.saturation.amount > 0) {
+      const saturationType = config.saturation.type === 'tube'
+        ? 'tube'
+        : config.saturation.type === 'transformer'
+          ? 'transformer'
+          : 'tape';
       chain.setSaturation(
         config.saturation.amount,
-        config.saturation.type || 'tube',
+        saturationType,
         config.saturation.mix ?? 1.0
       );
     }
@@ -1498,8 +1799,15 @@ export class AudioEngine {
     }
 
     if (isSaturationActive(config.saturation)) {
-        const sat = advancedDspService.createSaturation(offlineCtx, config.saturation as SaturationConfig);
-        currentNode.connect(sat.input); currentNode = sat.output;
+        const satCfg = config.saturation as SaturationConfig;
+        if (satCfg.type === 'tape' || satCfg.type === 'tube' || satCfg.type === 'console') {
+            const sat = new AnalogSaturationEngine(offlineCtx, satCfg.amount, satCfg.mix ?? 1);
+            sat.setType(satCfg.type);
+            currentNode.connect(sat.input); currentNode = sat.output;
+        } else {
+            const sat = advancedDspService.createSaturation(offlineCtx, satCfg);
+            currentNode.connect(sat.input); currentNode = sat.output;
+        }
     }
 
     if (isTransientActive(config.transientShaper)) {
@@ -1755,7 +2063,14 @@ export class AudioEngine {
     } catch (e) { console.error('[audioEngine] setCompression failed', e); }
   }
   
-  setSaturation(config?: SaturationConfig) { if (this.liveNodes?.saturation && config) { this.liveNodes.saturation.setDrive(config.amount); this.liveNodes.saturation.setMix(config.mix ?? 1); this.liveNodes.saturation.setMode(config.type); } }
+  setSaturation(config?: SaturationConfig) {
+    if (this.liveNodes?.saturation && config) {
+      const liveMode = config.type === 'transformer' ? 'console' : config.type;
+      this.liveNodes.saturation.setDrive(config.amount);
+      this.liveNodes.saturation.setMix(config.mix ?? 1);
+      this.liveNodes.saturation.setMode(liveMode);
+    }
+  }
   setTransientShaper(config?: TransientShaperConfig) { if (this.liveNodes?.transientShaper && config) { this.liveNodes.transientShaper.setAttack(config.attack); this.liveNodes.transientShaper.setSustain(config.sustain); this.liveNodes.transientShaper.setMix(config.mix); } }
   setStereoImager(config?: StereoImagerConfig) {
     if (!this.liveNodes?.stereoImager || !config) return;
@@ -2132,6 +2447,49 @@ export class AudioEngine {
 
   canPreviewPitchRealtime(): boolean {
     return pitchCorrectionService.canUseRealtime(this.audioContext);
+  }
+
+  /**
+   * Render audio with a mandatory premaster checkpoint gate.
+   *
+   * @param config          - ProcessingConfig to apply (same as renderProcessedAudio).
+   * @param sourceBuffer    - Optional source buffer override. Falls back to the
+   *                          engine's currently-loaded buffer if omitted.
+   * @param checkpoint      - Optional pre-built PremasterCheckpoint. When supplied,
+   *                          it is validated immediately. When omitted, one is built
+   *                          automatically from `sourceBuffer` (or the engine buffer).
+   *
+   * @throws Error if the checkpoint is not approved for mastering, listing all
+   *              blocking reasons so the caller / UI can surface them.
+   *
+   * Existing callers of renderProcessedAudio() are NOT affected — they bypass
+   * this gate entirely, preserving backward compatibility.
+   */
+  async renderMasteredAudio(
+    config: ProcessingConfig,
+    sourceBuffer?: AudioBuffer,
+    checkpoint?: PremasterCheckpoint,
+  ): Promise<AudioBuffer> {
+    const bufferToCheck = sourceBuffer || this.originalBuffer || this.buffer;
+    if (!bufferToCheck) {
+      throw new Error('[audioEngine.renderMasteredAudio] No audio buffer available to master.');
+    }
+
+    let resolvedCheckpoint = checkpoint;
+    if (!resolvedCheckpoint) {
+      console.log('[audioEngine] Building premaster checkpoint automatically...');
+      resolvedCheckpoint = await buildPremasterCheckpoint(bufferToCheck);
+    }
+
+    if (!resolvedCheckpoint.approvedForMastering) {
+      const reasons = resolvedCheckpoint.blockingReasons.join(' | ');
+      throw new Error(
+        `[audioEngine.renderMasteredAudio] Premaster checkpoint blocked mastering. Reasons: ${reasons}`,
+      );
+    }
+
+    console.log(`[audioEngine] Premaster checkpoint ${resolvedCheckpoint.checkpointId} approved. Proceeding with mastering.`);
+    return this.renderProcessedAudio(config, sourceBuffer);
   }
 
   /**

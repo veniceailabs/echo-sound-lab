@@ -9,6 +9,7 @@
 export enum Capability {
   UI_NAVIGATION = 'UI_NAVIGATION',
   TEXT_INPUT = 'TEXT_INPUT',
+  TEXT_INPUT_COMMAND = 'TEXT_INPUT_COMMAND',
   TEXT_INPUT_SAFE = 'TEXT_INPUT_SAFE',
   PARAMETER_ADJUSTMENT = 'PARAMETER_ADJUSTMENT',
   FILE_READ = 'FILE_READ',
@@ -54,6 +55,7 @@ export const DEFAULT_ACC_POLICY_TEMPLATE: AccPolicyTemplateName = 'CO_PILOT';
 export const CAPABILITY_RISK_TIER_MAP: Readonly<Record<Capability, RiskTier>> = Object.freeze({
   [Capability.UI_NAVIGATION]: RiskTier.LOW,
   [Capability.TEXT_INPUT]: RiskTier.MEDIUM,
+  [Capability.TEXT_INPUT_COMMAND]: RiskTier.MEDIUM,
   [Capability.TEXT_INPUT_SAFE]: RiskTier.LOW,
   [Capability.PARAMETER_ADJUSTMENT]: RiskTier.MEDIUM,
   [Capability.FILE_READ]: RiskTier.LOW,
@@ -132,6 +134,7 @@ export type CapabilityGrant = {
   requiresACC: boolean;         // if true, must get active consent before each use
   riskTier?: RiskTier;
   policyTemplate?: AccPolicyTemplateName;
+  grantId?: string;
 };
 
 /**
@@ -153,11 +156,4 @@ export type CapabilityCheckResult = {
   grant?: CapabilityGrant;
   denialReason?: string;
   timestamp: number;
-};
-
-export type {
-  CapabilityScope,
-  CapabilityGrant,
-  CapabilityRequest,
-  CapabilityCheckResult
 };

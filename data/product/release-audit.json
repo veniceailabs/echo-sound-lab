@@ -1,0 +1,105 @@
+{
+  "status": "ok",
+  "audit": {
+    "status": "ok",
+    "schema_version": 1,
+    "created_at": "2026-06-20",
+    "source": "hands-on ESL proof mixing session with Andra",
+    "purpose": "Persist real-session mix decisions so Echo Sound Lab can reuse them through MixVault, benchmark fixtures, and future reference matching.",
+    "global_lessons": [
+      "Do not render a proof from raw vocal and beat at zero unless timing has been validated against the user's reference bounce.",
+      "For session folders with multiple vocal prints, align every candidate to the reference and include intro, bridge, hook, dub, and adlib prints intentionally.",
+      "When vocals feel buried, use automated ducking from the vocal envelope before pushing static vocal gain.",
+      "A midrange pocket duck is not enough for dense rap vocals; use a small full-band duck plus a focused 1-6 kHz duck.",
+      "For Drake/40-style beats, preserve beat weight and depth while keeping consonants forward and section levels even.",
+      "For Navy Blue-style warmth, keep the top end less glossy, preserve intimacy, and use low-mid warmth without masking the vocal.",
+      "Do not call the studio done until a raw vocal has been mixed, mastered, compared to a reference, revised from feedback, and exported cleanly."
+    ],
+    "session_counts": {
+      "total": 2,
+      "approved": 1,
+      "pending": 1
+    },
+    "sessions": [
+      {
+        "id": "stories_about_my_brother_dom_cruz",
+        "status": "approved",
+        "session_root": "/Users/DRA/SESSIONS/\u201cStories About My Brother.\u201d w: Dom Cruz",
+        "final_proof": "/Users/DRA/SESSIONS/\u201cStories About My Brother.\u201d w: Dom Cruz/Bounces/proof_render/stories-about-my-brother-proof-auto-ducked-warm-v2.wav",
+        "latest_candidate": null,
+        "reference_master": null,
+        "accepted_direction": "Warm, intimate, Navy Blue-influenced pass with Drake/40-context vocal-forward ducking.",
+        "metrics": {
+          "integrated_lufs": -12.177432086465158,
+          "true_peak_db": -0.512206130920292,
+          "sample_rate": 48000.0,
+          "channels": 2.0
+        }
+      },
+      {
+        "id": "dont_holdback_kenneth_english",
+        "status": "pending_user_review",
+        "session_root": "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English ",
+        "final_proof": null,
+        "latest_candidate": "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/proof_render/dontHoldback-proof-trainer-v29.wav",
+        "reference_master": "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/dontHoldback. prod. Kenneth English (Final Mix).wav",
+        "accepted_direction": "Pending. Andra's Final Mix is the mandatory gold standard; do not accept a proof until it surpasses that reference by ear.",
+        "metrics": {
+          "integrated_lufs": -16.134069498643335,
+          "true_peak_db": -2.1938985646761786,
+          "sample_rate": 48000.0,
+          "channels": 2.0
+        }
+      }
+    ],
+    "gates": [
+      {
+        "id": "W-01",
+        "title": "Sonic quality does not yet meet the launch promise",
+        "status": "failed",
+        "evidence": "dontHoldback remains pending user review and the ledger still treats the user's Final Mix as the reference standard.",
+        "evidence_paths": [
+          "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/proof_render/dontHoldback-proof-trainer-v29.wav"
+        ]
+      },
+      {
+        "id": "W-02",
+        "title": "Lead and supporting vocals are not independently controlled end to end",
+        "status": "failed",
+        "evidence": "The dontHoldback session contains multiple explicit vocal roles and support layers, but the proof is not yet approved.",
+        "evidence_paths": [
+          "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English "
+        ]
+      },
+      {
+        "id": "W-08",
+        "title": "MixVault learning still needs promotion control",
+        "status": "failed",
+        "evidence": "1 sessions are still pending user review and should not be treated as promoted benchmark data.",
+        "evidence_paths": [
+          "/Users/DRA/SESSIONS/\u201cStories About My Brother.\u201d w: Dom Cruz/Bounces/proof_render/stories-about-my-brother-proof-auto-ducked-warm-v2.wav",
+          "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/proof_render/dontHoldback-proof-trainer-v29.wav"
+        ]
+      },
+      {
+        "id": "W-09",
+        "title": "Session ingestion and alignment still require deterministic manifests",
+        "status": "failed",
+        "evidence": "The ledger records exact session roots, source files, and placements, and the core test suite now verifies repeated-render checksums for both the manifest path and a real ocean_eyes fixture, but dontHoldback remains unfinished and the full benchmark matrix is still incomplete.",
+        "evidence_paths": [
+          "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/dontHoldback. prod. Kenneth English (Final Mix).wav"
+        ]
+      },
+      {
+        "id": "W-16",
+        "title": "Commercial workflow and support are not yet proven at scale",
+        "status": "failed",
+        "evidence": "One session is approved and one is pending; the external-order loop is not yet proven repeatedly.",
+        "evidence_paths": [
+          "/Users/DRA/SESSIONS/\u201cStories About My Brother.\u201d w: Dom Cruz/Bounces/proof_render/stories-about-my-brother-proof-auto-ducked-warm-v2.wav"
+        ]
+      }
+    ],
+    "ledger_path": "/Users/DRA/apps/echo-sound-lab-core/data/learning/andra-proof-sessions-2026-06-20.json"
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "meta": {
+    "id": "master-lease",
+    "title": "Master Lease - Real Estate Management Platform",
+    "duration_target": 55,
+    "style": "professional",
+    "useHybridFeatures": true
+  },
+  "voice": {
+    "provider": "auto",
+    "persona": "professional"
+  },
+  "intro": {
+    "enabled": true,
+    "prompt": "Real estate portfolio, property management dashboard, modern architecture",
+    "style": "cinematic",
+    "duration": 3,
+    "music": true,
+    "effects": "minimal"
+  },
+  "scenes": [
+    {
+      "id": 1,
+      "action": "WAIT",
+      "voiceover": "Welcome to Master Lease. The complete platform for analyzing co-living deals.",
+      "duration": 4
+    },
+    {
+      "id": 2,
+      "action": "CLICK",
+      "targetSelector": "a.btn.primary[href='#analyzer']",
+      "voiceover": "Click Run Deal Analyzer to bring the pricing suite into view.",
+      "duration": 3
+    },
+    {
+      "id": 3,
+      "action": "TYPE",
+      "targetSelector": "#zip",
+      "notes": "94114",
+      "voiceover": "Enter a zip code to load live room comps and whole-home rents.",
+      "duration": 3
+    },
+    {
+      "id": 4,
+      "action": "CLICK",
+      "targetSelector": "#loadZipProfile",
+      "voiceover": "Load the zip profile so the system caches your market assumptions.",
+      "duration": 3
+    },
+    {
+      "id": 5,
+      "action": "CLICK",
+      "targetSelector": "#addRoomComp",
+      "voiceover": "Add room comps to capture micro-level rent detail.",
+      "duration": 3
+    },
+    {
+      "id": 6,
+      "action": "CLICK",
+      "targetSelector": "#addHouseComp",
+      "voiceover": "Add a whole-home comparable to benchmark overall performance.",
+      "duration": 3
+    },
+    {
+      "id": 7,
+      "action": "SCROLL",
+      "targetSelector": ".metrics",
+      "voiceover": "Scroll through the analyzer to see the live profit stack and metrics.",
+      "duration": 4
+    },
+    {
+      "id": 8,
+      "action": "CLICK",
+      "targetSelector": "#jumpListings",
+      "voiceover": "Jump to listings to browse available properties in your target market.",
+      "duration": 3
+    },
+    {
+      "id": 9,
+      "action": "CLICK",
+      "targetSelector": "#submitListing",
+      "voiceover": "Submit a new listing to share with operators and investors.",
+      "duration": 3
+    },
+    {
+      "id": 10,
+      "action": "CLICK",
+      "targetSelector": "#membershipPlan",
+      "voiceover": "Choose a membership tier to unlock full access to deals and comps.",
+      "duration": 3
+    },
+    {
+      "id": 11,
+      "action": "WAIT",
+      "voiceover": "Every action is governed by Action Authority, keeping compliance locked in.",
+      "duration": 3
+    },
+    {
+      "id": 12,
+      "action": "WAIT",
+      "voiceover": "Master Lease. Price rooms with confidence. Pay owners on time. Keep the spread.",
+      "duration": 4
+    }
+  ],
+  "postProduction": {
+    "fadeOutDuration": 1,
+    "credits": {
+      "enabled": true,
+      "text": "Master Lease - Property Management Platform | Powered by Action Authority",
+      "duration": 2
+    }
+  }
+}

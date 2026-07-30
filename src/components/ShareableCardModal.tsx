@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import { ShareableCard } from '../services/venumEngine';
+import { useViewport } from '../context/ViewportContext';
 
 interface ShareableCardModalProps {
   card: ShareableCard | null;
@@ -16,7 +17,9 @@ export const ShareableCardModal: React.FC<ShareableCardModalProps> = ({
   onClose,
   nudgeText,
 }) => {
+  const { isPhone } = useViewport();
   const [copied, setCopied] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
 
   if (!card) return null;
 
@@ -25,6 +28,30 @@ export const ShareableCardModal: React.FC<ShareableCardModalProps> = ({
     link.href = card.imageDataUrl;
     link.download = `echo-${card.type}-${Date.now()}.png`;
     link.click();
+  };
+
+  const canNativeShare = (() => {
+    const nav: any = navigator;
+    return typeof nav !== 'undefined' && typeof nav.share === 'function' && typeof nav.canShare === 'function';
+  })();
+
+  const handleNativeShare = async () => {
+    setShareError(null);
+    try {
+      const blob = await (await fetch(card.imageDataUrl)).blob();
+      const file = new File([blob], `echo-${card.type}-${Date.now()}.png`, { type: blob.type || 'image/png' });
+      const nav: any = navigator;
+      if (!nav.canShare?.({ files: [file] })) {
+        throw new Error('Sharing is not available on this device.');
+      }
+      await nav.share({
+        title: 'Echo Sound Lab',
+        text: card.caption,
+        files: [file],
+      });
+    } catch (e) {
+      setShareError((e as Error).message || 'Share failed');
+    }
   };
 
   const handleCopyCaption = () => {
@@ -45,10 +72,18 @@ export const ShareableCardModal: React.FC<ShareableCardModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-gradient-to-br from-slate-900 to-slate-950 rounded-2xl border border-white/10 shadow-2xl max-w-xl w-full max-h-[95vh] overflow-hidden">
+    <div
+      className={`fixed inset-0 z-[200] flex bg-black/80 backdrop-blur-sm ${
+        isPhone ? 'items-stretch justify-stretch p-0' : 'items-center justify-center p-4'
+      }`}
+    >
+      <div
+        className={`bg-gradient-to-br from-slate-900 to-slate-950 border border-white/10 shadow-2xl w-full overflow-hidden flex flex-col ${
+          isPhone ? 'rounded-none max-w-none h-[100dvh] max-h-none' : 'rounded-2xl max-w-xl max-h-[95vh]'
+        }`}
+      >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between">
+        <div className={`px-4 sm:px-6 py-4 border-b border-white/5 flex items-center justify-between ${isPhone ? 'pt-[calc(18px+var(--esl-safe-top))]' : ''}`}>
           <div>
             <h3 className="text-lg font-bold text-white">{getCardTitle()}</h3>
             {nudgeText && (
@@ -63,37 +98,47 @@ export const ShareableCardModal: React.FC<ShareableCardModalProps> = ({
           </button>
         </div>
 
-        {/* Card Preview */}
-        <div className="p-6">
-          <div className="rounded-xl overflow-hidden border border-white/10 shadow-lg">
-            <img
-              src={card.imageDataUrl}
-              alt={getCardTitle()}
-              className="w-full h-auto"
-            />
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* Card Preview */}
+          <div className="p-4 sm:p-6">
+            <div className="rounded-xl overflow-hidden border border-white/10 shadow-lg">
+              <img
+                src={card.imageDataUrl}
+                alt={getCardTitle()}
+                className="w-full h-auto"
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Caption */}
-        <div className="px-6 pb-4">
-          <div className="bg-white/5 rounded-xl p-4 border border-white/10">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1">
-                <p className="text-white text-sm">{card.caption}</p>
-                <p className="text-amber-400/70 text-xs mt-2">{card.hashtags.join(' ')}</p>
+          {/* Caption */}
+          <div className="px-4 sm:px-6 pb-4">
+            <div className="bg-white/5 rounded-xl p-4 border border-white/10">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1">
+                  <p className="text-white text-sm">{card.caption}</p>
+                  <p className="text-amber-400/70 text-xs mt-2">{card.hashtags.join(' ')}</p>
+                </div>
+                <button
+                  onClick={handleCopyCaption}
+                  className="px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-lg text-xs text-white/70 hover:text-white transition-all flex-shrink-0"
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
               </div>
-              <button
-                onClick={handleCopyCaption}
-                className="px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-lg text-xs text-white/70 hover:text-white transition-all flex-shrink-0"
-              >
-                {copied ? 'Copied!' : 'Copy'}
-              </button>
             </div>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="px-6 pb-6 flex gap-3">
+        <div className={`px-4 sm:px-6 pb-6 flex gap-3 ${isPhone ? 'pb-[calc(18px+var(--esl-safe-bottom))]' : ''}`}>
+          {canNativeShare && (
+            <button
+              onClick={handleNativeShare}
+              className="px-4 py-3 min-h-[44px] bg-white/5 hover:bg-white/10 text-white/70 hover:text-white font-medium rounded-xl border border-white/10 transition-all"
+            >
+              Share
+            </button>
+          )}
           <button
             onClick={handleDownload}
             className="flex-1 px-4 py-3 bg-slate-900 text-orange-400 font-bold rounded-xl shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6),_2px_2px_4px_rgba(255,255,255,0.04)] hover:text-orange-300 active:shadow-[inset_2px_2px_6px_rgba(0,0,0,0.8),inset_-1px_-1px_3px_rgba(255,255,255,0.02)] active:translate-y-[1px] transition-all"
@@ -108,8 +153,16 @@ export const ShareableCardModal: React.FC<ShareableCardModalProps> = ({
           </button>
         </div>
 
+        {shareError && (
+          <div className="px-4 sm:px-6 pb-4">
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-xs text-amber-300">
+              {shareError}
+            </div>
+          </div>
+        )}
+
         {/* Subtle branding */}
-        <div className="px-6 pb-4 text-center">
+        <div className="px-4 sm:px-6 pb-4 text-center">
           <p className="text-[10px] text-white/20">Powered by V.E.N.U.M.</p>
         </div>
       </div>
@@ -135,6 +188,7 @@ export const ShareButton: React.FC<ShareButtonProps> = ({
   size = 'md',
   nudge,
 }) => {
+  const { isTouch } = useViewport();
   const baseClasses = 'font-medium rounded-xl transition-all flex items-center gap-2';
 
   const variantClasses = {
@@ -144,8 +198,8 @@ export const ShareButton: React.FC<ShareButtonProps> = ({
   };
 
   const sizeClasses = {
-    sm: 'px-3 py-1.5 text-xs',
-    md: 'px-4 py-2 text-sm',
+    sm: 'px-3 py-2 min-h-[44px] text-xs',
+    md: 'px-4 py-2.5 min-h-[44px] text-sm',
   };
 
   return (
@@ -161,10 +215,15 @@ export const ShareButton: React.FC<ShareButtonProps> = ({
       </button>
 
       {/* Nudge tooltip */}
-      {nudge && (
+      {nudge && !isTouch && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-amber-500 text-black text-xs font-medium rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
           {nudge}
           <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-amber-500" />
+        </div>
+      )}
+      {nudge && isTouch && (
+        <div className="mt-2 text-[11px] text-amber-300/80">
+          {nudge}
         </div>
       )}
     </div>

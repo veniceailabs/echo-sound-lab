@@ -13,6 +13,7 @@ import { sessionManager } from './sessionManager';
 import ESLCapabilityAdapter from './eslCapabilityAdapter';
 import { withCapability } from './withCapability';
 import { Capability } from './capabilities';
+import { getSecureItem, removeSecureItem, setSecureItem } from './secureStorage';
 
 export class GuardedSessionManager {
   private autosaveTimer: number | null = null;
@@ -145,10 +146,8 @@ export class GuardedSessionManager {
    */
   private async performAutosave(session: SessionState): Promise<void> {
     try {
-      // Delegate to original sessionManager's internal save
-      // (We cannot call public saveSessionNow, so we use the same logic)
       const SESSION_KEY = 'echo-session-v2';
-      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      await setSecureItem(SESSION_KEY, session);
     } catch (error) {
       console.error('[GuardedSessionManager] Failed to persist session:', error);
       throw error;
@@ -159,10 +158,10 @@ export class GuardedSessionManager {
    * Clear session (on revocation or logout).
    * Does NOT require capability check (cleanup operation).
    */
-  clearSession(): void {
+  async clearSession(): Promise<void> {
     const SESSION_KEY = 'echo-session-v2';
     try {
-      localStorage.removeItem(SESSION_KEY);
+      await removeSecureItem(SESSION_KEY);
       this.sessionDataPendingAutosave = null;
       console.log('[GuardedSessionManager] Session cleared');
     } catch (error) {
@@ -173,13 +172,12 @@ export class GuardedSessionManager {
   /**
    * Load session from localStorage (read-only, no capability check needed).
    */
-  loadSession(): SessionState | null {
+  async loadSession(): Promise<SessionState | null> {
     try {
       const SESSION_KEY = 'echo-session-v2';
-      const data = localStorage.getItem(SESSION_KEY);
+      const data = await getSecureItem<SessionState>(SESSION_KEY);
       if (data) {
-        const parsed = JSON.parse(data);
-        return parsed as SessionState;
+        return data;
       }
     } catch (error) {
       console.error('[GuardedSessionManager] Failed to load session:', error);
@@ -192,7 +190,7 @@ export class GuardedSessionManager {
    * No capability check (reading only, and user already has access to their own session).
    */
   async restoreSession(): Promise<SessionState | null> {
-    const session = this.loadSession();
+    const session = await this.loadSession();
     if (session) {
       this.sessionDataPendingAutosave = session;
     }

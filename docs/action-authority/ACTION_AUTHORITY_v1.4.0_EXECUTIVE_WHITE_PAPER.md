@@ -1,4 +1,4 @@
-2# ACTION AUTHORITY v1.4.0
+# ACTION AUTHORITY v1.4.0
 
 ## The Golden Master: A Universal Governance Spine for AI Execution
 

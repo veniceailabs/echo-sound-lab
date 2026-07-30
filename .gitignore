@@ -29,14 +29,3 @@ dist-ssr
 venv/
 echo-bridge/venv/
 backend/venv/
-
-# Build output and deploy snapshots -- these bloated .git to 6.3GB and made
-# pushes fail with HTTP 408.
-dist-electron/
-artifacts/
-public/artifacts/
-echo-bridge/output/
-test-results/
-__pycache__/
-*.pyc
-supabase/.temp/

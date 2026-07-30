@@ -1,0 +1,388 @@
+.ab-testing-panel {
+  background: linear-gradient(135deg, #0a0a14 0%, #15151f 100%);
+  border-radius: 16px;
+  padding: 40px;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.panel-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.panel-header h1 {
+  font-size: 32px;
+  margin: 0 0 8px 0;
+  background: linear-gradient(135deg, #ff00ff 0%, #00ffff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.panel-header p {
+  color: #aaa;
+  margin: 0;
+  font-size: 14px;
+}
+
+/* ============================================================================
+   VARIANTS LIST
+   ============================================================================ */
+
+.variants-list h2 {
+  font-size: 20px;
+  margin: 0 0 20px 0;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+.empty-state p {
+  color: #888;
+  margin: 0;
+}
+
+.variants-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.variant-card {
+  background: linear-gradient(135deg, rgba(20, 20, 40, 0.8) 0%, rgba(30, 30, 60, 0.8) 100%);
+  border: 2px solid rgba(255, 0, 255, 0.2);
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.variant-card:hover {
+  border-color: rgba(255, 0, 255, 0.5);
+  background: linear-gradient(135deg, rgba(30, 20, 50, 0.9) 0%, rgba(40, 30, 70, 0.9) 100%);
+  transform: translateY(-4px);
+  box-shadow: 0 10px 30px rgba(255, 0, 255, 0.2);
+}
+
+.variant-card.active {
+  border-color: rgba(255, 0, 255, 1);
+  background: linear-gradient(135deg, rgba(100, 20, 150, 0.4) 0%, rgba(150, 20, 200, 0.4) 100%);
+}
+
+.variant-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.variant-header h3 {
+  font-size: 16px;
+  margin: 0;
+  color: #fff;
+}
+
+.vote-count {
+  background: rgba(255, 0, 255, 0.2);
+  color: #ff00ff;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.variant-config {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 12px;
+}
+
+.variant-config span {
+  margin: 0 4px;
+}
+
+.variant-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+}
+
+.metric {
+  text-align: center;
+}
+
+.metric label {
+  display: block;
+  font-size: 10px;
+  color: #888;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric value {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #00ffff;
+  font-family: 'Monaco', monospace;
+}
+
+.metric .quality-score {
+  color: #ff00ff;
+}
+
+.variant-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.play-btn,
+.compare-btn {
+  padding: 8px;
+  background: rgba(255, 0, 255, 0.1);
+  border: 1px solid rgba(255, 0, 255, 0.3);
+  color: #ff00ff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.play-btn:hover,
+.compare-btn:hover:not(:disabled) {
+  background: rgba(255, 0, 255, 0.2);
+  border-color: rgba(255, 0, 255, 0.6);
+}
+
+.compare-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.created-at {
+  font-size: 10px;
+  color: #666;
+  text-align: center;
+}
+
+/* ============================================================================
+   COMPARISON VIEW
+   ============================================================================ */
+
+.back-btn {
+  padding: 8px 16px;
+  background: rgba(0, 100, 150, 0.2);
+  border: 1px solid rgba(0, 200, 255, 0.3);
+  color: #00ffff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-bottom: 20px;
+  transition: all 0.2s ease;
+}
+
+.back-btn:hover {
+  background: rgba(0, 100, 150, 0.3);
+  border-color: rgba(0, 200, 255, 0.6);
+}
+
+.comparison-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.comparison-header h2 {
+  font-size: 24px;
+  margin: 0 0 8px 0;
+}
+
+.comparison-header p {
+  color: #aaa;
+  margin: 0;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-bottom: 40px;
+}
+
+.comparison-card {
+  background: rgba(0, 0, 0, 0.3);
+  border: 2px solid rgba(255, 200, 0, 0.2);
+  border-radius: 12px;
+  padding: 30px;
+  position: relative;
+}
+
+.comparison-card.variant-a {
+  border-color: rgba(100, 150, 255, 0.4);
+}
+
+.comparison-card.variant-b {
+  border-color: rgba(255, 100, 200, 0.4);
+}
+
+.card-label {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #666;
+}
+
+.comparison-card h3 {
+  font-size: 20px;
+  margin: 0 0 20px 0;
+}
+
+.config-display {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.config-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.config-item label {
+  color: #999;
+  font-weight: 600;
+}
+
+.config-item value {
+  color: #fff;
+  font-family: 'Monaco', monospace;
+}
+
+.metrics-display {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.metric-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.metric-row span {
+  color: #999;
+}
+
+.metric-row strong {
+  color: #fff;
+  font-family: 'Monaco', monospace;
+}
+
+.comparison-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.listen-btn,
+.vote-btn {
+  padding: 14px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.listen-btn {
+  background: rgba(0, 150, 255, 0.2);
+  color: #00ffff;
+  border: 1px solid rgba(0, 200, 255, 0.3);
+}
+
+.listen-btn:hover {
+  background: rgba(0, 150, 255, 0.3);
+  border-color: rgba(0, 200, 255, 0.6);
+}
+
+.vote-btn {
+  background: rgba(255, 100, 150, 0.2);
+  color: #ff6490;
+  border: 1px solid rgba(255, 100, 150, 0.3);
+}
+
+.vote-btn:hover:not(.voted) {
+  background: rgba(255, 100, 150, 0.3);
+  border-color: rgba(255, 100, 150, 0.6);
+  transform: scale(1.02);
+}
+
+.vote-btn.voted {
+  background: rgba(0, 255, 100, 0.2);
+  color: #00ff64;
+  border-color: rgba(0, 255, 100, 0.5);
+  font-weight: 700;
+}
+
+.vote-count {
+  text-align: center;
+  font-size: 12px;
+  color: #888;
+}
+
+.comparison-results {
+  text-align: center;
+  padding: 20px;
+  background: rgba(0, 255, 100, 0.1);
+  border: 1px solid rgba(0, 255, 100, 0.3);
+  border-radius: 8px;
+}
+
+.vote-result {
+  color: #00ff64;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ab-testing-panel {
+    padding: 24px;
+  }
+
+  .variants-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .comparison-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}

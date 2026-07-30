@@ -7,6 +7,11 @@ import { autoMasteringService } from '../services/autoMastering';
 import { referenceMatchingService } from '../services/referenceMatching';
 import { audioEngine } from '../services/audioEngine';
 import { localPluginService } from '../services/localPluginService';
+import {
+    REFERENCE_WORLD_PROFILES,
+    resolveReferenceWorldPitchPreset,
+    type ReferenceWorldProfileId,
+} from '../services/finishing/referenceWorldEngine';
 import { FULL_STUDIO_WAM_CHAIN, FULL_STUDIO_LOCAL_CHAIN, loadFullStudioSuite, clearFullStudioSuite, getFullStudioState } from '../services/fullStudioSuite';
 import { WAMPluginRack } from './WAMPluginRack';
 import { LocalPluginRack } from './LocalPluginRack';
@@ -52,9 +57,9 @@ export const EnhancedControlPanel: React.FC<EnhancedControlPanelProps> = ({
                                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                         }`}
                     >
-                        {tab === 'plugins' && '🎚️ Plugins'}
+                        {tab === 'plugins' && '🎚�Plugins'}
                         {tab === 'presets' && 'Presets'}
-                        {tab === 'tools' && '⚙️ Tools'}
+                        {tab === 'tools' && '⚙�Tools'}
                         {tab === 'history' && 'History'}
                     </button>
                 ))}
@@ -351,7 +356,7 @@ const ReferenceMatchPanel: React.FC<{ onConfigApply: (config: ProcessingConfig) 
                     Choose Reference File
                     <input
                         type="file"
-                        accept="audio/*"
+                        accept="audio/*,.wav,.wave,.mp3,.m4a,.aac,.flac,.aiff,.aif,.ogg,.caf,.alac"
                         onChange={handleReferenceUpload}
                         className="hidden"
                     />
@@ -390,7 +395,7 @@ const ReferenceMatchPanel: React.FC<{ onConfigApply: (config: ProcessingConfig) 
                             <p className="text-xs font-semibold text-slate-400 mb-2">Recommendations:</p>
                             <ul className="text-xs text-slate-300 space-y-1">
                                 {result.analysis.recommendations.map((rec: string, i: number) => (
-                                    <li key={i}>• {rec}</li>
+                                    <li key={i}>�{rec}</li>
                                 ))}
                             </ul>
                         </div>
@@ -451,7 +456,7 @@ const BatchProcessPanel: React.FC<{ currentConfig: ProcessingConfig }> = ({ curr
                     Choose Files
                     <input
                         type="file"
-                        accept="audio/*"
+                        accept="audio/*,.wav,.wave,.mp3,.m4a,.aac,.flac,.aiff,.aif,.ogg,.caf,.alac"
                         multiple
                         onChange={handleFilesUpload}
                         className="hidden"
@@ -566,6 +571,12 @@ const FullStudioPanel: React.FC<{
         softness: 0.3,
     };
     const clipperConfig = { ...defaultClipperConfig, ...(currentConfig.clipper ?? {}) };
+    const applyReferenceWorldPreset = (profileId: ReferenceWorldProfileId) => {
+        onConfigApply({
+            ...currentConfig,
+            pitch: resolveReferenceWorldPitchPreset(profileId),
+        });
+    };
 
     const refreshLoaded = () => {
         const state = getFullStudioState();
@@ -704,6 +715,30 @@ const FullStudioPanel: React.FC<{
 
                 {pitchConfig.enabled && (
                     <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label className="text-[10px] uppercase tracking-wider text-slate-500">Benchmark Worlds</label>
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                {REFERENCE_WORLD_PROFILES.map((profile) => (
+                                    <button
+                                        key={profile.id}
+                                        onClick={() => applyReferenceWorldPreset(profile.id)}
+                                        className={`rounded-xl border px-3 py-3 text-left transition-all ${
+                                            currentConfig.pitch?.key === profile.pitchPreset.key && currentConfig.pitch?.scale === profile.pitchPreset.scale
+                                                ? 'border-orange-500/60 bg-orange-500/15 text-orange-200'
+                                                : 'border-slate-700/50 bg-slate-900/50 text-slate-200 hover:border-orange-400/40'
+                                        }`}
+                                    >
+                                        <div className="text-sm font-bold">{profile.label}</div>
+                                        <div className="text-[10px] uppercase tracking-wider text-slate-400">
+                                            {profile.aliases[0]}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-[11px] text-slate-500">
+                                These are benchmark lanes, not artist clones. They set the tuning feel for the performance world you want.
+                            </p>
+                        </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1">
                                 <label className="text-[10px] uppercase tracking-wider text-slate-500">Mode</label>
@@ -1065,7 +1100,7 @@ const HistoryPanel: React.FC<{ onConfigApply: (config: ProcessingConfig) => void
                     disabled={!historyManager.canUndo()}
                     className="flex-1 bg-slate-800 text-white py-2 rounded-lg hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
                 >
-                    ← Undo
+                    �Undo
                 </button>
                 <button
                     onClick={handleRedo}

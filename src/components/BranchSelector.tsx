@@ -29,6 +29,7 @@ function BranchSelectorComponent({
             value={activeBranchId || ''}
             disabled={isBusy}
             onChange={(event) => onCheckout(event.target.value)}
+            title="Switch to another deterministic branch."
             className="rounded border border-white/15 bg-slate-900 px-3 py-2 text-sm text-slate-100"
           >
             {branches.map((branch) => (
@@ -42,6 +43,7 @@ function BranchSelectorComponent({
             type="button"
             disabled={isBusy || branches.length < 2}
             onClick={onOpenMerge}
+            title={branches.length < 2 ? 'Create a second branch before merging.' : 'Open the branch merge dialog.'}
             className="rounded border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-[11px] uppercase tracking-[0.12em] text-cyan-200 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Merge
@@ -55,4 +57,3 @@ function BranchSelectorComponent({
 const BranchSelector = React.memo(BranchSelectorComponent);
 
 export default BranchSelector;
-

@@ -3,6 +3,7 @@ import { referenceAnalyzerV2, AdvancedReferenceAnalysis } from '../services/refe
 import { stemMixerService, Stem, StemRole } from '../services/stemMixer';
 import { fxMatchingEngine, FXMatchResult } from '../services/fxMatchingEngine';
 import { audioEngine } from '../services/audioEngine';
+import { createDefaultStemMixState, type StemMixState } from '../services/stemMixer';
 
 interface ReferenceMixingPanelProps {
   onProcessingComplete?: (buffer: AudioBuffer) => void;
@@ -108,6 +109,32 @@ export const ReferenceMixingPanel: React.FC<ReferenceMixingPanelProps> = ({ onPr
     setStems(stemMixerService.getStems());
   }, [referenceAnalysis, stems]);
 
+  const buildMixState = useCallback((currentStems: Stem[]): StemMixState => {
+    const state = createDefaultStemMixState();
+    const pickStem = (...roles: StemRole[]) => currentStems.find((stem) => roles.includes(stem.role)) || null;
+
+    const vocals = pickStem('lead_vocal', 'background_vocal', 'adlibs');
+    const drums = pickStem('drums', 'beat');
+    const bass = pickStem('bass');
+    const other = pickStem('melody', 'fx', 'other');
+
+    const mapStem = (key: keyof StemMixState, stem: Stem | null) => {
+      if (!stem) return;
+      state[key] = {
+        volume_db: stem.volume,
+        pan: stem.pan,
+        mute: stem.muted,
+        solo: stem.solo,
+      };
+    };
+
+    mapStem('vocals', vocals);
+    mapStem('drums', drums);
+    mapStem('bass', bass);
+    mapStem('other', other);
+    return state;
+  }, []);
+
   // Render mixdown
   const renderMixdown = useCallback(async () => {
     if (stems.length === 0) return;
@@ -118,7 +145,8 @@ export const ReferenceMixingPanel: React.FC<ReferenceMixingPanelProps> = ({ onPr
         reverbDecay: referenceAnalysis?.reverb.decayTime ?? 1.5,
         reverbMix: referenceAnalysis?.reverb.wetDryRatio ?? 0.2,
         delayTimeMs: referenceAnalysis?.delay.delayTimeMs ?? 250,
-        delayFeedback: referenceAnalysis?.delay.feedback ?? 0.3
+        delayFeedback: referenceAnalysis?.delay.feedback ?? 0.3,
+        mixState: buildMixState(stems),
       });
 
       const peakDb = 20 * Math.log10(result.peakLevel);
@@ -139,7 +167,7 @@ export const ReferenceMixingPanel: React.FC<ReferenceMixingPanelProps> = ({ onPr
     } finally {
       setIsMixing(false);
     }
-  }, [stems, referenceAnalysis, onProcessingComplete]);
+  }, [stems, referenceAnalysis, onProcessingComplete, buildMixState]);
 
   return (
     <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden">
@@ -176,7 +204,7 @@ export const ReferenceMixingPanel: React.FC<ReferenceMixingPanelProps> = ({ onPr
                 {referenceFile ? referenceFile.name : 'Choose Reference Track'}
                 <input
                   type="file"
-                  accept="audio/*"
+                  accept="audio/*,.wav,.wave,.mp3,.m4a,.aac,.flac,.aiff,.aif,.ogg,.caf,.alac"
                   onChange={handleReferenceUpload}
                   className="hidden"
                 />
@@ -302,7 +330,7 @@ export const ReferenceMixingPanel: React.FC<ReferenceMixingPanelProps> = ({ onPr
                 Add Stems
                 <input
                   type="file"
-                  accept="audio/*"
+                  accept="audio/*,.wav,.wave,.mp3,.m4a,.aac,.flac,.aiff,.aif,.ogg,.caf,.alac"
                   multiple
                   onChange={handleStemUpload}
                   className="hidden"

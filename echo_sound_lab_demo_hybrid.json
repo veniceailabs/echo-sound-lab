@@ -1,0 +1,118 @@
+{
+  "meta": {
+    "id": "echo-sound-lab",
+    "title": "Echo Sound Lab - AI Audio Mastering Studio",
+    "duration_target": 75,
+    "style": "professional",
+    "useHybridFeatures": true
+  },
+  "voice": {
+    "provider": "auto",
+    "persona": "professional"
+  },
+  "intro": {
+    "enabled": true,
+    "prompt": "Professional audio mastering, sound waves, music production studio, technology",
+    "style": "cinematic",
+    "duration": 3,
+    "music": true,
+    "effects": "minimal"
+  },
+  "scenes": [
+    {
+      "id": 1,
+      "action": "WAIT",
+      "voiceover": "Welcome to Echo Sound Lab. AI-powered audio mastering for professional results.",
+      "duration": 4
+    },
+    {
+      "id": 2,
+      "action": "CLICK",
+      "targetSelector": "button[title='Return to Echo Sound Lab']",
+      "voiceover": "The Echo Sound Lab logo takes you back to the main workspace.",
+      "duration": 3
+    },
+    {
+      "id": 3,
+      "action": "CLICK",
+      "targetSelector": "input[type='file']",
+      "voiceover": "Upload your audio file to begin the mastering process.",
+      "duration": 3
+    },
+    {
+      "id": 4,
+      "action": "WAIT",
+      "voiceover": "Echo Sound Lab analyzes your track in real-time, extracting metrics and identifying areas for improvement.",
+      "duration": 4
+    },
+    {
+      "id": 5,
+      "action": "CLICK",
+      "targetSelector": "button:contains('AI_STUDIO')",
+      "voiceover": "Switch to AI Studio mode for intelligent, guided mastering suggestions.",
+      "duration": 3
+    },
+    {
+      "id": 6,
+      "action": "CLICK",
+      "targetSelector": "button:contains('MULTI')",
+      "voiceover": "Multi-stem mode lets you work with individual tracks for precise control.",
+      "duration": 3
+    },
+    {
+      "id": 7,
+      "action": "CLICK",
+      "targetSelector": "button:contains('VIDEO')",
+      "voiceover": "Video Engine generates AI-powered visuals synced to your audio.",
+      "duration": 3
+    },
+    {
+      "id": 8,
+      "action": "CLICK",
+      "targetSelector": "button:contains('SINGLE')",
+      "voiceover": "Return to Single mode for streamlined stereo mastering.",
+      "duration": 3
+    },
+    {
+      "id": 9,
+      "action": "CLICK",
+      "targetSelector": "button[title='View Processing History']",
+      "voiceover": "View your complete processing history to compare and revert changes.",
+      "duration": 3
+    },
+    {
+      "id": 10,
+      "action": "CLICK",
+      "targetSelector": "button[title='Settings']",
+      "voiceover": "Access settings to configure your workflow and preferences.",
+      "duration": 3
+    },
+    {
+      "id": 11,
+      "action": "SCROLL",
+      "targetSelector": ".max-w-7xl",
+      "voiceover": "Scroll through the analysis panel to review spectral data, LUFS, and dynamic range.",
+      "duration": 4
+    },
+    {
+      "id": 12,
+      "action": "WAIT",
+      "voiceover": "Every action is governed by Action Authority, ensuring transparent, auditable processing.",
+      "duration": 4
+    },
+    {
+      "id": 13,
+      "action": "WAIT",
+      "voiceover": "Echo Sound Lab. Professional mastering powered by AI. Your sound, perfected.",
+      "duration": 4
+    }
+  ],
+  "postProduction": {
+    "fadeOutDuration": 1,
+    "credits": {
+      "enabled": true,
+      "text": "Echo Sound Lab - AI Audio Mastering | Powered by Action Authority",
+      "duration": 2
+    }
+  }
+}

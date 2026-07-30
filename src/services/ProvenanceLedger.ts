@@ -18,7 +18,7 @@ export interface ProvenanceLedgerEntry {
   sourceHash: string;
   contextId: string;
   generator: string;
-  assertions: string[];
+  readonly assertions: readonly string[];
 }
 
 export interface ProvenanceAppendInput {

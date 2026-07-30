@@ -21,9 +21,11 @@ describe('ServiceTemplates', () => {
     expect(template).toBeTruthy();
     if (!template) return;
 
-    const manifestIds = template.actions.map(
+    const manifestIds = template.actions
+      .map(
       (action) => String((action.parameters as Record<string, unknown>).manifestId || '')
-    );
+      )
+      .filter(Boolean);
     expect(manifestIds).toEqual([
       'echo.vocal.gate',
       'echo.vocal.eq.proximity',
@@ -37,11 +39,16 @@ describe('ServiceTemplates', () => {
       generatorId: 'test/service-template',
     });
 
-    expect(proposals).toHaveLength(4);
-    for (const proposal of proposals) {
-      expect(proposal.action.type).toBe('ADD_PLUGIN');
-      expect(typeof proposal.proposalId).toBe('string');
-      expect(proposal.proposalId.length).toBeGreaterThan(8);
-    }
+    expect(proposals).toHaveLength(template.actions.length);
+    expect(proposals.map((proposal) => proposal.action.type)).toEqual([
+      'ADD_PLUGIN',
+      'ADD_PLUGIN',
+      'ADD_PLUGIN',
+      'ADD_PLUGIN',
+      'GAIN_ADJUSTMENT',
+      'NORMALIZATION',
+      'LIMITING',
+    ]);
+    expect(proposals.every((proposal) => typeof proposal.proposalId === 'string' && proposal.proposalId.length > 8)).toBe(true);
   });
 });

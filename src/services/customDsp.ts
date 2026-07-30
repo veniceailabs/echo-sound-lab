@@ -1,3 +1,7 @@
+import type { PitchCorrectionConfig } from '../types';
+
+const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
+
 /**
  * Custom DSP Plugins for Echo Sound Lab
  *
@@ -320,11 +324,17 @@ class BiquadFilter {
         gainDb: number,
         q: number
     ): void {
-        const omega = 2 * Math.PI * frequency / sampleRate;
+        // Clamp to safe ranges — prevents NaN/Infinity that would silence the entire chain.
+        // q=0 → alpha=∞ → NaN coefficients after normalization (the original "NaN bug").
+        const safeFreq = Math.max(1, Math.min(frequency, sampleRate * 0.4999));
+        const safeQ    = Math.max(0.001, isFinite(q) ? q : 0.707);
+        const safeGain = isFinite(gainDb) ? gainDb : 0;
+
+        const omega    = 2 * Math.PI * safeFreq / sampleRate;
         const sinOmega = Math.sin(omega);
         const cosOmega = Math.cos(omega);
-        const alpha = sinOmega / (2 * q);
-        const A = Math.pow(10, gainDb / 40); // Amplitude
+        const alpha    = sinOmega / (2 * safeQ);
+        const A        = Math.pow(10, safeGain / 40);
 
         if (type === 'peaking') {
             this.b0 = 1 + alpha * A;
@@ -349,28 +359,40 @@ class BiquadFilter {
             this.a2 = 1 - alpha;
         }
 
-        // Normalize coefficients
+        // Normalize coefficients. Guard against a0=0 (degenerate case at Nyquist).
+        if (!this.a0 || !isFinite(this.a0)) {
+            // Fall back to passthrough — better than silence
+            this.b0 = 1; this.b1 = 0; this.b2 = 0;
+            this.a1 = 0; this.a2 = 0; this.a0 = 1;
+            return;
+        }
         this.b0 /= this.a0;
         this.b1 /= this.a0;
         this.b2 /= this.a0;
         this.a1 /= this.a0;
         this.a2 /= this.a0;
         this.a0 = 1;
+        // Final NaN guard: if any coefficient is non-finite, reset to passthrough
+        if (!isFinite(this.b0) || !isFinite(this.b1) || !isFinite(this.b2) ||
+            !isFinite(this.a1) || !isFinite(this.a2)) {
+            this.b0 = 1; this.b1 = 0; this.b2 = 0;
+            this.a1 = 0; this.a2 = 0;
+        }
     }
 
     public process(buffer: Float32Array): void {
         for (let i = 0; i < buffer.length; i++) {
-            const x0 = buffer[i];
+            const x0 = isFinite(buffer[i]) ? buffer[i] : 0;
             const y0 = this.b0 * x0 + this.b1 * this.x1 + this.b2 * this.x2
                       - this.a1 * this.y1 - this.a2 * this.y2;
 
-            // Update state
+            // Update state — clamp to prevent NaN from poisoning the feedback path
             this.x2 = this.x1;
             this.x1 = x0;
             this.y2 = this.y1;
-            this.y1 = y0;
+            this.y1 = isFinite(y0) ? y0 : 0;
 
-            buffer[i] = y0;
+            buffer[i] = this.y1;
         }
     }
 }
@@ -884,6 +906,7 @@ export class CustomTransientShaper {
  * - Phase-coherent = prevents mono collapse
  */
 export class CustomStereoImager {
+    private sampleRate: number;
     private width: number; // 0-2 (0 = mono, 1 = unchanged, 2 = super wide)
     private lowCutoff: number; // Hz - frequencies below stay mono (bass management)
 
@@ -897,6 +920,7 @@ export class CustomStereoImager {
         width: number = 1.0,
         lowCutoff: number = 200 // Keep bass centered
     ) {
+        this.sampleRate = sampleRate;
         this.width = width;
         this.lowCutoff = lowCutoff;
 
@@ -980,6 +1004,15 @@ export class CustomStereoImager {
 
     public setLowCutoff(freq: number): void {
         this.lowCutoff = freq;
+    }
+
+    public reset(): void {
+        if (this.lowCutoff > 0) {
+            this.lowPassL = new BiquadFilter(this.sampleRate, 'lowpass', this.lowCutoff, 0, 0.707);
+            this.lowPassR = new BiquadFilter(this.sampleRate, 'lowpass', this.lowCutoff, 0, 0.707);
+            this.highPassL = new BiquadFilter(this.sampleRate, 'highpass', this.lowCutoff, 0, 0.707);
+            this.highPassR = new BiquadFilter(this.sampleRate, 'highpass', this.lowCutoff, 0, 0.707);
+        }
     }
 }
 
@@ -1155,6 +1188,12 @@ export class CustomMotionReverb {
         damper: number;
     }> = [];
 
+    // Separate allpass filter state per channel to prevent L/R cross-contamination.
+    // Bug: sharing a single allpass buffer for both channels caused L's writes to corrupt
+    // R's read positions, which in loud material could generate runaway feedback.
+    private allPassFiltersL: Array<{ buffer: Float32Array; index: number }> = [];
+    private allPassFiltersR: Array<{ buffer: Float32Array; index: number }> = [];
+    // Keep the mono path separate too
     private allPassFilters: Array<{
         buffer: Float32Array;
         index: number;
@@ -1187,13 +1226,12 @@ export class CustomMotionReverb {
             });
         }
 
-        // All-pass filter delays (for diffusion)
+        // All-pass filter delays (for diffusion) — create independent copies for mono, L, and R
         const allPassDelays = [225, 556, 441, 341];
         for (const delay of allPassDelays) {
-            this.allPassFilters.push({
-                buffer: new Float32Array(delay),
-                index: 0,
-            });
+            this.allPassFilters.push({ buffer: new Float32Array(delay), index: 0 });
+            this.allPassFiltersL.push({ buffer: new Float32Array(delay), index: 0 });
+            this.allPassFiltersR.push({ buffer: new Float32Array(delay), index: 0 });
         }
     }
 
@@ -1282,10 +1320,10 @@ export class CustomMotionReverb {
             }
             wetR /= this.combFilters.length / 2;
 
-            // All-pass diffusion
-            for (const allPass of this.allPassFilters) {
-                wetL = this.processAllPass(wetL, allPass);
-                wetR = this.processAllPass(wetR, allPass);
+            // All-pass diffusion — use independent L/R state to prevent cross-channel feedback
+            for (let j = 0; j < this.allPassFiltersL.length; j++) {
+                wetL = this.processAllPass(wetL, this.allPassFiltersL[j]);
+                wetR = this.processAllPass(wetR, this.allPassFiltersR[j]);
             }
 
             // Apply modulation
@@ -1317,6 +1355,14 @@ export class CustomMotionReverb {
             comb.damper = 0;
         }
         for (const allPass of this.allPassFilters) {
+            allPass.buffer.fill(0);
+            allPass.index = 0;
+        }
+        for (const allPass of this.allPassFiltersL) {
+            allPass.buffer.fill(0);
+            allPass.index = 0;
+        }
+        for (const allPass of this.allPassFiltersR) {
             allPass.buffer.fill(0);
             allPass.index = 0;
         }
@@ -1960,6 +2006,13 @@ export class BassManagement {
         this.crossoverFreq = freq;
         // Would need to recreate filters - simplified for now
     }
+
+    public reset(): void {
+        this.lowPassL = new BiquadFilter(this.sampleRate, 'lowpass', this.crossoverFreq, 0, 0.707);
+        this.lowPassR = new BiquadFilter(this.sampleRate, 'lowpass', this.crossoverFreq, 0, 0.707);
+        this.highPassL = new BiquadFilter(this.sampleRate, 'highpass', this.crossoverFreq, 0, 0.707);
+        this.highPassR = new BiquadFilter(this.sampleRate, 'highpass', this.crossoverFreq, 0, 0.707);
+    }
 }
 
 /**
@@ -2178,15 +2231,25 @@ export class CustomProcessingChain {
     /**
      * Configure Pitch Correction
      */
-    public setPitchCorrection(amount: number = 0.5, scale: 'major' | 'minor' | 'chromatic' = 'chromatic', key: number = 0): void {
-        this.pitchCorrection = new CustomPitchCorrection(this.sampleRate, amount, scale, key);
+    public setPitchCorrection(config: PitchCorrectionConfig | undefined): void {
+        if (!config?.enabled) {
+            this.pitchCorrection = null;
+            return;
+        }
+        const pitchKeys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
+        const keyIndex = config.key ? pitchKeys.indexOf(config.key) : 0;
+        const normalizedKey = pitchKeys[keyIndex >= 0 ? keyIndex : 0] ?? 'C';
+        const scale = config.scale ?? (config.mode === 'scale' ? 'major' : 'chromatic');
+        const amount = clamp(config.strength / 100, 0, 1);
+        const correctionSpeed = clamp(1 - (config.retuneSpeed / 100), 0, 1);
+        this.pitchCorrection = new CustomPitchCorrection(this.sampleRate, normalizedKey, scale, correctionSpeed, amount);
     }
 
     /**
      * Configure Delay
      */
     public setDelay(time: number = 0.25, feedback: number = 0.3, mix: number = 0.3, damping: number = 0.7): void {
-        this.delay = new CustomDelay(this.sampleRate, time, feedback, mix, damping);
+        this.delay = new CustomDelay(this.sampleRate, time, feedback, mix);
     }
 
     /**

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { audioEngine } from '../services/audioEngine';
 import { customRenderers, extendedVisualizerStyles, VisualizerStyle, RenderParams } from './visualizers';
+import { useViewport } from '../context/ViewportContext';
 
 interface VisualizerProps {
   isPlaying: boolean;
@@ -11,6 +12,7 @@ interface VisualizerProps {
 }
 
 const Visualizer: React.FC<VisualizerProps> = ({ isPlaying, currentTime, buffer, onSeek, onPlayheadUpdate }) => {
+  const { isPhone, isTablet } = useViewport();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number | undefined>(undefined);
   const [hoverTime, setHoverTime] = useState<string | null>(null);
@@ -36,29 +38,45 @@ const Visualizer: React.FC<VisualizerProps> = ({ isPlaying, currentTime, buffer,
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
+    const dprCap = isPhone ? 1.25 : isTablet ? 1.5 : 2;
+    const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
+    let rect = canvas.getBoundingClientRect();
+    const resizeCanvas = () => {
+      rect = canvas.getBoundingClientRect();
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      // Avoid cumulative scaling if resize triggers repeatedly.
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+    };
+    resizeCanvas();
     ctx.imageSmoothingEnabled = false;
 
     const analyser = audioEngine.getAnalyserNode();
-    analyser.smoothingTimeConstant = 0.4; // Low smoothing for responsive feel
+    // Phones need a touch more smoothing for stability; desktop can be snappier.
+    analyser.smoothingTimeConstant = isPhone ? 0.6 : 0.4;
     const freqData = new Uint8Array(analyser.frequencyBinCount);
     const timeData = new Uint8Array(analyser.fftSize);
     spectrumRef.current = [];
     energyRef.current = { low: 0, mid: 0, high: 0, air: 0 };
+    let lastFrameMs = 0;
+    const minFrameMs = isPhone ? 1000 / 30 : 1000 / 60;
+
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(resizeCanvas) : null;
+    ro?.observe(canvas);
+    window.addEventListener('resize', resizeCanvas, { passive: true });
+    window.addEventListener('orientationchange', resizeCanvas);
 
     const renderSpectrum = () => {
       ctx.fillStyle = 'rgb(12,16,24)';
       ctx.fillRect(0, 0, rect.width, rect.height);
 
-      const barWidth = 3;
-      const barGap = 2;
+      const barWidth = isPhone ? 2 : 3;
+      const barGap = isPhone ? 1 : 2;
       const margin = rect.width * 0.03;
       const usableWidth = rect.width - margin * 2;
-      const barCount = Math.floor(usableWidth / (barWidth + barGap));
+      const barCountCap = isPhone ? 160 : isTablet ? 220 : 320;
+      const barCount = Math.min(Math.floor(usableWidth / (barWidth + barGap)), barCountCap);
 
       if (spectrumRef.current.length !== barCount) {
         spectrumRef.current = Array.from({ length: barCount }, () => 0);
@@ -117,6 +135,8 @@ const Visualizer: React.FC<VisualizerProps> = ({ isPlaying, currentTime, buffer,
     const draw = () => {
       animationRef.current = requestAnimationFrame(draw);
       const nowMs = performance.now();
+      if (nowMs - lastFrameMs < minFrameMs) return;
+      lastFrameMs = nowMs;
       analyser.getByteFrequencyData(freqData);
 
       // Update energy bands for all visualizers
@@ -179,8 +199,11 @@ const Visualizer: React.FC<VisualizerProps> = ({ isPlaying, currentTime, buffer,
 
     return () => {
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
+      ro?.disconnect();
+      window.removeEventListener('resize', resizeCanvas);
+      window.removeEventListener('orientationchange', resizeCanvas);
     };
-  }, [isPlaying, buffer, visualizerStyle]);
+  }, [isPlaying, buffer, visualizerStyle, isPhone, isTablet]);
 
 
   useEffect(() => {
@@ -266,9 +289,9 @@ const Visualizer: React.FC<VisualizerProps> = ({ isPlaying, currentTime, buffer,
         </div>
       </div>
 
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/70 rounded-2xl border border-slate-800/60">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-3 sm:px-4 py-2 bg-slate-900/70 rounded-2xl border border-slate-800/60">
         <span className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Visualizer Style</span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
           {visualizerStyles.map((style) => (
             <button
               key={style.value}
@@ -288,10 +311,16 @@ const Visualizer: React.FC<VisualizerProps> = ({ isPlaying, currentTime, buffer,
       </div>
 
       {/* Transport Controls */}
-      <div className="flex items-center justify-center gap-4 px-5 py-3 bg-slate-900/70 rounded-2xl border border-slate-800/60 shadow-[inset_2px_2px_4px_#090e1a,inset_-2px_-2px_4px_#15203a]">
+      <div
+        className={`flex items-center justify-center flex-wrap sm:flex-nowrap gap-2 sm:gap-4 px-3 sm:px-5 py-3 bg-slate-900/70 border border-slate-800/60 shadow-[inset_2px_2px_4px_#090e1a,inset_-2px_-2px_4px_#15203a] ${
+          isPhone
+            ? 'sticky bottom-0 z-20 rounded-t-2xl rounded-b-none pb-[calc(12px+var(--esl-safe-bottom))]'
+            : 'rounded-2xl'
+        }`}
+      >
         <button
           onClick={() => audioEngine.skipBackward(10)}
-          className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/60 hover:border-orange-400/40 transition-all group shadow-[inset_2px_2px_4px_#090e1a,inset_-2px_-2px_4px_#15203a]"
+          className="p-2.5 min-h-[44px] min-w-[44px] rounded-xl bg-slate-900/80 border border-slate-800/60 hover:border-orange-400/40 transition-all group shadow-[inset_2px_2px_4px_#090e1a,inset_-2px_-2px_4px_#15203a]"
           title="Rewind 10s (Shift+←)"
         >
           <svg className="w-4.5 h-4.5 text-slate-300 group-hover:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -300,19 +329,19 @@ const Visualizer: React.FC<VisualizerProps> = ({ isPlaying, currentTime, buffer,
         </button>
         <button
           onClick={() => audioEngine.skipBackward(5)}
-          className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/60 hover:border-orange-400/40 transition-all group shadow-[inset_2px_2px_4px_#090e1a,inset_-2px_-2px_4px_#15203a]"
+          className="p-2.5 min-h-[44px] min-w-[44px] rounded-xl bg-slate-900/80 border border-slate-800/60 hover:border-orange-400/40 transition-all group shadow-[inset_2px_2px_4px_#090e1a,inset_-2px_-2px_4px_#15203a]"
           title="Rewind 5s (←)"
         >
           <svg className="w-4.5 h-4.5 text-slate-300 group-hover:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <div className="px-4 py-2 bg-slate-900/80 rounded-full text-xs text-orange-400 font-mono font-bold min-w-[100px] text-center border border-slate-800/70">
+        <div className="px-4 py-2 min-h-[44px] bg-slate-900/80 rounded-full text-xs text-orange-400 font-mono font-bold min-w-[100px] text-center border border-slate-800/70 flex items-center justify-center">
           {currentMins}:{currentSecs} / {totalMins}:{totalSecs}
         </div>
         <button
           onClick={() => audioEngine.skipForward(5)}
-          className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/60 hover:border-orange-400/40 transition-all group shadow-[inset_2px_2px_4px_#090e1a,inset_-2px_-2px_4px_#15203a]"
+          className="p-2.5 min-h-[44px] min-w-[44px] rounded-xl bg-slate-900/80 border border-slate-800/60 hover:border-orange-400/40 transition-all group shadow-[inset_2px_2px_4px_#090e1a,inset_-2px_-2px_4px_#15203a]"
           title="Forward 5s (→)"
         >
           <svg className="w-4.5 h-4.5 text-slate-300 group-hover:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -321,7 +350,7 @@ const Visualizer: React.FC<VisualizerProps> = ({ isPlaying, currentTime, buffer,
         </button>
         <button
           onClick={() => audioEngine.skipForward(10)}
-          className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800/60 hover:border-orange-400/40 transition-all group shadow-[inset_2px_2px_4px_#090e1a,inset_-2px_-2px_4px_#15203a]"
+          className="p-2.5 min-h-[44px] min-w-[44px] rounded-xl bg-slate-900/80 border border-slate-800/60 hover:border-orange-400/40 transition-all group shadow-[inset_2px_2px_4px_#090e1a,inset_-2px_-2px_4px_#15203a]"
           title="Forward 10s (Shift+→)"
         >
           <svg className="w-4.5 h-4.5 text-slate-300 group-hover:text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">

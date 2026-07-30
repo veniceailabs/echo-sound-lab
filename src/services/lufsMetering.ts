@@ -37,47 +37,65 @@ export const STREAMING_TARGETS: Record<string, StreamingTarget> = {
 class LUFSMeteringService {
     // K-weighting filter coefficients (approximation for web audio)
     private readonly SAMPLE_RATE = 48000;
+    private readonly ABSOLUTE_GATE_LUFS = -70;
+    private readonly RELATIVE_GATE_OFFSET_LU = -10;
+    private readonly CHANNEL_WEIGHTS = [1, 1, 1, 1.41, 1.41];
+
+    private powerToLufs(meanSquare: number): number {
+        if (!Number.isFinite(meanSquare) || meanSquare <= 0) return -Infinity;
+        return -0.691 + 10 * Math.log10(meanSquare);
+    }
+
+    private lufsToPower(lufs: number): number {
+        if (!Number.isFinite(lufs)) return 0;
+        return Math.pow(10, (lufs + 0.691) / 10);
+    }
 
     /**
      * Calculate integrated LUFS for entire audio buffer
      */
     async calculateIntegratedLUFS(buffer: AudioBuffer): Promise<number> {
-        // Pre-filter with high-shelf (simulates K-weighting Stage 1)
-        const filteredBuffer = await this.applyKWeighting(buffer);
+        // Pre-filter with K-weighting across all channels.
+        const filteredChannels = await this.applyKWeighting(buffer);
 
         // Calculate mean square in 400ms blocks (gating blocks)
         const blockSize = Math.floor(0.4 * buffer.sampleRate); // 400ms
-        const overlap = Math.floor(0.3 * buffer.sampleRate);   // 75% overlap
+        const hopSize = Math.max(1, Math.floor(0.1 * buffer.sampleRate)); // 100ms hop, 75% overlap
 
         const blocks: number[] = [];
         let position = 0;
 
-        while (position + blockSize <= filteredBuffer.length) {
+        while (position + blockSize <= buffer.length) {
             let sumSquared = 0;
-            const numChannels = buffer.numberOfChannels;
+            let weightTotal = 0;
 
-            for (let ch = 0; ch < numChannels; ch++) {
-                const channelData = buffer.getChannelData(ch);
+            for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+                const channelData = filteredChannels[ch];
+                const weight = this.CHANNEL_WEIGHTS[ch] ?? 1;
+                if (!channelData) continue;
                 for (let i = position; i < position + blockSize; i++) {
-                    const sample = filteredBuffer[i];
-                    sumSquared += sample * sample;
+                    const sample = channelData[i] ?? 0;
+                    sumSquared += (sample * sample) * weight;
                 }
+                weightTotal += weight;
             }
 
-            const meanSquare = sumSquared / (blockSize * numChannels);
-            blocks.push(meanSquare);
-            position += overlap;
+            if (weightTotal > 0) {
+                const meanSquare = sumSquared / (blockSize * weightTotal);
+                blocks.push(meanSquare);
+            }
+            position += hopSize;
         }
 
         // Apply absolute and relative gating per EBU R128
-        const absoluteThreshold = Math.pow(10, -70 / 10); // -70 LKFS
+        const absoluteThreshold = this.lufsToPower(this.ABSOLUTE_GATE_LUFS);
         const gatedBlocks = blocks.filter(b => b > absoluteThreshold);
 
         if (gatedBlocks.length === 0) return -Infinity;
 
         // Calculate relative threshold
-        const meanGated = gatedBlocks.reduce((a, b) => a + b, 0) / gatedBlocks.length;
-        const relativeThreshold = meanGated * Math.pow(10, -10 / 10); // -10 LU relative
+        const ungatedLufs = this.powerToLufs(gatedBlocks.reduce((a, b) => a + b, 0) / gatedBlocks.length);
+        const relativeThreshold = this.lufsToPower(ungatedLufs + this.RELATIVE_GATE_OFFSET_LU);
 
         // Final gating
         const finalBlocks = gatedBlocks.filter(b => b >= relativeThreshold);
@@ -86,7 +104,7 @@ class LUFSMeteringService {
         const finalMean = finalBlocks.reduce((a, b) => a + b, 0) / finalBlocks.length;
 
         // Convert to LUFS
-        return -0.691 + 10 * Math.log10(finalMean);
+        return this.powerToLufs(finalMean);
     }
 
     /**
@@ -128,22 +146,32 @@ class LUFSMeteringService {
      * Calculate loudness range (LRA) - dynamic range measurement
      */
     async calculateLoudnessRange(buffer: AudioBuffer): Promise<number> {
+        const filteredChannels = await this.applyKWeighting(buffer);
         const blockSize = Math.floor(3.0 * buffer.sampleRate); // 3 second blocks
         const blocks: number[] = [];
 
         for (let position = 0; position + blockSize <= buffer.length; position += blockSize) {
             let sumSquared = 0;
+            let weightTotal = 0;
 
             for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
-                const channelData = buffer.getChannelData(ch);
+                const channelData = filteredChannels[ch];
+                const weight = this.CHANNEL_WEIGHTS[ch] ?? 1;
+                if (!channelData) continue;
                 for (let i = position; i < position + blockSize; i++) {
-                    sumSquared += channelData[i] * channelData[i];
+                    const sample = channelData[i] ?? 0;
+                    sumSquared += (sample * sample) * weight;
                 }
+                weightTotal += weight;
             }
 
-            const meanSquare = sumSquared / (blockSize * buffer.numberOfChannels);
-            const loudness = -0.691 + 10 * Math.log10(meanSquare);
-            blocks.push(loudness);
+            if (weightTotal > 0) {
+                const meanSquare = sumSquared / (blockSize * weightTotal);
+                const loudness = this.powerToLufs(meanSquare);
+                if (Number.isFinite(loudness)) {
+                    blocks.push(loudness);
+                }
+            }
         }
 
         if (blocks.length === 0) return 0;
@@ -160,8 +188,8 @@ class LUFSMeteringService {
      * Apply K-weighting filter (simplified for web audio)
      * This is an approximation - full implementation would require custom DSP
      */
-    private async applyKWeighting(buffer: AudioBuffer): Promise<Float32Array> {
-        const ctx = new OfflineAudioContext(1, buffer.length, buffer.sampleRate);
+    private async applyKWeighting(buffer: AudioBuffer): Promise<Float32Array[]> {
+        const ctx = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
         const source = ctx.createBufferSource();
         source.buffer = buffer;
 
@@ -183,7 +211,7 @@ class LUFSMeteringService {
         source.start(0);
 
         const rendered = await ctx.startRendering();
-        return rendered.getChannelData(0);
+        return Array.from({ length: rendered.numberOfChannels }, (_, idx) => rendered.getChannelData(idx).slice());
     }
 
     /**

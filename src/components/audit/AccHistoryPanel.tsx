@@ -37,7 +37,7 @@ export interface AccHistoryPanelProps {
 
 export function AccHistoryPanel({ auditLog, className = '' }: AccHistoryPanelProps) {
   // Extract ACC events from log
-  // Build map: accId ‚Üí { issued, response, validated, consumed }
+  // Build map: accId ‚Ü{ issued, response, validated, consumed }
   const accMap = new Map<
     string,
     {
@@ -146,17 +146,17 @@ export function AccHistoryPanel({ auditLog, className = '' }: AccHistoryPanelPro
                   <td className="px-4 py-2">
                     {entry.isApproved && (
                       <span className="bg-green-100 text-green-900 px-2 py-1 rounded font-medium text-xs">
-                        ‚úì APPROVED
+                        ‚úAPPROVED
                       </span>
                     )}
                     {entry.isDenied && (
                       <span className="bg-red-100 text-red-900 px-2 py-1 rounded font-medium text-xs">
-                        ‚úó DENIED
+                        ‚úDENIED
                       </span>
                     )}
                     {entry.isExpired && (
                       <span className="bg-yellow-100 text-yellow-900 px-2 py-1 rounded font-medium text-xs">
-                        ‚è± EXPIRED
+                        ‚èEXPIRED
                       </span>
                     )}
                   </td>

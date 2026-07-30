@@ -4,6 +4,9 @@
  */
 
 import { ProcessingConfig, RevisionEntry } from '../types';
+import { getSecureItem, removeSecureItem, setSecureItem } from './secureStorage';
+import { parseSessionInterchangePackage } from './sessionInterchangeService';
+import { parseStudioSessionRecoveryBundleJson } from './studioSessionRecoveryService';
 
 export interface SessionState {
   version: string;
@@ -18,14 +21,52 @@ export interface SessionState {
   revisionLog: RevisionEntry[];
   // WAM plugin state
   activeWamPluginId: string | null;
+  importContext?: SessionImportContext | null;
 }
 
 const SESSION_KEY = 'echo-session-v2';
 const AUTOSAVE_INTERVAL = 5000; // 5 seconds
 
+function isSessionStateLike(value: unknown): value is SessionState {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<SessionState>;
+  return typeof candidate.version === 'string' && typeof candidate.config === 'object' && candidate.config !== null;
+}
+
+function cloneSessionState(session: SessionState): SessionState {
+  return JSON.parse(JSON.stringify(session)) as SessionState;
+}
+
+export type SessionImportSourceKind = 'recovery-bundle' | 'session-package' | 'session-state';
+
+export interface SessionImportEngineSummary {
+  masteringQualityMode: string;
+  recommendedRenderPath: string;
+  chainSignature: string | null;
+  noteCount: number;
+}
+
+export interface SessionImportContext {
+  sourceKind: SessionImportSourceKind;
+  sourceLabel: string;
+  canRestoreAudioLess: boolean;
+  engineSummary: SessionImportEngineSummary | null;
+}
+
+export interface SessionImportEnvelope {
+  session: SessionState;
+  sourceKind: SessionImportSourceKind;
+  sourceLabel: string;
+  canRestoreAudioLess: boolean;
+  importContext: SessionImportContext;
+  sessionPackage: ReturnType<typeof parseSessionInterchangePackage> | null;
+  recoveryBundle: ReturnType<typeof parseStudioSessionRecoveryBundleJson> | null;
+}
+
 class SessionManager {
   private autosaveTimer: number | null = null;
   private currentSession: SessionState | null = null;
+  private lastImportEnvelope: SessionImportEnvelope | null = null;
   private onRestoreCallback: ((session: SessionState) => void) | null = null;
   private saveDebounceTimer: number | null = null;
   private lastSaveTime: number = 0;
@@ -34,8 +75,8 @@ class SessionManager {
   /**
    * Initialize session manager and check for existing session
    */
-  init(): SessionState | null {
-    const saved = this.loadSession();
+  async init(): Promise<SessionState | null> {
+    const saved = await this.loadSession();
     if (saved) {
       this.currentSession = saved;
     }
@@ -51,7 +92,9 @@ class SessionManager {
     }
     this.autosaveTimer = window.setInterval(() => {
       if (this.currentSession) {
-        this.saveSession(this.currentSession);
+        this.saveSession(this.currentSession).catch((error) => {
+          console.warn('[SessionManager] Autosave failed:', error);
+        });
       }
     }, AUTOSAVE_INTERVAL);
   }
@@ -88,11 +131,15 @@ class SessionManager {
 
     if (timeSinceLastSave >= this.MIN_SAVE_INTERVAL) {
       // Save immediately if enough time has passed
-      this.saveSessionNow(this.currentSession);
+      this.saveSessionNow(this.currentSession!).catch((error) => {
+        console.warn('[SessionManager] Immediate save failed:', error);
+      });
     } else {
       // Otherwise, debounce the save
       this.saveDebounceTimer = window.setTimeout(() => {
-        this.saveSessionNow(this.currentSession!);
+        this.saveSessionNow(this.currentSession!).catch((error) => {
+          console.warn('[SessionManager] Debounced save failed:', error);
+        });
       }, this.MIN_SAVE_INTERVAL - timeSinceLastSave);
     }
   }
@@ -100,11 +147,10 @@ class SessionManager {
   /**
    * Save session to localStorage immediately (internal use)
    */
-  private saveSessionNow(session: SessionState) {
+  private async saveSessionNow(session: SessionState) {
     try {
-      localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      await setSecureItem(SESSION_KEY, session);
       this.lastSaveTime = Date.now();
-      // Removed console.log to reduce noise
     } catch (e) {
       console.warn('[SessionManager] Failed to save session:', e);
     }
@@ -113,26 +159,22 @@ class SessionManager {
   /**
    * Save session to localStorage (legacy method)
    */
-  private saveSession(session: SessionState) {
-    this.saveSessionNow(session);
+  private async saveSession(session: SessionState) {
+    await this.saveSessionNow(session);
   }
 
   /**
    * Load session from localStorage
    */
-  private loadSession(): SessionState | null {
+  private async loadSession(): Promise<SessionState | null> {
     try {
-      const data = localStorage.getItem(SESSION_KEY);
-      if (data) {
-        const parsed = JSON.parse(data);
-        // Validate version
-        if (parsed.version === '2.1') {
-          return {
-            ...this.getDefaultSession(),
-            ...parsed,
-            revisionLog: parsed.revisionLog || []
-          } as SessionState;
-        }
+      const data = await getSecureItem<SessionState>(SESSION_KEY);
+      if (data && data.version === '2.1') {
+        return {
+          ...this.getDefaultSession(),
+          ...data,
+          revisionLog: data.revisionLog || []
+        } as SessionState;
       }
     } catch (e) {
       console.warn('[SessionManager] Failed to load session:', e);
@@ -143,9 +185,9 @@ class SessionManager {
   /**
    * Clear saved session
    */
-  clearSession() {
+  async clearSession() {
     try {
-      localStorage.removeItem(SESSION_KEY);
+      await removeSecureItem(SESSION_KEY);
       this.currentSession = null;
       console.log('[SessionManager] Session cleared');
     } catch (e) {
@@ -173,15 +215,81 @@ class SessionManager {
   /**
    * Import session from JSON file
    */
-  async importSession(file: File): Promise<SessionState | null> {
+  async importSessionEnvelope(file: File): Promise<SessionImportEnvelope | null> {
     try {
       const text = await file.text();
-      const session = JSON.parse(text) as SessionState;
+      const parsed = JSON.parse(text) as unknown;
+      const recoveryBundle = parseStudioSessionRecoveryBundleJson(text);
+      const sessionPackage = parseSessionInterchangePackage(text);
+      const importedSession =
+        recoveryBundle?.sessionPackage.session ||
+        sessionPackage?.session ||
+        (isSessionStateLike(parsed) ? parsed : null);
 
-      // Validate
-      if (session.version && session.config) {
+      if (!importedSession) return null;
+
+      const session = {
+        ...this.getDefaultSession(),
+        ...cloneSessionState(importedSession),
+        savedAt: Date.now(),
+        revisionLog: importedSession.revisionLog || [],
+      } as SessionState;
+
+      const sourceKind: SessionImportSourceKind = recoveryBundle
+        ? 'recovery-bundle'
+        : sessionPackage
+          ? 'session-package'
+          : 'session-state';
+      const importContext: SessionImportContext = {
+        sourceKind,
+        sourceLabel:
+          sourceKind === 'recovery-bundle'
+            ? 'ESL recovery bundle'
+            : sourceKind === 'session-package'
+              ? 'ESL session package'
+              : 'Saved session JSON',
+        canRestoreAudioLess: sourceKind !== 'session-state',
+        engineSummary: sessionPackage
+          ? {
+              masteringQualityMode: sessionPackage.engine.masteringQualityMode,
+              recommendedRenderPath: sessionPackage.engine.recommendedRenderPath,
+              chainSignature: sessionPackage.engine.chainSignature,
+              noteCount: sessionPackage.notes.length,
+            }
+          : recoveryBundle
+            ? {
+                masteringQualityMode: recoveryBundle.sessionPackage.engine.masteringQualityMode,
+                recommendedRenderPath: recoveryBundle.sessionPackage.engine.recommendedRenderPath,
+                chainSignature: recoveryBundle.sessionPackage.engine.chainSignature,
+                noteCount: recoveryBundle.notes.length,
+              }
+            : null,
+      };
+      session.importContext = importContext;
+
+      return {
+        session,
+        sourceKind,
+        sourceLabel: importContext.sourceLabel,
+        canRestoreAudioLess: importContext.canRestoreAudioLess,
+        importContext,
+        sessionPackage,
+        recoveryBundle,
+      };
+    } catch (e) {
+      console.error('[SessionManager] Failed to import session envelope:', e);
+      return null;
+    }
+  }
+
+  async importSession(file: File): Promise<SessionState | null> {
+    try {
+      const envelope = await this.importSessionEnvelope(file);
+      if (envelope) {
+        this.lastImportEnvelope = envelope;
+        const { session } = envelope;
         this.currentSession = session;
-        this.saveSession(session);
+        await this.saveSession(session);
         return session;
       }
     } catch (e) {
@@ -195,6 +303,10 @@ class SessionManager {
    */
   getSession(): SessionState | null {
     return this.currentSession;
+  }
+
+  getLastImportEnvelope(): SessionImportEnvelope | null {
+    return this.lastImportEnvelope;
   }
 
   /**
@@ -231,6 +343,7 @@ class SessionManager {
       activeMode: 'SINGLE',
       revisionLog: [],
       activeWamPluginId: null,
+      importContext: null,
     };
   }
 }

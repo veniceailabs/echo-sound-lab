@@ -743,7 +743,7 @@ PILLAR 5: CREATIVE EXCELLENCE (0-10 points)
 Award 9-10 for truly special mixes. Solid creative work: 6-8 points. Average: 4-6 points.
 
 SCORING DISTRIBUTION:
-92-100: MASTERPIECE (Grammy-level work - extremely rare)
+92-100: MASTERPIECE (highest tier - extremely rare)
 85-91: OUTSTANDING (elite professional quality)
 78-84: EXCELLENT (professional release quality)
 70-77: VERY GOOD (solid work, minor refinements optional)

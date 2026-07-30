@@ -112,8 +112,8 @@ export class RecordingManager {
         }
       };
 
-      this.mediaRecorder.onerror = (event: MediaRecorderErrorEvent) => {
-        const error = new Error(`Recording error: ${event.error}`);
+      this.mediaRecorder.onerror = (event: Event) => {
+        const error = new Error(`Recording error: ${event.type}`);
         if (this.config.onError) {
           this.config.onError(error);
         }

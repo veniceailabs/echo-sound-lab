@@ -661,12 +661,29 @@ async def run_audio_separation(ws: WebSocket, payload: Dict[str, Any]) -> None:
 
         # --- STEP 2: VALIDATE INPUT FILE ---
         logger.info(f"  → Checking for file: {filename}")
-        input_file = INPUT_DIR / filename
+        safe_filename = Path(filename).name or f"bridge_input_{int(time.time())}.wav"
+        input_file = INPUT_DIR / safe_filename
+        audio_data = payload.get("audio_data")
+
+        if audio_data:
+            logger.info(f"  → Writing uploaded audio payload to: {input_file}")
+            try:
+                with open(input_file, "wb") as f:
+                    f.write(base64.b64decode(audio_data))
+            except Exception as decode_error:
+                logger.error(f"Failed to decode uploaded audio: {decode_error}")
+                await ws.send_json({
+                    "status": "error",
+                    "message": f"Failed to decode uploaded audio: {decode_error}",
+                    "stage": "file_loading"
+                })
+                return
+
         if not input_file.exists():
             logger.error(f"File not found: {input_file}")
             await ws.send_json({
                 "status": "error",
-                "message": f"File not found: {filename}. Place audio in echo-bridge/input/ directory.",
+                "message": f"File not found: {safe_filename}. Place audio in echo-bridge/input/ directory or provide audio_data.",
                 "stage": "file_loading"
             })
             return
@@ -1367,20 +1384,32 @@ async def run_music_system(websocket, payload):
     """
     request_id = payload.get('request_id')
     voice_path = payload.get('voice_path')
+    take_paths = payload.get('take_paths') or []
+    input_audio = payload.get('input_audio')
+    start_time = payload.get('start_time')
     style = payload.get('style')
     tempo = payload.get('tempo', 120)
     lyrics = payload.get('lyrics', '')
     voice_id = payload.get('voice_id', '')
     instrumental = bool(payload.get('instrumental', False))
+    vocal_texture = (payload.get('vocal_texture') or 'none').strip()
+    enable_honest_tuner = bool(payload.get('enable_honest_tuner', False))
+    tuner_key = (payload.get('tuner_key') or 'C').strip()
+    tuner_scale = (payload.get('tuner_scale') or 'chromatic').strip()
+    tuner_strength = payload.get('tuner_strength', 18)
+    enable_smart_comping = bool(payload.get('enable_smart_comping', False))
+    comping_segment_ms = payload.get('comping_segment_ms', 420)
+    license_tier = (payload.get('license_tier') or '').strip()
+    username = (payload.get('username') or '').strip()
     output_path = payload.get('output_path')
     song_title = (payload.get('song_title') or '').strip()
 
-    if not voice_path or not style or not output_path:
+    if (not voice_path and not input_audio) or not style or not output_path:
         await websocket.send_json({
             "action": "RUN_MUSIC_SYSTEM",
             "request_id": request_id,
             "status": "error",
-            "message": "Missing required args: voice_path, style, output_path"
+            "message": "Missing required args: (voice_path or input_audio), style, output_path"
         })
         return
 
@@ -1402,13 +1431,40 @@ async def run_music_system(websocket, payload):
     cmd = [
         sys.executable,
         str(script_path),
-        "--voice", str(voice_path),
         "--style", str(style),
         "--tempo", str(tempo),
         "--lyrics", str(lyrics),
         "--voice_id", str(voice_id),
         "--output", str(output_target),
     ]
+    if voice_path:
+        cmd.extend(["--voice", str(voice_path)])
+    if isinstance(take_paths, list):
+        for take_path in take_paths:
+            if take_path:
+                cmd.extend(["--take", str(take_path)])
+    if input_audio:
+        cmd.extend(["--input_audio", str(input_audio)])
+    if start_time is not None:
+        cmd.extend(["--start_time", str(start_time)])
+    if license_tier:
+        cmd.extend(["--license_tier", license_tier])
+    if username:
+        cmd.extend(["--username", username])
+    if vocal_texture:
+        cmd.extend(["--vocal_texture", vocal_texture])
+    if enable_honest_tuner:
+        cmd.append("--enable_honest_tuner")
+    if tuner_key:
+        cmd.extend(["--tuner_key", tuner_key])
+    if tuner_scale:
+        cmd.extend(["--tuner_scale", tuner_scale])
+    if tuner_strength is not None:
+        cmd.extend(["--tuner_strength", str(tuner_strength)])
+    if enable_smart_comping:
+        cmd.append("--enable_smart_comping")
+    if comping_segment_ms is not None:
+        cmd.extend(["--comping_segment_ms", str(comping_segment_ms)])
     if instrumental:
         cmd.append("--instrumental")
 

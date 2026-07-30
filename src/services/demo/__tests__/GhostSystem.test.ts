@@ -123,6 +123,7 @@ describe('Ghost System - Integration Tests', () => {
       expect(script.actions).toHaveLength(1);
       expect(script.actions[0].type).toBe('holdButton');
     });
+
   });
 
   describe('Unit Tests: SELECTOR_MAP', () => {

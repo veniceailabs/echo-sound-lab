@@ -6,6 +6,12 @@ import { glassCard, glowButton, secondaryButton, sectionHeader, cn } from '../ut
 import AudioDeviceSelector from './AudioDeviceSelector';
 import { INTEGRATION_FLAGS } from '../config/integrationFlags';
 import { nativeVoiceService } from '../services/nativeVoiceService';
+import {
+  REFERENCE_WORLD_PROFILES,
+  resolveReferenceWorldPitchPreset,
+  type ReferenceWorldProfileId,
+} from '../services/finishing/referenceWorldEngine';
+import { analyzeRecordingIntake, type RecordingIntakeAnalysis } from '../services/recordingIntakeService';
 
 interface SongGenerationWizardProps {
   voiceModels: VoiceModel[];
@@ -60,10 +66,12 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
   const [tunerKey, setTunerKey] = useState('C');
   const [tunerScale, setTunerScale] = useState<'major' | 'minor' | 'chromatic'>('chromatic');
   const [tunerStrength, setTunerStrength] = useState(18);
+  const [referenceWorldId, setReferenceWorldId] = useState<ReferenceWorldProfileId>('balanced_modern_release');
   const [vocalTexture, setVocalTexture] = useState<VocalTexture>('none');
   const [usingRecordedVoice, setUsingRecordedVoice] = useState(false);
   const [selectedInputDeviceId, setSelectedInputDeviceId] = useState('');
   const [channelMode, setChannelMode] = useState<'mono' | 'stereo'>('mono');
+  const [recordingIntake, setRecordingIntake] = useState<RecordingIntakeAnalysis | null>(null);
 
   const [personas, setPersonas] = useState<PersonaPreset[]>([]);
   const [generatedSongs, setGeneratedSongs] = useState<Array<GeneratedSong & { createdAt: number }>>([]);
@@ -89,6 +97,35 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
   useEffect(() => {
     if (recorderError) setError(recorderError.message);
   }, [recorderError]);
+
+  useEffect(() => {
+    if (!audioBlob) {
+      setRecordingIntake(null);
+      return;
+    }
+
+    let cancelled = false;
+    const analyze = async () => {
+      try {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const buffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+        const result = analyzeRecordingIntake(buffer);
+        if (!cancelled) setRecordingIntake(result);
+        if (ctx.state !== 'closed') {
+          await ctx.close();
+        }
+      } catch (err) {
+        console.warn('[SongGenerationWizard] Recording intake analysis failed:', err);
+        if (!cancelled) setRecordingIntake(null);
+      }
+    };
+
+    void analyze();
+    return () => {
+      cancelled = true;
+    };
+  }, [audioBlob]);
 
   useEffect(() => {
     if (!voiceModels.length) {
@@ -214,9 +251,9 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
           outputName,
           vocalTexture,
           enableHonestTuner,
-          tunerKey,
-          tunerScale,
-          tunerStrength,
+          tunerKey: enableHonestTuner ? (resolveReferenceWorldPitchPreset(referenceWorldId).key ?? tunerKey) : tunerKey,
+          tunerScale: enableHonestTuner ? (resolveReferenceWorldPitchPreset(referenceWorldId).scale ?? tunerScale) : tunerScale,
+          tunerStrength: enableHonestTuner ? resolveReferenceWorldPitchPreset(referenceWorldId).strength : tunerStrength,
           enableSmartComping,
           compingSegmentMs,
           compTakeInputs: enableSmartComping ? compTakeFiles : [],
@@ -527,6 +564,22 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
 
                     {voiceFile && <p className="text-xs text-green-300">Uploaded: {voiceFile.name}</p>}
                     {audioUrl && usingRecordedVoice && <audio src={audioUrl} controls className="w-full" />}
+                    {recordingIntake && usingRecordedVoice && (
+                      <div className={`rounded-xl border p-3 text-left text-xs ${
+                        recordingIntake.verdict === 'ready'
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                          : recordingIntake.verdict === 'borderline'
+                            ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                            : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                      }`}>
+                        <div className="font-bold uppercase tracking-wider">Recording Intake</div>
+                        <p className="mt-1">{recordingIntake.summary}</p>
+                        <p className="mt-1 text-[11px] opacity-90">{recordingIntake.recommendation}</p>
+                        <div className="mt-2 text-[11px] uppercase tracking-wider text-slate-300">
+                          Recommended lane: {REFERENCE_WORLD_PROFILES.find((profile) => profile.id === recordingIntake.recommendedWorldId)?.label}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-4">
@@ -610,6 +663,33 @@ const SongGenerationWizard: React.FC<SongGenerationWizardProps> = ({ voiceModels
                       </select>
                       <div className="rounded-xl border border-slate-700 bg-slate-800 px-2 py-2 text-xs text-slate-200">
                         {tunerKey} {tunerScale}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] uppercase tracking-wider text-slate-500">Benchmark Worlds</label>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {REFERENCE_WORLD_PROFILES.map((profile) => (
+                          <button
+                            key={profile.id}
+                            type="button"
+                            onClick={() => {
+                              setReferenceWorldId(profile.id);
+                              setEnableHonestTuner(true);
+                              const preset = resolveReferenceWorldPitchPreset(profile.id);
+                              setTunerKey(preset.key ?? 'C');
+                              setTunerScale(preset.scale ?? 'chromatic');
+                              setTunerStrength(preset.strength);
+                            }}
+                            className={`rounded-xl border px-3 py-3 text-left transition-all ${
+                              referenceWorldId === profile.id
+                                ? 'border-orange-500/60 bg-orange-500/15 text-orange-200'
+                                : 'border-slate-700 bg-slate-800/70 text-slate-200 hover:border-orange-400/40'
+                            }`}
+                          >
+                            <div className="text-sm font-bold">{profile.label}</div>
+                            <div className="text-[10px] uppercase tracking-wider text-slate-400">{profile.aliases[0]}</div>
+                          </button>
+                        ))}
                       </div>
                     </div>
                     <div>

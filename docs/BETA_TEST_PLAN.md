@@ -28,3 +28,16 @@ Test all tabs once, with strongest focus on:
 - Testers complete full loop without blockers
 - No unresolved P0
 - Mixing/mastering quality is acceptable in Single Track and Stems
+
+## Pricing Policy (Beta -> Launch)
+Echo Sound Lab is built for the people. During Beta, all features are free.
+
+Post-launch pricing model:
+- Free Tier: $0 (2 masters/month, standard AI Studio, watermarked video)
+- Artist (Pro): $19/month (unlimited exports, HD engine, Smart Comping, Honest Tuner, Vocal Textures, no watermark)
+- Founding Defender: $199 one-time (lifetime access for v2.x lifecycle)
+
+Safeguards:
+- Founding Defender is time-boxed to the first 500 users.
+- "Lifetime" means non-expiring access within the v2.x product lifecycle.
+- Unlimited is for human creators. Automated/high-frequency headless rendering is prohibited on standard licenses.

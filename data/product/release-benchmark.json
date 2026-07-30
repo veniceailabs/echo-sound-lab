@@ -1,0 +1,43 @@
+{
+  "status": "ok",
+  "benchmark": {
+    "status": "ok",
+    "ledger_path": "/Users/DRA/apps/echo-sound-lab-core/data/learning/andra-proof-sessions-2026-06-20.json",
+    "session_counts": {
+      "total": 2,
+      "evaluated": 2,
+      "passed": 1,
+      "skipped": 0
+    },
+    "average_match_score": 75.505,
+    "results": [
+      {
+        "id": "stories_about_my_brother_dom_cruz",
+        "status": "approved",
+        "reference_path": "/Users/DRA/SESSIONS/\u201cStories About My Brother.\u201d w: Dom Cruz/Bounces/\u201cStories About My Brother.\u201d w Dom Cruz (light mix).wav",
+        "candidate_path": "/Users/DRA/SESSIONS/\u201cStories About My Brother.\u201d w: Dom Cruz/Bounces/proof_render/stories-about-my-brother-proof-auto-ducked-warm-v2.wav",
+        "overall_match_score": 53.99,
+        "lufs_delta": 6.917498652073482,
+        "true_peak_delta": 8.180783241875657,
+        "spectral_match_percent": 99.98319745063782,
+        "dynamic_match_percent": 0.0,
+        "parity_pass": false,
+        "notes": []
+      },
+      {
+        "id": "dont_holdback_kenneth_english",
+        "status": "pending_user_review",
+        "reference_path": "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/dontHoldback. prod. Kenneth English (Final Mix).wav",
+        "candidate_path": "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/proof_render/dontHoldback-proof-trainer-v29.wav",
+        "overall_match_score": 97.02,
+        "lufs_delta": -0.5722164846001014,
+        "true_peak_delta": -0.015672205966392738,
+        "spectral_match_percent": 99.91919100284576,
+        "dynamic_match_percent": 93.61623840519385,
+        "parity_pass": true,
+        "notes": []
+      }
+    ],
+    "generated_from": "real-session-ledger"
+  }
+}

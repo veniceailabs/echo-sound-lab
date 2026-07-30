@@ -1,0 +1,183 @@
+{
+  "profileName": "🪼\"JellyFish.\"🪼 (official)",
+  "sourceFolder": "/Users/DRA/Music/PROJECTS/🪼\"JellyFish.\"🪼 (official)",
+  "generatedAt": "2026-03-13T20:25:25.800Z",
+  "trackCount": 10,
+  "technicalBaseline": {
+    "sampleRates": [
+      48000
+    ],
+    "channelCounts": [
+      2
+    ],
+    "bitDepths": [
+      16,
+      24
+    ]
+  },
+  "overallStats": {
+    "integratedLUFS": {
+      "min": -15.42,
+      "max": -10.33,
+      "avg": -13.13,
+      "median": -13.58
+    },
+    "truePeakDbtp": {
+      "min": -4.04,
+      "max": -0.81,
+      "avg": -2.82,
+      "median": -3.04
+    },
+    "loudnessRangeLu": {
+      "min": 3.5,
+      "max": 8.2,
+      "avg": 6.36,
+      "median": 6.9
+    }
+  },
+  "cohortRule": "Integrated LUFS between -15.5 and -11.5, and true peak at or below -2.0 dBTP.",
+  "referenceBand": {
+    "integratedLUFS": {
+      "min": -15.42,
+      "max": -12.25,
+      "target": -13.81
+    },
+    "truePeakDbtp": {
+      "min": -4.04,
+      "max": -2.41,
+      "target": -3.24
+    },
+    "loudnessRangeLu": {
+      "min": 3.5,
+      "max": 8,
+      "target": 6.11
+    }
+  },
+  "cohortTrackCount": 8,
+  "outliers": [
+    {
+      "file": "1. 🪼\"first of my kind.\"🪼.wav",
+      "integratedLUFS": -10.51,
+      "truePeakDbtp": -0.81,
+      "loudnessRangeLu": 8.2
+    },
+    {
+      "file": "3.🪼\"Plates.\"🪼.wav",
+      "integratedLUFS": -10.33,
+      "truePeakDbtp": -1.44,
+      "loudnessRangeLu": 6.5
+    }
+  ],
+  "catalog": [
+    {
+      "file": "1. 🪼\"first of my kind.\"🪼.wav",
+      "durationSec": 76.701,
+      "sampleRate": 48000,
+      "channelCount": 2,
+      "bitsPerSample": 24,
+      "integratedLUFS": -10.51,
+      "truePeakDbtp": -0.81,
+      "loudnessRangeLu": 8.2,
+      "thresholdDb": -21.08
+    },
+    {
+      "file": "2.🪼“In My Lane.”🪼.wav",
+      "durationSec": 109.68,
+      "sampleRate": 48000,
+      "channelCount": 2,
+      "bitsPerSample": 16,
+      "integratedLUFS": -14.62,
+      "truePeakDbtp": -2.82,
+      "loudnessRangeLu": 3.5,
+      "thresholdDb": -24.78
+    },
+    {
+      "file": "3.🪼\"Plates.\"🪼.wav",
+      "durationSec": 110.48,
+      "sampleRate": 48000,
+      "channelCount": 2,
+      "bitsPerSample": 24,
+      "integratedLUFS": -10.33,
+      "truePeakDbtp": -1.44,
+      "loudnessRangeLu": 6.5,
+      "thresholdDb": -20.39
+    },
+    {
+      "file": "4.🪼“No Cry.” 🪼.wav",
+      "durationSec": 130.92,
+      "sampleRate": 48000,
+      "channelCount": 2,
+      "bitsPerSample": 16,
+      "integratedLUFS": -12.25,
+      "truePeakDbtp": -2.66,
+      "loudnessRangeLu": 6.5,
+      "thresholdDb": -22.35
+    },
+    {
+      "file": "5. 🪼\"Northbound v2e.\"🪼.wav",
+      "durationSec": 148.08,
+      "sampleRate": 48000,
+      "channelCount": 2,
+      "bitsPerSample": 16,
+      "integratedLUFS": -14.29,
+      "truePeakDbtp": -3.69,
+      "loudnessRangeLu": 7.5,
+      "thresholdDb": -24.66
+    },
+    {
+      "file": "6. 🪼“Toronto Nights.”🪼.wav",
+      "durationSec": 111.045,
+      "sampleRate": 48000,
+      "channelCount": 2,
+      "bitsPerSample": 24,
+      "integratedLUFS": -12.36,
+      "truePeakDbtp": -4.04,
+      "loudnessRangeLu": 3.5,
+      "thresholdDb": -22.52
+    },
+    {
+      "file": "7. 🪼\"diamondlife.\"🪼.wav",
+      "durationSec": 135.88,
+      "sampleRate": 48000,
+      "channelCount": 2,
+      "bitsPerSample": 16,
+      "integratedLUFS": -14.16,
+      "truePeakDbtp": -3.25,
+      "loudnessRangeLu": 7.3,
+      "thresholdDb": -24.69
+    },
+    {
+      "file": "8.🪼“Light Below.” 🪼.wav",
+      "durationSec": 146.84,
+      "sampleRate": 48000,
+      "channelCount": 2,
+      "bitsPerSample": 16,
+      "integratedLUFS": -15.42,
+      "truePeakDbtp": -3.76,
+      "loudnessRangeLu": 8,
+      "thresholdDb": -25.69
+    },
+    {
+      "file": "9.🪼“Lord.”🪼w: The V E N I C E Choir.wav",
+      "durationSec": 234.76,
+      "sampleRate": 48000,
+      "channelCount": 2,
+      "bitsPerSample": 16,
+      "integratedLUFS": -14.39,
+      "truePeakDbtp": -3.32,
+      "loudnessRangeLu": 4.8,
+      "thresholdDb": -24.55
+    },
+    {
+      "file": "10.🪼“Midnight Reverie.”🪼.wav",
+      "durationSec": 213.8,
+      "sampleRate": 48000,
+      "channelCount": 2,
+      "bitsPerSample": 16,
+      "integratedLUFS": -13,
+      "truePeakDbtp": -2.41,
+      "loudnessRangeLu": 7.8,
+      "thresholdDb": -23.3
+    }
+  ]
+}

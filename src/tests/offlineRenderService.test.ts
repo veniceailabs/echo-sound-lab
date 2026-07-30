@@ -59,22 +59,32 @@ class FakeOfflineContext implements AudioContextLike {
     return new FakeBufferSourceNode();
   }
 
-  async resume(): Promise<void> {
-    this.state = 'running';
-  }
-
-  async startRendering() {
-    const samples = new Float32Array(44100);
-    for (let i = 0; i < samples.length; i += 1) {
-      samples[i] = Math.sin((i / 44100) * Math.PI * 2 * 220) * 0.15;
-    }
+  state = 'suspended';
+  startRendering = async () => {
+    this.state = 'closed';
     return {
-      duration: 1,
-      length: 44100,
+      length: 44100 * 30,
+      duration: 30,
       sampleRate: 44100,
-      numberOfChannels: 1,
-      getChannelData: () => samples,
+      numberOfChannels: 2,
+      getChannelData: () => new Float32Array(44100 * 30),
+      copyFromChannel: () => {},
+      copyToChannel: () => {},
     };
+  };
+}
+
+class FakeAudioBuffer {
+  length: number;
+  sampleRate: number;
+  _data = new Float32Array(0);
+  constructor(options: { length: number; sampleRate: number }) {
+    this.length = options.length;
+    this.sampleRate = options.sampleRate;
+    this._data = new Float32Array(options.length);
+  }
+  getChannelData() {
+    return this._data;
   }
 }
 
@@ -131,6 +141,10 @@ describe('OfflineRenderService', () => {
       generator: 'human-directed',
       assertions: ['agent.human', 'apl.executed'],
     });
+
+    vi.stubGlobal('Worker', {});
+    vi.stubGlobal('AudioBuffer', FakeAudioBuffer);
+    vi.stubGlobal('URL', {});
 
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : {};

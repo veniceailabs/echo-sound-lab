@@ -1,0 +1,86 @@
+{
+  "paper-perfector": {
+    "url": "https://paper-perfector.vercel.app/",
+    "meta": { "title": "Paper Perfector", "subtitle": "Publication-Ready Documents" },
+    "timeline": [
+      {
+        "action": "WAIT", "duration": 2,
+        "voice": "This is Paper Perfector. Stop fighting with formatting.",
+        "caption": "AUTOMATED DOCUMENT FORMATTING"
+      },
+      {
+        "action": "CLICK", "selector": "button:has-text('Import')", "duration": 1,
+        "voice": "Import markdown, HTML, or messy text instantly."
+      },
+      {
+        "action": "TYPE", "selector": ".editor-content", "value": "Research data indicates...", "duration": 2,
+        "voice": "Draft in a distraction-free environment."
+      },
+      {
+        "action": "CLICK", "selector": ".theme-toggle", "duration": 1,
+        "voice": "Switch themes for late-night research sessions.",
+        "caption": "DARK MODE NATIVE"
+      },
+      {
+        "action": "CLICK", "selector": "button:has-text('Export')", "duration": 4,
+        "voice": "Export perfectly cited, publication-ready PDFs in one click.",
+        "caption": "INSTANT PDF EXPORT"
+      }
+    ]
+  },
+  "data-blaster": {
+    "url": "https://data-blaster.vercel.app/",
+    "meta": { "title": "Data Blaster", "subtitle": "Messy Data -> Board Story" },
+    "timeline": [
+      {
+        "action": "WAIT", "duration": 2,
+        "voice": "Data Blaster turns messy CSVs into board-ready stories.",
+        "caption": "RAW DATA -> EXECUTIVE STORY"
+      },
+      {
+        "action": "CLICK", "selector": "button:has-text('Load Data')", "duration": 2,
+        "voice": "Upload your raw Excel or CSV files securely."
+      },
+      {
+        "action": "CLICK", "selector": ".story-mode-selector", "duration": 2,
+        "voice": "Choose your audience: Admin, Executive, or Technical.",
+        "caption": "ROLE-AWARE NARRATIVES"
+      },
+      {
+        "action": "CLICK", "selector": "button:has-text('Generate')", "duration": 5,
+        "voice": "Instantly generate slides, KPIs, and executive summaries.",
+        "caption": "AUTO-GENERATED INSIGHTS"
+      }
+    ]
+  },
+  "master-lease": {
+    "url": "https://master-lease-for-co-living.vercel.app/",
+    "meta": { "title": "Master Lease", "subtitle": "Co-Living Deal Analyzer" },
+    "timeline": [
+      {
+        "action": "WAIT", "duration": 2,
+        "voice": "Master Lease is the underwriting console for co-living operators.",
+        "caption": "REAL-TIME DEAL ANALYZER"
+      },
+      {
+        "action": "TYPE", "selector": "input[name='zipCode']", "value": "90210", "duration": 1,
+        "voice": "Enter your target market and rents."
+      },
+      {
+        "action": "CLICK", "selector": ".cost-stack-toggle", "duration": 2,
+        "voice": "Calculate utilities, vacancy reserves, and platform fees instantly.",
+        "caption": "ALGORITHMIC COST STACK"
+      },
+      {
+        "action": "SCROLL", "target": ".metrics-panel", "duration": 3,
+        "voice": "See your Net Operating Income and Break-Even rate live.",
+        "caption": "INSTANT PROFIT CALCULATION"
+      },
+      {
+        "action": "CLICK", "selector": ".decision-badge", "duration": 4,
+        "voice": "Know if the deal works before you sign the lease.",
+        "caption": "GREEN LIGHT / RED LIGHT"
+      }
+    ]
+  }
+}

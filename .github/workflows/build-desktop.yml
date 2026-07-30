@@ -6,10 +6,7 @@ name: Build desktop apps
 
 on:
   push:
-    # native-desktop is included so this workflow can run before it reaches
-    # main: pull_request events execute the workflow file from the *base*
-    # branch, so a PR alone cannot trigger a workflow main doesn't have yet.
-    branches: [main, master, native-desktop]
+    branches: [main, master]
     tags: ['v*']
   pull_request:
   workflow_dispatch:

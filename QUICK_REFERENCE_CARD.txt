@@ -1,0 +1,185 @@
+═══════════════════════════════════════════════════════════════════════
+VENICE AI LABS FIVERR LAUNCH - QUICK REFERENCE CARD
+═══════════════════════════════════════════════════════════════════════
+
+🎯 MISSION: 3 gigs live + 1 demo video in 90 minutes
+
+═══════════════════════════════════════════════════════════════════════
+FILE LOCATIONS (copy/paste from these):
+═══════════════════════════════════════════════════════════════════════
+
+Gig 1 Copy:  FIVERR_GIG_1_PAPER_PERFECTOR.txt
+Gig 2 Copy:  FIVERR_GIG_2_MASTER_LEASE.txt
+Gig 3 Copy:  FIVERR_GIG_3_VENICE_FLAGSHIP.txt
+Demo Script: paper_perfector_demo.json
+Recording:   RECORDING_GUIDE.md
+Checklist:   FIVERR_LAUNCH_CHECKLIST.md
+
+═══════════════════════════════════════════════════════════════════════
+DEMO VIDEO TIMING (45 seconds):
+═══════════════════════════════════════════════════════════════════════
+
+0:00 - 0:08   LANDING PAGE       [8 sec]  Intro + problem
+0:08 - 0:15   IMPORT TEXT        [7 sec]  Paste messy text
+0:15 - 0:20   DARK MODE          [5 sec]  Toggle theme
+0:20 - 0:30   ADD CITATION       [10 sec] Show auto-formatting
+0:30 - 0:40   EXPORT PDF         [10 sec] One-click publish
+0:40 - 0:45   CLOSING            [5 sec]  Wrap up + logo
+
+═══════════════════════════════════════════════════════════════════════
+PRICING REFERENCE:
+═══════════════════════════════════════════════════════════════════════
+
+PAPER PERFECTOR:          MASTER LEASE:             VENICE FLAGSHIP:
+├─ $450 (BASIC)           ├─ $295 (BASIC)           ├─ $295 (BASIC)
+├─ $1,850 (STANDARD) ✓    ├─ $1,500 (STANDARD) ✓    ├─ $1,950 (STANDARD) ✓
+└─ $4,500 (PREMIUM)       └─ $3,800 (PREMIUM)       └─ $4,850 (PREMIUM)
+
+(✓ = Most likely to sell)
+
+═══════════════════════════════════════════════════════════════════════
+VOICEOVER LINES (Memorize these):
+═══════════════════════════════════════════════════════════════════════
+
+0:00 "Formatting academic papers is a waste of human intelligence.
+      Stop fighting with Word."
+
+0:08 "This is Paper Perfector. Paste your messy draft directly
+      into the engine."
+
+0:15 "A beautiful, distraction-free environment that respects
+      your eyes."
+
+0:20 "Citations are handled automatically. MLA, APA, Chicago.
+      No errors."
+
+0:30 "One click export. Publication ready. Your data never leaves
+      your device."
+
+0:40 "Venice AI Labs. We build Sovereign Software."
+
+═══════════════════════════════════════════════════════════════════════
+FIVERR SETUP CHECKLIST:
+═══════════════════════════════════════════════════════════════════════
+
+ACCOUNT:
+☐ Fiverr.com login/signup
+☐ Profile photo uploaded
+☐ Bio updated
+☐ Payment method added
+
+GIG 1 (Paper Perfector):
+☐ Title: "I will build a secure React document editor..."
+☐ Category: Programming & Tech > Web Programming > Web Apps
+☐ Description: Copy from FIVERR_GIG_1_PAPER_PERFECTOR.txt
+☐ Tags: React App, Document Editor, EdTech, SaaS MVP, TypeScript
+☐ Pricing: $450 / $1,850 / $4,500
+☐ Delivery: 1 day / 3-5 days / 7-10 days
+☐ Video: Add after recording
+☐ PUBLISH ✓
+
+GIG 2 (Master Lease):
+☐ Title: "I will build a real estate financial analysis dashboard..."
+☐ Category: Programming & Tech > Web Programming > Web Apps
+☐ Description: Copy from FIVERR_GIG_2_MASTER_LEASE.txt
+☐ Tags: Real Estate App, FinTech, Dashboard, React Calculator, PropTech
+☐ Pricing: $295 / $1,500 / $3,800
+☐ Delivery: 1 day / 3-5 days / 7-10 days
+☐ PUBLISH ✓
+
+GIG 3 (Venice Flagship):
+☐ Title: "I will develop a secure, local-first AI application..."
+☐ Category: Programming & Tech > AI Development > AI Applications
+☐ Description: Copy from FIVERR_GIG_3_VENICE_FLAGSHIP.txt
+☐ Tags: Local AI, Sovereign AI, FastAPI, Custom AI, Secure App
+☐ Pricing: $295 / $1,950 / $4,850
+☐ Delivery: 2 days / 5-7 days / 10-14 days
+☐ PUBLISH ✓
+
+═══════════════════════════════════════════════════════════════════════
+RECORDING SETUP CHECKLIST:
+═══════════════════════════════════════════════════════════════════════
+
+BEFORE RECORDING:
+☐ Close all apps except browser + Paper Perfector
+☐ Messy text sample copied to clipboard
+☐ Screen recording setup (QuickTime or OBS)
+☐ Microphone tested
+☐ Phone on silent, do not disturb enabled
+☐ Good lighting on your face (if visible)
+
+RECORDING CHECKLIST:
+☐ 0:00 - Landing page visible, speak opening
+☐ 0:08 - Click into editor, paste text (Cmd+V)
+☐ 0:15 - Find theme toggle, click on/off
+☐ 0:20 - Click citation button, add dummy source
+☐ 0:30 - Click export, show PDF download
+☐ 0:40 - Show logo/text, speak closing
+
+POST-RECORDING:
+☐ Export as .mp4 (1080p)
+☐ File size: ~100-200 MB
+☐ Filename: paper_perfector_demo.mp4
+☐ Location: ~/Desktop or ~/Downloads
+
+═══════════════════════════════════════════════════════════════════════
+UPLOAD & SHARE:
+═══════════════════════════════════════════════════════════════════════
+
+UPLOAD TO FIVERR:
+☐ Edit Gig 1 (Paper Perfector)
+☐ Upload video file (or add Loom link)
+☐ Save & Publish
+
+SHARE ON SOCIAL:
+☐ Twitter: Share all 3 gig URLs
+☐ LinkedIn: Professional post about services
+☐ Discord: If applicable
+☐ Email: 3-5 contacts
+
+═══════════════════════════════════════════════════════════════════════
+EXPECTED RESULTS:
+═══════════════════════════════════════════════════════════════════════
+
+Week 1:   5-10 views per gig
+Week 2:   20-50 views total + 1-2 inquiries
+Week 3:   First order placed (likely Paper Perfector)
+Week 4+:  Deliver, get 5-star review, build momentum
+
+═══════════════════════════════════════════════════════════════════════
+CRITICAL REMINDERS:
+═══════════════════════════════════════════════════════════════════════
+
+✓ Speak with CONFIDENCE (you own this solution)
+✓ Don't rush the voiceover (natural pace)
+✓ Show the action FIRST, then explain (not vice versa)
+✓ Respond to buyer inquiries within 2 hours
+✓ Under-promise, over-deliver (set realistic timelines)
+✓ Don't automate until you close your first deal
+
+═══════════════════════════════════════════════════════════════════════
+YOUR GIG URLS (Fill in after publishing):
+═══════════════════════════════════════════════════════════════════════
+
+Paper Perfector:  https://www.fiverr.com/users/[YOUR_HANDLE]/gigs/[GIG_ID]
+Master Lease:     https://www.fiverr.com/users/[YOUR_HANDLE]/gigs/[GIG_ID]
+Venice Flagship:  https://www.fiverr.com/users/[YOUR_HANDLE]/gigs/[GIG_ID]
+
+Demo Video:       [LOOM_LINK_OR_FIVERR_VIDEO_URL]
+
+═══════════════════════════════════════════════════════════════════════
+TIMELINE (Target 8:00 PM completion):
+═══════════════════════════════════════════════════════════════════════
+
+6:00 PM - Start setup
+6:20 PM - Begin publishing gigs
+6:50 PM - All gigs live
+7:00 PM - Start recording
+7:35 PM - Recording complete, export
+7:45 PM - Upload to Fiverr/Loom
+7:55 PM - Social media share
+8:00 PM - DONE! 🎉
+
+═══════════════════════════════════════════════════════════════════════
+GOOD LUCK! YOU'VE GOT THIS. 🚀
+═══════════════════════════════════════════════════════════════════════

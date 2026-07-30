@@ -1,0 +1,501 @@
+{
+  "status": "ok",
+  "readiness": {
+    "status": "ok",
+    "market_ready": false,
+    "release_stage": "pre_market",
+    "implementation_progress_percent": 67.8,
+    "gate_counts": {
+      "total": 16,
+      "p0_total": 14,
+      "p0_passing": 0,
+      "blocked": 14
+    },
+    "p0_blockers": [
+      "W-01",
+      "W-02",
+      "W-03",
+      "W-04",
+      "W-05",
+      "W-06",
+      "W-07",
+      "W-08",
+      "W-09",
+      "W-10",
+      "W-12",
+      "W-13",
+      "W-14",
+      "W-15"
+    ],
+    "gates": [
+      {
+        "id": "W-01",
+        "title": "Sonic quality is not yet proven at launch standard",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "The documented dontHoldBack proof was rated 4/10 and the current engine has not passed the blind-listening closure gate.",
+        "closure_gate": "At least 80% of qualified blind listeners prefer ESL over the raw/static baseline on launch benchmark songs.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565775+00:00"
+      },
+      {
+        "id": "W-02",
+        "title": "Lead and supporting vocals are not independently proven across the full workflow",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "The current proof flow still builds vocals from shared assembly paths and has previously shown doubled, robotic, and missing-vocal behavior.",
+        "closure_gate": "No unintended duplicate source can enter the sum and every rendered vocal event is traceable to a source region and role.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565923+00:00"
+      },
+      {
+        "id": "W-03",
+        "title": "Vocal riding is not yet musical enough for release",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "Existing proof logic still relies on global ratio correction and the user reported vocals that were too low, too loud, or hard to hear.",
+        "closure_gate": "Lead-vocal short-term level stays in the approved pocket without audible pumping or flattened expression.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565926+00:00"
+      },
+      {
+        "id": "W-04",
+        "title": "Depth and ambience are not yet modeled as a verified send system",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "Current effects are still insert-heavy and have produced dry or phase-like results in proof renders.",
+        "closure_gate": "Blind listeners identify depth without masking and mono fold-down preserves the lead vocal.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565928+00:00"
+      },
+      {
+        "id": "W-05",
+        "title": "Public DSP controls are not fully contract-proven",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "Several profile parameters exist before their causal signal effects are verified by contract tests.",
+        "closure_gate": "Every public control changes the intended signal property and bypass is bit-identical within the defined format.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565930+00:00"
+      },
+      {
+        "id": "W-06",
+        "title": "Mastering is still carrying unresolved mix problems",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "The current workflow can still arrive at mastering before arrangement, balance, and vocal pocket are fully proven.",
+        "closure_gate": "Every job stores an approved premaster checkpoint with headroom before mastering begins.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565931+00:00"
+      },
+      {
+        "id": "W-07",
+        "title": "Reference matching remains too metric-driven",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "A high objective match has already coexisted with a poor human rating, so the current score is not a readiness proof.",
+        "closure_gate": "Automated quality scores correlate with panel preference and low-confidence results require human review.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565933+00:00"
+      },
+      {
+        "id": "W-08",
+        "title": "MixVault learning is not yet quarantined enough for production",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "The learning store does not yet enforce consent, quarantine, rollback, and promotion stages as hard gates.",
+        "closure_gate": "Only approved examples enter the production index and every learned item is traceable, reversible, and consented.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565935+00:00"
+      },
+      {
+        "id": "W-09",
+        "title": "Session ingestion still needs deterministic manifest guarantees",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "The manifest path now has repeated-render checksum verification in both unit coverage and a real ocean_eyes benchmark fixture, but the closure gate is still open because the full benchmark matrix is not yet enforced.",
+        "closure_gate": "A deterministic session manifest reproduces the approved arrangement sample-accurately across repeated renders.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565937+00:00"
+      },
+      {
+        "id": "W-10",
+        "title": "Backend test coverage is still too shallow for release",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "The backend still lacks the breadth of Python unit, integration, golden-audio, and concurrency tests required by the plan.",
+        "closure_gate": "CI blocks merges on DSP contract failures, timing drift, NaN/Inf, clipping, nondeterminism, API regressions, and benchmark degradation.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565939+00:00"
+      },
+      {
+        "id": "W-11",
+        "title": "Frontend breadth exceeds verified depth",
+        "severity": "P1",
+        "status": "failed",
+        "evidence": "The UI still exposes many partially connected surfaces, so some visible controls remain analysis-only or under-verified.",
+        "closure_gate": "Every production-visible action has an end-to-end test and auditable effect, or is clearly labeled analysis-only.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565940+00:00"
+      },
+      {
+        "id": "W-12",
+        "title": "Preview and offline render parity is not yet demonstrated",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "The preview and offline render stacks are still separate enough that equivalent names do not guarantee equivalent output.",
+        "closure_gate": "Preview/export difference stays below defined tolerances for gain, timing, EQ, dynamics, and automation.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565942+00:00"
+      },
+      {
+        "id": "W-13",
+        "title": "Production infrastructure is incomplete or inconsistently documented",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "The release story still contains mismatch between claimed readiness and verified deployment surface.",
+        "closure_gate": "A clean production smoke test completes signup, upload, payment authorization, render, revision, export, deletion, and refund handling.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565944+00:00"
+      },
+      {
+        "id": "W-14",
+        "title": "Security and privacy controls still need production verification",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "Local-path intake and partial admin protection remain higher-risk than the launch standard requires.",
+        "closure_gate": "Independent security review and automated tenant-isolation tests pass with no critical or high findings.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565946+00:00"
+      },
+      {
+        "id": "W-15",
+        "title": "Legal, rights, and consent rules are not yet enforced as product gates",
+        "severity": "P0",
+        "status": "failed",
+        "evidence": "Reference ingestion and MixVault learning still need technically enforced consent and deletion boundaries.",
+        "closure_gate": "Counsel-approved policies match actual behavior and consent plus deletion are technically enforced and tested.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565947+00:00"
+      },
+      {
+        "id": "W-16",
+        "title": "Commercial workflow and support are not yet proven end to end",
+        "severity": "P1",
+        "status": "failed",
+        "evidence": "Billing, revisions, packaging, and client intake exist, but the complete external-order loop has not been proven repeatedly.",
+        "closure_gate": "Ten consecutive external beta orders complete without manual database repair or lost audio.",
+        "owner": "core",
+        "updated_at": "2026-06-25T19:49:06.565949+00:00"
+      }
+    ],
+    "market_readiness_plan": {
+      "status": "pre_market",
+      "owner": "Andra / itsjustdra",
+      "system": "Echo Sound Lab core backend",
+      "plan_document_path": "/Users/DRA/apps/echo-sound-lab-core/docs/ESL_MARKET_READINESS_PLAN.md",
+      "release_promise": [
+        "Technically safe stereo mastering",
+        "Constrained multitrack mixing for organized sessions",
+        "Reference-assisted workflow with honest A/B comparison",
+        "Human-review-backed service when confidence is low"
+      ],
+      "weaknesses": [
+        {
+          "id": "W-01",
+          "severity": "P0",
+          "title": "Sonic quality is not yet proven",
+          "summary": "Proof renders do not consistently outperform a human reference."
+        },
+        {
+          "id": "W-02",
+          "severity": "P0",
+          "title": "Lead and supporting vocals are not independently controlled",
+          "summary": "Vocal role routing can collapse into shared paths and produce doubled or buried vocals."
+        },
+        {
+          "id": "W-03",
+          "severity": "P0",
+          "title": "Vocal riding is too global",
+          "summary": "A single RMS target does not hold a rap vocal in the pocket across a full song."
+        },
+        {
+          "id": "W-04",
+          "severity": "P0",
+          "title": "Ambience is not a verified send system",
+          "summary": "Depth still depends too much on inserts and fixed delays."
+        },
+        {
+          "id": "W-05",
+          "severity": "P0",
+          "title": "Exposed DSP controls are not fully contract-proven",
+          "summary": "Named controls can exist before their audible effect is verified."
+        },
+        {
+          "id": "W-06",
+          "severity": "P0",
+          "title": "Mastering is still being asked to rescue mix defects",
+          "summary": "Mastering can be reached before arrangement and vocal pocket are settled."
+        },
+        {
+          "id": "W-07",
+          "severity": "P0",
+          "title": "Reference matching is too metric-driven",
+          "summary": "Similarity scores can coexist with poor human ratings."
+        },
+        {
+          "id": "W-08",
+          "severity": "P0",
+          "title": "MixVault learning can absorb weak examples",
+          "summary": "The learning store needs stricter quarantine and promotion rules."
+        },
+        {
+          "id": "W-09",
+          "severity": "P0",
+          "title": "Session ingestion and alignment are still fragile",
+          "summary": "The system must preserve the intended arrangement exactly."
+        },
+        {
+          "id": "W-10",
+          "severity": "P0",
+          "title": "Backend test coverage is still too shallow",
+          "summary": "The core needs stronger Python and golden-audio coverage."
+        },
+        {
+          "id": "W-11",
+          "severity": "P1",
+          "title": "Frontend breadth exceeds verified depth",
+          "summary": "Too many surfaces can look complete before they are fully wired."
+        },
+        {
+          "id": "W-12",
+          "severity": "P0",
+          "title": "Preview and export can diverge",
+          "summary": "Web audio and offline rendering are separate systems."
+        },
+        {
+          "id": "W-13",
+          "severity": "P0",
+          "title": "Production infrastructure is not fully proven",
+          "summary": "Readiness claims must match the real deployment surface."
+        },
+        {
+          "id": "W-14",
+          "severity": "P0",
+          "title": "Security and privacy require production verification",
+          "summary": "Path validation, tenant isolation, and deletion behavior need hard proof."
+        },
+        {
+          "id": "W-15",
+          "severity": "P0",
+          "title": "Legal, rights, and consent rules are not yet enforced enough",
+          "summary": "Reference ingestion and learning need explicit consent boundaries."
+        },
+        {
+          "id": "W-16",
+          "severity": "P1",
+          "title": "Commercial workflow and support are unproven",
+          "summary": "Billing, revisions, packaging, and fulfillment are not yet proven as a full journey."
+        }
+      ],
+      "weakness_counts": {
+        "total": 16,
+        "p0": 14,
+        "p1": 2
+      },
+      "launch_scope": {
+        "in_scope": [
+          "Stereo mastering from WAV, AIFF, and FLAC",
+          "Organized multitrack mixing for constrained roles",
+          "Hip-hop and R&B as validated launch genres",
+          "Reference-assisted analysis without proprietary-chain claims",
+          "Level-matched A/B proof and engineering reports",
+          "Human review fallback when confidence is low"
+        ],
+        "out_of_scope": [
+          "Arbitrary DAW project import",
+          "Automatic comping, pitch correction, or timing repair without approval",
+          "Full replacement for Logic, Pro Tools, or a human engineer",
+          "Guaranteed Grammy-level results",
+          "Training on customer audio without opt-in",
+          "Unlimited genres before genre-specific validation exists"
+        ]
+      },
+      "phases": [
+        {
+          "id": 0,
+          "name": "Truth reset",
+          "exit_gate": "No readiness claim contradicts the gate dashboard."
+        },
+        {
+          "id": 1,
+          "name": "Deterministic source and session integrity",
+          "exit_gate": "Benchmark sessions reproduce without missing or shifted audio."
+        },
+        {
+          "id": 2,
+          "name": "Rebuild the vocal engine",
+          "exit_gate": "Vocal benchmark passes intelligibility and level-consistency tests."
+        },
+        {
+          "id": 3,
+          "name": "Rebuild mix-bus intelligence",
+          "exit_gate": "No clipping, pumping, or phase instability across the benchmark matrix."
+        },
+        {
+          "id": 4,
+          "name": "Rebuild mastering as a separate approval stage",
+          "exit_gate": "Masters translate and win blind preference tests."
+        },
+        {
+          "id": 5,
+          "name": "Reference intelligence and confidence",
+          "exit_gate": "High ESL scores predict human preference on held-out songs."
+        },
+        {
+          "id": 6,
+          "name": "MixVault learning safety",
+          "exit_gate": "Every recommendation can identify and roll back its supporting examples."
+        },
+        {
+          "id": 7,
+          "name": "One real frontend workflow",
+          "exit_gate": "New beta users complete the workflow without developer help."
+        },
+        {
+          "id": 8,
+          "name": "Backend production hardening",
+          "exit_gate": "Load and disaster-recovery tests pass without lost jobs."
+        },
+        {
+          "id": 9,
+          "name": "Security, privacy, legal, and billing",
+          "exit_gate": "Security review passes and policies match behavior."
+        },
+        {
+          "id": 10,
+          "name": "Closed beta and market validation",
+          "exit_gate": "At least 30 completed songs and 80% successful delivery."
+        },
+        {
+          "id": 11,
+          "name": "Controlled commercial launch",
+          "exit_gate": "Four consecutive weeks meet quality, reliability, and support targets."
+        }
+      ],
+      "definition_of_market_ready": [
+        "Preserve intended performance and arrangement decisions",
+        "Make the majority of validated songs sound clearly better",
+        "Keep vocal results stable, intelligible, dimensional, and artifact-free",
+        "Ensure preview and export agree",
+        "Correlate automated confidence with human preference",
+        "Prevent bad results from entering production learning",
+        "Support safe upload, payment, processing, revision, approval, download, and deletion",
+        "Survive retries, worker failures, and browser closure"
+      ]
+    },
+    "audit": {
+      "status": "ok",
+      "schema_version": 1,
+      "created_at": "2026-06-20",
+      "source": "hands-on ESL proof mixing session with Andra",
+      "purpose": "Persist real-session mix decisions so Echo Sound Lab can reuse them through MixVault, benchmark fixtures, and future reference matching.",
+      "global_lessons": [
+        "Do not render a proof from raw vocal and beat at zero unless timing has been validated against the user's reference bounce.",
+        "For session folders with multiple vocal prints, align every candidate to the reference and include intro, bridge, hook, dub, and adlib prints intentionally.",
+        "When vocals feel buried, use automated ducking from the vocal envelope before pushing static vocal gain.",
+        "A midrange pocket duck is not enough for dense rap vocals; use a small full-band duck plus a focused 1-6 kHz duck.",
+        "For Drake/40-style beats, preserve beat weight and depth while keeping consonants forward and section levels even.",
+        "For Navy Blue-style warmth, keep the top end less glossy, preserve intimacy, and use low-mid warmth without masking the vocal.",
+        "Do not call the studio done until a raw vocal has been mixed, mastered, compared to a reference, revised from feedback, and exported cleanly."
+      ],
+      "session_counts": {
+        "total": 2,
+        "approved": 1,
+        "pending": 1
+      },
+      "sessions": [
+        {
+          "id": "stories_about_my_brother_dom_cruz",
+          "status": "approved",
+          "session_root": "/Users/DRA/SESSIONS/\u201cStories About My Brother.\u201d w: Dom Cruz",
+          "final_proof": "/Users/DRA/SESSIONS/\u201cStories About My Brother.\u201d w: Dom Cruz/Bounces/proof_render/stories-about-my-brother-proof-auto-ducked-warm-v2.wav",
+          "latest_candidate": null,
+          "reference_master": null,
+          "accepted_direction": "Warm, intimate, Navy Blue-influenced pass with Drake/40-context vocal-forward ducking.",
+          "metrics": {
+            "integrated_lufs": -12.177432086465158,
+            "true_peak_db": -0.512206130920292,
+            "sample_rate": 48000.0,
+            "channels": 2.0
+          }
+        },
+        {
+          "id": "dont_holdback_kenneth_english",
+          "status": "pending_user_review",
+          "session_root": "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English ",
+          "final_proof": null,
+          "latest_candidate": "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/proof_render/dontHoldback-proof-trainer-v29.wav",
+          "reference_master": "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/dontHoldback. prod. Kenneth English (Final Mix).wav",
+          "accepted_direction": "Pending. Andra's Final Mix is the mandatory gold standard; do not accept a proof until it surpasses that reference by ear.",
+          "metrics": {
+            "integrated_lufs": -16.134069498643335,
+            "true_peak_db": -2.1938985646761786,
+            "sample_rate": 48000.0,
+            "channels": 2.0
+          }
+        }
+      ],
+      "gates": [
+        {
+          "id": "W-01",
+          "title": "Sonic quality does not yet meet the launch promise",
+          "status": "failed",
+          "evidence": "dontHoldback remains pending user review and the ledger still treats the user's Final Mix as the reference standard.",
+          "evidence_paths": [
+            "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/proof_render/dontHoldback-proof-trainer-v29.wav"
+          ]
+        },
+        {
+          "id": "W-02",
+          "title": "Lead and supporting vocals are not independently controlled end to end",
+          "status": "failed",
+          "evidence": "The dontHoldback session contains multiple explicit vocal roles and support layers, but the proof is not yet approved.",
+          "evidence_paths": [
+            "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English "
+          ]
+        },
+        {
+          "id": "W-08",
+          "title": "MixVault learning still needs promotion control",
+          "status": "failed",
+          "evidence": "1 sessions are still pending user review and should not be treated as promoted benchmark data.",
+          "evidence_paths": [
+            "/Users/DRA/SESSIONS/\u201cStories About My Brother.\u201d w: Dom Cruz/Bounces/proof_render/stories-about-my-brother-proof-auto-ducked-warm-v2.wav",
+            "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/proof_render/dontHoldback-proof-trainer-v29.wav"
+          ]
+        },
+        {
+          "id": "W-09",
+          "title": "Session ingestion and alignment still require deterministic manifests",
+          "status": "failed",
+          "evidence": "The ledger records exact session roots, source files, and placements, and the core test suite now verifies repeated-render checksums for both the manifest path and a real ocean_eyes fixture, but dontHoldback remains unfinished and the full benchmark matrix is still incomplete.",
+          "evidence_paths": [
+            "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /Bounces/dontHoldback. prod. Kenneth English (Final Mix).wav"
+          ]
+        },
+        {
+          "id": "W-16",
+          "title": "Commercial workflow and support are not yet proven at scale",
+          "status": "failed",
+          "evidence": "One session is approved and one is pending; the external-order loop is not yet proven repeatedly.",
+          "evidence_paths": [
+            "/Users/DRA/SESSIONS/\u201cStories About My Brother.\u201d w: Dom Cruz/Bounces/proof_render/stories-about-my-brother-proof-auto-ducked-warm-v2.wav"
+          ]
+        }
+      ],
+      "ledger_path": "/Users/DRA/apps/echo-sound-lab-core/data/learning/andra-proof-sessions-2026-06-20.json"
+    },
+    "updated_at": "2026-06-25T19:49:07.688458+00:00"
+  }
+}

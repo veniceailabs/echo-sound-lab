@@ -16,6 +16,7 @@ import { APLProposal } from '../echo-sound-lab/apl/proposal-engine';
 import { proposalToWorkOrder, invalidateContextAfterAPLExecution } from 'action-authority/integration/apl-bridge';
 import { getExecutionDispatcher } from 'action-authority/execution/dispatcher';
 import type { AAExecutionResult } from 'action-authority/execution/work-order';
+import { AppleScriptActuator } from './AppleScriptActuator';
 
 export interface ExecutionContext {
   id: string;
@@ -56,8 +57,7 @@ export class APLExecutor {
       console.log(`[APLExecutor] Generated AppleScript (${script.length} chars)`);
 
       // Step 2: Execute the script
-      // NOTE: In Phase 3 with AppleScript, this will actually run the command
-      // For now, we simulate successful execution
+      // In browser-only environments, AppleScript execution is unavailable.
       const executionResult = await this.executeAppleScript(script);
 
       if (!executionResult.success) {
@@ -273,26 +273,41 @@ export class APLExecutor {
 
   /**
    * Execute AppleScript
-   *
-   * This is a placeholder that would be implemented with actual AppleScript execution.
-   * In production, this would use the AppleScriptActuator from Phase 11.
    */
   private static async executeAppleScript(script: string): Promise<{
     success: boolean;
     output?: string;
     error?: string;
   }> {
-    // In Phase 3 with AppleScriptActuator integrated, this would actually execute
-    // For now, we simulate successful execution
-    console.log(`[APLExecutor] Simulating AppleScript execution...`);
+    const isNodeRuntime = typeof process !== 'undefined' && !!process.versions?.node;
 
-    // Simulate execution delay (realistic for AppleScript)
-    await new Promise(resolve => setTimeout(resolve, 500));
+    if (!isNodeRuntime) {
+      return {
+        success: false,
+        error: 'AppleScript execution is unavailable in browser runtime',
+      };
+    }
 
-    return {
-      success: true,
-      output: 'AppleScript executed successfully'
-    };
+    if (!AppleScriptActuator.validateScript(script)) {
+      return {
+        success: false,
+        error: 'AppleScript validation failed',
+      };
+    }
+
+    try {
+      console.log(`[APLExecutor] Running AppleScript through host actuator...`);
+      const output = await AppleScriptActuator.run(script);
+      return {
+        success: true,
+        output,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 }
 

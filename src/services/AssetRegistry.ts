@@ -23,6 +23,10 @@ export interface AssetRegistryDecodingContext {
   decodeAudioData(audioData: ArrayBuffer): Promise<DecodedAssetBuffer> | DecodedAssetBuffer;
 }
 
+const DB_NAME = 'echo-studio-asset-registry';
+const DB_VERSION = 1;
+const STORE_ASSETS = 'assets';
+
 function cloneArrayBuffer(input: ArrayBuffer): ArrayBuffer {
   return input.slice(0);
 }
@@ -37,6 +41,11 @@ export class AssetRegistry {
   private readonly waveformCache = new Map<string, Float32Array>();
   private previewContext: AssetRegistryDecodingContext | null = null;
   private idCounter = 0;
+  private readonly hydratePromise: Promise<void>;
+
+  constructor() {
+    this.hydratePromise = this.restorePersistedAssets().catch(() => {});
+  }
 
   private nextAssetId(fileName: string): string {
     this.idCounter += 1;
@@ -49,6 +58,7 @@ export class AssetRegistry {
   }
 
   async registerFile(file: File, assetId?: string): Promise<AssetRegistration> {
+    await this.whenReady();
     const arrayBuffer = await file.arrayBuffer();
     return this.registerArrayBuffer(
       arrayBuffer,
@@ -77,6 +87,7 @@ export class AssetRegistry {
       decodedBuffer: null,
     };
     this.assets.set(id, record);
+    void this.persistAsset(record).catch(() => {});
     return {
       assetId: record.assetId,
       name: record.name,
@@ -124,6 +135,7 @@ export class AssetRegistry {
     assetId: string,
     context?: AssetRegistryDecodingContext
   ): Promise<DecodedAssetBuffer | null> {
+    await this.whenReady();
     const record = this.assets.get(assetId);
     if (!record) return null;
     if (record.decodedBuffer) return record.decodedBuffer;
@@ -169,6 +181,11 @@ export class AssetRegistry {
   clear(): void {
     this.assets.clear();
     this.waveformCache.clear();
+    void this.clearPersistedAssets().catch(() => {});
+  }
+
+  async whenReady(): Promise<void> {
+    await this.hydratePromise;
   }
 
   private getOrCreatePreviewContext(): AssetRegistryDecodingContext | null {
@@ -182,6 +199,84 @@ export class AssetRegistry {
     this.previewContext = new Ctor();
     return this.previewContext;
   }
+
+  private async persistAsset(record: AssetRecord): Promise<void> {
+    const db = await openAssetRegistryDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_ASSETS, 'readwrite');
+      tx.objectStore(STORE_ASSETS).put({
+        assetId: record.assetId,
+        name: record.name,
+        mimeType: record.mimeType,
+        sizeBytes: record.sizeBytes,
+        registeredAt: record.registeredAt,
+        arrayBuffer: cloneArrayBuffer(record.arrayBuffer),
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  private async restorePersistedAssets(): Promise<void> {
+    const db = await openAssetRegistryDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_ASSETS, 'readonly');
+      const req = tx.objectStore(STORE_ASSETS).getAll();
+      req.onsuccess = () => {
+        const records = Array.isArray(req.result) ? req.result as Array<{
+          assetId: string;
+          name: string;
+          mimeType: string;
+          sizeBytes: number;
+          registeredAt: number;
+          arrayBuffer: ArrayBuffer;
+        }> : [];
+        for (const stored of records) {
+          if (!stored?.assetId || this.assets.has(stored.assetId)) continue;
+          this.assets.set(stored.assetId, {
+            assetId: stored.assetId,
+            name: stored.name,
+            mimeType: stored.mimeType,
+            sizeBytes: stored.sizeBytes,
+            registeredAt: stored.registeredAt,
+            arrayBuffer: cloneArrayBuffer(stored.arrayBuffer),
+            decodedBuffer: null,
+          });
+          this.idCounter = Math.max(this.idCounter, this.deriveCounterFromAssetId(stored.assetId));
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  private async clearPersistedAssets(): Promise<void> {
+    const db = await openAssetRegistryDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_ASSETS, 'readwrite');
+      tx.objectStore(STORE_ASSETS).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  private deriveCounterFromAssetId(assetId: string): number {
+    const match = assetId.match(/-([a-z0-9]+)$/i);
+    if (!match) return this.idCounter;
+    const parsed = parseInt(match[1] || '', 36);
+    return Number.isFinite(parsed) ? Math.max(this.idCounter, parsed) : this.idCounter;
+  }
 }
 
 export const assetRegistry = new AssetRegistry();
+
+function openAssetRegistryDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(STORE_ASSETS, { keyPath: 'assetId' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}

@@ -200,4 +200,61 @@ describe('Plugin Automation Scheduling', () => {
     expect(events[2]).toEqual({ type: 'ramp', value: -12, at: 11 });
     expect(events[3]).toEqual({ type: 'ramp', value: -30, at: 13 });
   });
+
+  test('schedules master LUFS automation on the mastering lane', async () => {
+    const fakeContext = new FakeAudioContext();
+    const engine = new AudioPlaybackEngine({
+      createAudioContext: () => fakeContext,
+    });
+
+    const state: ReplayState = {
+      ...AUTOMATION_STATE,
+      tracks: [
+        ...AUTOMATION_STATE.tracks,
+        {
+          trackId: 'master-bus',
+          trackName: 'Master Bus',
+          kind: 'master',
+          gainDb: 0,
+          pan: 0,
+          muted: false,
+          solo: false,
+          limiterThresholdDb: -0.1,
+          normalizedTargetLUFS: -14,
+          dcRemovalHz: null,
+          inserts: [],
+          outputBusId: null,
+          sends: [],
+          appliedProposalIds: [],
+          trackStateHash: '',
+        },
+      ],
+      automation: [
+        {
+          laneId: 'lane-master-lufs',
+          trackId: 'master-bus',
+          parameter: 'master:normalizedTargetLUFS',
+          points: [
+            { pointId: 'm-0', timeSec: 0, value: -14, curve: 'linear' },
+            { pointId: 'm-1', timeSec: 2, value: -12, curve: 'linear' },
+          ],
+        },
+      ],
+    };
+
+    await engine.init();
+    await engine.syncState(state);
+    engine.playFrom(0);
+
+    const masterTrack = engine.getTrackDebug('master-bus');
+    expect(masterTrack).not.toBeNull();
+    const gainNode = masterTrack?.gainNode as FakeGainNode;
+    expect(gainNode.gain.events).toHaveLength(3);
+    expect(gainNode.gain.events[0]).toEqual({ type: 'cancel', at: 10 });
+    expect(gainNode.gain.events[1]).toEqual({ type: 'set', value: 1, at: 10 });
+    expect(gainNode.gain.events[2].type).toBe('ramp');
+    expect(gainNode.gain.events[2].at).toBe(12);
+    expect(gainNode.gain.events[2].value).toBeCloseTo(Math.pow(10, -2 / 20), 6);
+    expect(gainNode.gain.value).toBeCloseTo(Math.pow(10, -2 / 20), 6);
+  });
 });

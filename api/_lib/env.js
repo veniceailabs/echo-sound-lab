@@ -87,3 +87,11 @@ export function getAnimateArtConfig() {
     apiKey: requireEnv(['ANIMATE_ART_KEY'], 'Animate Art key'),
   };
 }
+
+export function getDspConfig() {
+  const url = optionalEnv(['PYTHON_BACKEND_URL', 'DSP_API_URL'], '');
+  return {
+    apiUrl: url.replace(/\/$/, ''),
+    configured: Boolean(url),
+  };
+}

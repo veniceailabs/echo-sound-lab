@@ -31,7 +31,7 @@ export class GhostUser {
   private isMoving: boolean = false;
   private isHolding: boolean = false;
 
-  private constructor(config: GhostUserConfig = {}) {
+  constructor(config: GhostUserConfig = {}) {
     this.config = {
       demoMode: true,
       verboseLogging: false,

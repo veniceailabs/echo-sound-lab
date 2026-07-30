@@ -32,6 +32,21 @@ export interface NudgeMessage {
   action?: string;
 }
 
+export interface AutonomousMarketingContext {
+  firstSession: boolean;
+  hasMastered: boolean;
+  hasExported: boolean;
+  isReleaseReady: boolean;
+  improvementPercent?: number;
+}
+
+export interface AutonomousMarketingPrompt {
+  title: string;
+  body: string;
+  actionLabel: string;
+  tone: NudgeMessage['tone'];
+}
+
 export interface GenerateEchoReportCardOptions {
   trackName: string;
   report?: EchoReport;
@@ -704,6 +719,44 @@ const NUDGE_TEMPLATES: Record<string, NudgeMessage[]> = {
 export const getNudge = (context: string): NudgeMessage => {
   const templates = NUDGE_TEMPLATES[context] || NUDGE_TEMPLATES.export_ready;
   return randomFrom(templates);
+};
+
+/**
+ * Build an autonomous marketing prompt from live session state.
+ * Keeps the free value proposition visible and only escalates when the
+ * session has enough signal to justify a stronger ask.
+ */
+export const buildAutonomousMarketingPrompt = (
+  context: AutonomousMarketingContext
+): AutonomousMarketingPrompt | null => {
+  if (context.hasExported) {
+    return {
+      title: 'Share the proof',
+      body: 'ESL is free to use. Turn this result into a share card so the work markets itself.',
+      actionLabel: 'Create card',
+      tone: 'hype',
+    };
+  }
+
+  if (context.isReleaseReady || (context.improvementPercent ?? 0) >= 10) {
+    return {
+      title: 'Marketable result',
+      body: 'This transformation is strong enough to sell on sight. Create a proof card before moving on.',
+      actionLabel: 'Create card',
+      tone: 'mentor',
+    };
+  }
+
+  if (context.firstSession) {
+    return {
+      title: 'Free to use',
+      body: 'No account required. Start with a master, hear the result, and let the app guide the next move.',
+      actionLabel: 'See plans',
+      tone: 'subtle',
+    };
+  }
+
+  return null;
 };
 
 // ============================================

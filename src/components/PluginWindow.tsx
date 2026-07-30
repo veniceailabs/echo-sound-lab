@@ -1,5 +1,6 @@
 import React from 'react';
 import type { EchoPluginManifest } from '../services/plugins/echoPlugin';
+import { estimatePluginLatencyMs } from '../services/plugins/pluginRegistry';
 import type { ReplayPluginInstance } from '../services/deterministicReplayService';
 
 interface PluginWindowProps {
@@ -31,6 +32,7 @@ export default function PluginWindow({
   isReadOnly = false,
   onSetParam,
 }: PluginWindowProps) {
+  const estimatedLatencyMs = estimatePluginLatencyMs(manifest.manifestId, pluginInstance.parameters);
   return (
     <div className="rounded-xl border border-cyan-400/20 bg-cyan-950/20 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -38,9 +40,14 @@ export default function PluginWindow({
           <p className="text-xs font-semibold text-cyan-200">{manifest.displayName}</p>
           <p className="text-[10px] text-cyan-300/80">{manifest.manifestId}</p>
         </div>
-        <span className="rounded bg-cyan-500/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
-          {manifest.category}
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span className="rounded bg-cyan-500/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-cyan-200">
+            {manifest.category}
+          </span>
+          <span className="rounded bg-black/30 px-2 py-0.5 text-[10px] uppercase tracking-[0.12em] text-slate-300">
+            {estimatedLatencyMs.toFixed(2)} ms est. latency
+          </span>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -136,4 +143,3 @@ export default function PluginWindow({
     </div>
   );
 }
-

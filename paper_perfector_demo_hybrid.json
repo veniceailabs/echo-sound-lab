@@ -1,0 +1,98 @@
+{
+  "meta": {
+    "id": "paper-perfector",
+    "title": "Paper Perfector - AI Document Assistant",
+    "duration_target": 55,
+    "style": "professional",
+    "useHybridFeatures": true
+  },
+  "voice": {
+    "provider": "auto",
+    "persona": "professional"
+  },
+  "intro": {
+    "enabled": true,
+    "prompt": "Professional document analysis, AI technology, modern office",
+    "style": "cinematic",
+    "duration": 3,
+    "music": true,
+    "effects": "minimal"
+  },
+  "scenes": [
+    {
+      "id": 1,
+      "action": "WAIT",
+      "voiceover": "Introducing Paper Perfector. Intelligent document creation powered by advanced AI.",
+      "duration": 4
+    },
+    {
+      "id": 2,
+      "action": "CLICK",
+      "targetSelector": ".assistant-toggle",
+      "voiceover": "Open the assistant to explore your starting options.",
+      "duration": 3
+    },
+    {
+      "id": 3,
+      "action": "CLICK",
+      "targetSelector": ".assistant-actions button:first-child",
+      "voiceover": "Start with a blank document to build your narrative from scratch.",
+      "duration": 3
+    },
+    {
+      "id": 4,
+      "action": "WAIT",
+      "voiceover": "The workspace loads your new document in structured edit mode.",
+      "duration": 3
+    },
+    {
+      "id": 5,
+      "action": "CLICK",
+      "targetSelector": ".toolbar-button:nth-of-type(4)",
+      "voiceover": "Toggle edit mode to refine your content directly.",
+      "duration": 3
+    },
+    {
+      "id": 6,
+      "action": "SCROLL",
+      "targetSelector": ".document-renderer",
+      "voiceover": "Scroll through the structured sections to review the layout.",
+      "duration": 4
+    },
+    {
+      "id": 7,
+      "action": "CLICK",
+      "targetSelector": "button[data-tip*='format']",
+      "voiceover": "Open format settings to adjust fonts, margins, and spacing.",
+      "duration": 3
+    },
+    {
+      "id": 8,
+      "action": "CLICK",
+      "targetSelector": "button[data-tip*='Save']",
+      "voiceover": "Save your work to the library for future access.",
+      "duration": 3
+    },
+    {
+      "id": 9,
+      "action": "CLICK",
+      "targetSelector": "button[data-tip*='Export']",
+      "voiceover": "Export to PDF when you are ready to share or print.",
+      "duration": 3
+    },
+    {
+      "id": 10,
+      "action": "WAIT",
+      "voiceover": "Paper Perfector. Transform how you work with documents. Enterprise-grade intelligence at your fingertips.",
+      "duration": 4
+    }
+  ],
+  "postProduction": {
+    "fadeOutDuration": 1,
+    "credits": {
+      "enabled": true,
+      "text": "Paper Perfector - AI Document Intelligence | Powered by Action Authority",
+      "duration": 2
+    }
+  }
+}

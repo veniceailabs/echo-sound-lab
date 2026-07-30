@@ -1,0 +1,93 @@
+{
+  "meta": {
+    "id": "master-lease",
+    "title": "Master Lease - Real Estate Management Platform",
+    "duration_target": 45,
+    "style": "professional",
+    "useHybridFeatures": true
+  },
+  "voice": {
+    "provider": "auto",
+    "persona": "professional"
+  },
+  "intro": {
+    "enabled": false,
+    "prompt": "Real estate portfolio, property management dashboard",
+    "style": "cinematic",
+    "duration": 3,
+    "music": true,
+    "effects": "minimal"
+  },
+  "scenes": [
+    {
+      "id": 1,
+      "action": "WAIT",
+      "voiceover": "Welcome to Master Lease. The complete platform for managing your real estate portfolio.",
+      "duration": 4
+    },
+    {
+      "id": 2,
+      "action": "CLICK",
+      "targetSelector": "a.btn.primary[href='#analyzer']",
+      "voiceover": "Click Run Deal Analyzer to bring the pricing suite into view.",
+      "duration": 3
+    },
+    {
+      "id": 3,
+      "action": "TYPE",
+      "selector": "#zip",
+      "value": "94114",
+      "voiceover": "Type a zip code to load live room comps and whole-home rents.",
+      "duration": 4
+    },
+    {
+      "id": 4,
+      "action": "CLICK",
+      "targetSelector": "#loadZipProfile",
+      "voiceover": "Load the zip profile so the system caches your market assumptions.",
+      "duration": 3
+    },
+    {
+      "id": 5,
+      "action": "CLICK",
+      "targetSelector": "#addRoomComp",
+      "voiceover": "Add room comps to capture micro-level rent detail.",
+      "duration": 3
+    },
+    {
+      "id": 6,
+      "action": "CLICK",
+      "targetSelector": "#addHouseComp",
+      "voiceover": "Add a whole-home comparable to benchmark overall performance.",
+      "duration": 3
+    },
+    {
+      "id": 7,
+      "action": "SCROLL",
+      "targetSelector": "#analyzer",
+      "voiceover": "Scroll through the analyzer to see the live profit stack.",
+      "duration": 4
+    },
+    {
+      "id": 8,
+      "action": "CLICK",
+      "targetSelector": "#saveZipProfile",
+      "voiceover": "Save the profile so the deal stays ready for your next pitch.",
+      "duration": 3
+    },
+    {
+      "id": 9,
+      "action": "WAIT",
+      "voiceover": "Every action is governed by Action Authority, keeping compliance locked in.",
+      "duration": 3
+    }
+  ],
+  "postProduction": {
+    "fadeOutDuration": 1,
+    "credits": {
+      "enabled": true,
+      "text": "Master Lease - Property Management Platform",
+      "duration": 2
+    }
+  }
+}

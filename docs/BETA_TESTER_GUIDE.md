@@ -43,3 +43,16 @@ Please include:
 - Audio quality issues
 - Confusing UX moments
 - Top 1-2 changes before launch
+
+## What Happens After Beta
+During beta, all features are free so we can harden quality with your feedback.
+
+Planned launch pricing:
+- Free Tier: $0
+- Artist (Pro): $19/month
+- Founding Defender: $199 one-time (v2.x lifetime license)
+
+Important policy notes:
+- Founding Defender is limited to the first 500 users.
+- v2.x lifetime means all updates/features in the v2.x lifecycle.
+- Unlimited usage is intended for human creators; bot/headless high-frequency rendering is not allowed on standard licenses.

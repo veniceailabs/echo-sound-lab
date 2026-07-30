@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { HistoryEntry, ProcessingConfig, AudioMetrics } from '../types';
 import { historyManager } from '../services/historyManager';
 import { glassCard, neonCard, secondaryButton, dangerButton, glowBadge, sectionHeader, gradientDivider, metricCard, cn } from '../utils/secondLightStyles';
+import { useViewport } from '../context/ViewportContext';
 
 interface HistoryTimelineProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
   snapshotABActive,
   onClearSnapshotAB
 }) => {
+  const { isPhone } = useViewport();
   const [timeline, setTimeline] = useState<Array<{
     entry: HistoryEntry;
     isCurrent: boolean;
@@ -311,14 +313,24 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-fade-in">
-      <div className={cn(glassCard, 'w-full max-w-4xl max-h-[90vh] flex flex-col shadow-[0_0_60px_rgba(6,182,212,0.2)]')}>
+    <div
+      className={`fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex animate-fade-in ${
+        isPhone ? 'items-stretch justify-stretch p-0' : 'items-center justify-center p-6'
+      }`}
+    >
+      <div
+        className={cn(
+          glassCard,
+          'w-full flex flex-col shadow-[0_0_60px_rgba(6,182,212,0.2)] overflow-hidden',
+          isPhone ? 'h-[100dvh] max-w-none max-h-none rounded-none' : 'max-w-4xl max-h-[90vh]'
+        )}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-8 border-b border-slate-700/30">
+        <div className={`flex items-center justify-between p-5 sm:p-8 border-b border-slate-700/30 ${isPhone ? 'pt-[calc(20px+var(--esl-safe-top))]' : ''}`}>
           <div>
             <h2 className={cn(sectionHeader, 'text-3xl mb-2')}>Processing History</h2>
             <p className="text-sm text-slate-400 mt-2">
-              {timeline.length} total entries • {filteredTimeline.length} visible
+              {timeline.length} total entries �{filteredTimeline.length} visible
             </p>
           </div>
           <button
@@ -330,7 +342,7 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
         </div>
 
         {/* Filters */}
-        <div className="px-8 py-5 border-b border-slate-700/30 flex gap-3 flex-wrap bg-slate-900/30">
+        <div className="px-5 sm:px-8 py-5 border-b border-slate-700/30 flex gap-3 flex-wrap bg-slate-900/30">
           {[
             { value: 'all' as const, label: 'All', icon: 'ALL' },
             { value: 'eq' as const, label: 'EQ', icon: 'EQ' },
@@ -357,7 +369,7 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
         </div>
 
         {/* Timeline */}
-        <div ref={timelineRef} className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div ref={timelineRef} className={`flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-4 ${isPhone ? 'pb-[calc(16px+var(--esl-safe-bottom))]' : ''}`}>
           {filteredTimeline.length === 0 ? (
             <div className="text-center text-slate-500 py-12">
               <div className="text-4xl mb-4">📭</div>

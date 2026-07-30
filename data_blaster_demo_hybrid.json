@@ -1,0 +1,111 @@
+{
+  "meta": {
+    "id": "data-blaster",
+    "title": "Data Blaster - Data Processing Platform",
+    "duration_target": 65,
+    "style": "professional",
+    "useHybridFeatures": true
+  },
+  "voice": {
+    "provider": "auto",
+    "persona": "professional"
+  },
+  "intro": {
+    "enabled": true,
+    "prompt": "Data processing, analytics, information management, technology",
+    "style": "cinematic",
+    "duration": 3,
+    "music": true,
+    "effects": "minimal"
+  },
+  "scenes": [
+    {
+      "id": 1,
+      "action": "WAIT",
+      "voiceover": "Introducing Data Blaster. Fast, secure data processing for modern enterprises.",
+      "duration": 4
+    },
+    {
+      "id": 2,
+      "action": "CLICK",
+      "targetSelector": "#guided-start",
+      "voiceover": "Start the guided setup to walk through the workflow step by step.",
+      "duration": 3
+    },
+    {
+      "id": 3,
+      "action": "CLICK",
+      "targetSelector": "#load-sample",
+      "voiceover": "Load sample data so the interface comes alive with real numbers.",
+      "duration": 3
+    },
+    {
+      "id": 4,
+      "action": "WAIT",
+      "voiceover": "Data Blaster parses every column, identifies headers, and flags anomalies automatically.",
+      "duration": 4
+    },
+    {
+      "id": 5,
+      "action": "CLICK",
+      "targetSelector": "#theme-toggle",
+      "voiceover": "Toggle the interface theme to match your brand or preference.",
+      "duration": 3
+    },
+    {
+      "id": 6,
+      "action": "SCROLL",
+      "targetSelector": ".workspace",
+      "voiceover": "Scroll through the workspace to see data health panels and smart mapping controls.",
+      "duration": 4
+    },
+    {
+      "id": 7,
+      "action": "CLICK",
+      "targetSelector": "#story-once",
+      "voiceover": "One click generates a complete executive story from your data.",
+      "duration": 3
+    },
+    {
+      "id": 8,
+      "action": "CLICK",
+      "targetSelector": ".tab[data-tab='story']",
+      "voiceover": "Switch to the narrative view to see the auto-generated story.",
+      "duration": 3
+    },
+    {
+      "id": 9,
+      "action": "CLICK",
+      "targetSelector": "#export-pptx",
+      "voiceover": "Export a board-ready PowerPoint deck with a single tap.",
+      "duration": 3
+    },
+    {
+      "id": 10,
+      "action": "CLICK",
+      "targetSelector": "#export-summary",
+      "voiceover": "Send the executive outline as structured summary notes.",
+      "duration": 3
+    },
+    {
+      "id": 11,
+      "action": "WAIT",
+      "voiceover": "Every action remains governed by Action Authority. No request slips through without approval and audit.",
+      "duration": 4
+    },
+    {
+      "id": 12,
+      "action": "WAIT",
+      "voiceover": "Data Blaster. Process smarter. Act faster. Transform every dataset into confident decisions.",
+      "duration": 4
+    }
+  ],
+  "postProduction": {
+    "fadeOutDuration": 1,
+    "credits": {
+      "enabled": true,
+      "text": "Data Blaster - Enterprise Data Processing | Powered by Action Authority",
+      "duration": 2
+    }
+  }
+}

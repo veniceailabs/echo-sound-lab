@@ -16,8 +16,8 @@
  *     async () => { await exportMp3(); }
  *   );
  *
- * Call execute() to run. Will throw [ACC_REQUIRED] if confirmation needed.
- * Caller must wire that to ACC modal.
+ * Call execute() to run. ACC-gated actions pause until the provider-level
+ * confirmation flow resolves or is dismissed.
  */
 
 import { useContext, useCallback, useState } from 'react';
@@ -64,9 +64,15 @@ export function useGuardedAction(
     } catch (err) {
       const error = err as Error;
 
-      // ACC required
+      // ACC dismissed / unavailable
       if (error.message.includes('[ACC_REQUIRED]')) {
         options.onACCRequired?.(request);
+        setError(error);
+        throw error;
+      }
+
+      if (error.message.includes('[ACC_DISMISSED]') || error.message.includes('[ACC_UNAVAILABLE]')) {
+        options.onDenied?.(error);
         setError(error);
         throw error;
       }

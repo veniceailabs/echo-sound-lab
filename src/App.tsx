@@ -1,4 +1,5 @@
 import React, { Suspense, startTransition, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import { AppState, AudioMetrics, ProcessingConfig, Suggestion, EchoReport, RevisionEntry, ReferenceTrack, MixSignature, GeneratedSong, Stem, EQSettings, DynamicEQConfig, EngineMode, ProcessingAction, SSCScan, PreservationMode, CohesionTrackReport, BatchState } from './types';
 import { audioEngine } from './services/audioEngine';
 import { audioPerceptionLayer } from './services/audioPerceptionLayer';
@@ -9,6 +10,13 @@ import { calculateLoudnessRange } from './services/dsp/analysisUtils';
 import { generateStressStem } from './services/debug/stressTestEngine';
 import { CohesionEngine, deriveCohesionTrackReportFromMetrics } from './services/cohesionEngine';
 import { batchMasterService } from './services/batchMasterService';
+import { analyzeAlbumAuthority } from './services/finishing/albumAuthorityEngine';
+import { analyzeReferenceDelta } from './services/finishing/referenceDeltaEngine';
+import { analyzeSessionFinishAuthority } from './services/finishing/sessionFinishAuthority';
+import { analyzeFinishLoop } from './services/finishing/finishLoopEngine';
+import { encoderService } from './services/encoderService';
+import { downloadAudioWithManifest } from './services/audioExportService';
+import { cloneBufferWithGain, LOUDNESS_VARIANT_SPECS, resolveVariantFilename } from './services/exportVariantService';
 
 // NEW: Refactored pipeline
 import { AudioSessionProvider, useAudioSession } from './context/AudioSessionContext';
@@ -33,7 +41,7 @@ import { useTranslation } from 'react-i18next';
 // NEW: Import enhanced features
 import { PhaseCorrelationMeter, StereoFieldMeter, LUFSMeter } from './components/AdvancedMeters';
 import { historyManager } from './services/historyManager';
-import { sessionManager, SessionState } from './services/sessionManager';
+import { sessionManager, SessionState, SessionImportContext } from './services/sessionManager';
 import { useStudioEngine } from './context/StudioEngineProvider';
 import { DiagnosticsOverlay, useDiagnosticsToggle } from './components/DiagnosticsOverlay';
 import { SSCOverlay } from './components/SSCOverlay';
@@ -44,6 +52,7 @@ import { useViewport } from './context/ViewportContext';
 import { debugTelemetryService } from './services/debugTelemetryService';
 import { useAudioContextState } from './hooks/useAudioContextState';
 import { AudioResumeGuard } from './components/AudioResumeGuard';
+import StudioCoachmarkTour from './components/StudioCoachmarkTour';
 // V.E.N.U.M. - Viral Emergent Network Utility Matrix
 import { generateEchoReportCard, ShareableCard, GenerateEchoReportCardOptions } from './services/venumEngine';
 
@@ -63,8 +72,38 @@ import { generateMockProposals } from './utils/mockAPLProposals';
 import type { TimelineActionRequest } from './components/TimelineWorkspace';
 import SessionShell from './shells/SessionShell';
 import ExportShell from './shells/ExportShell';
+import FirstSongReadyScreen from './components/FirstSongReadyScreen';
+import { abVariantService } from './services/abVariantService';
+import { classifySessionFiles } from './services/sessionImportService';
 const TimelineShell = React.lazy(() => import('./shells/TimelineShell'));
 const OrchestrationShell = React.lazy(() => import('./shells/OrchestrationShell'));
+
+type ImportedSessionSummary = {
+  fileName: string;
+  sourceLabel: string;
+  canRestoreAudioLess: boolean;
+  engineSummary: SessionImportContext['engineSummary'];
+};
+
+const buildImportedSessionSummary = (session: SessionState | null): ImportedSessionSummary | null => {
+  if (!session?.importContext) return null;
+  return {
+    fileName: session.fileName ?? 'Untitled session',
+    sourceLabel: session.importContext.sourceLabel,
+    canRestoreAudioLess: session.importContext.canRestoreAudioLess,
+    engineSummary: session.importContext.engineSummary,
+  };
+};
+
+type ImportedStemBundleSummary = {
+  rootName: string;
+  sourceApp: string;
+  audioFileCount: number;
+  beatCount: number;
+  vocalCount: number;
+  referenceCount: number;
+  warnings: string[];
+};
 
 // Phase 4: ExecutionService (Main Process Integration)
 // ExecutionBridge is called directly from ProposalCard
@@ -73,7 +112,7 @@ import { ExecutionPayload } from './types/execution-contract';
 import { executionSessionService } from './services/executionSessionService';
 import { signExecutionPayload } from './services/executionSigning';
 import { deterministicId } from './services/deterministicJson';
-import { ReplayState } from './services/deterministicReplayService';
+import { ReplayState, runDeterministicReplay } from './services/deterministicReplayService';
 import { provenanceLedger } from './services/ProvenanceLedger';
 import { TimelineHydrationMetrics } from './services/timelineReplayCache';
 import type { AudioBufferLike } from './services/AudioPlaybackEngine';
@@ -87,9 +126,13 @@ import {
 // Day 3: APL Real Analysis (replaces mock proposals)
 import { aplAnalysisService } from './services/APLAnalysisService';
 
+// Sprint 4A: MIDI Export
+import { NoteTranscriptionService } from './modules/master-class/engine/NoteTranscriptionService';
+// Sprint 4B: Session Share
+import { generateShareURL, copyToClipboard, loadShareFromCurrentURL } from './services/sessionShareService';
+
 // ===== GHOST SYSTEM (Self-Demonstrating Mode) =====
 import { VirtualCursor } from './components/demo';
-import { getDemoDirector } from './services/demo/DemoDirector';
 import { HIP_HOP_MASTER_SCENARIO, POP_MASTER_SCENARIO, QUICK_TOUR_SCENARIO } from './services/demo/HipHopMasterScenario';
 
 // ===== PHASE 5: ADVERSARIAL HARDENING =====
@@ -100,6 +143,7 @@ import { MerkleAuditLog } from './action-authority/audit/MerkleAuditLog';
 // ===== PHASE 3: HYBRID BRIDGE =====
 const ChatInterface = React.lazy(() => import('./components/ChatInterface'));
 const ProcessingPanel = React.lazy(() => import('./components/ProcessingPanel').then((module) => ({ default: module.ProcessingPanel })));
+const AlbumModeRoute = React.lazy(() => import('./components/album/AlbumModeRoute').then((module) => ({ default: module.AlbumModeRoute })));
 const AnalysisPanel = React.lazy(() => import('./components/AnalysisPanel'));
 const EchoReportPanel = React.lazy(() => import('./components/EchoReportPanel').then((module) => ({ default: module.EchoReportPanel })));
 const ListeningPassCard = React.lazy(() => import('./components/ListeningPassCard').then((module) => ({ default: module.ListeningPassCard })));
@@ -108,6 +152,18 @@ const EnhancedControlPanel = React.lazy(() => import('./components/EnhancedContr
 const HistoryTimeline = React.lazy(() => import('./components/HistoryTimeline').then((module) => ({ default: module.HistoryTimeline })));
 const DemoDashboard = React.lazy(() => import('./components/demo').then((module) => ({ default: module.DemoDashboard })));
 const BridgeTest = React.lazy(() => import('./components/BridgeTest').then((module) => ({ default: module.BridgeTest })));
+const EngineerStylePanel = React.lazy(() => import('./components/EngineerStylePanel'));
+const GrammyMasterPanel = React.lazy(() => import('./components/GrammyMasterPanel').then((module) => ({ default: module.GrammyMasterPanel })));
+const PlatformExportPanel = React.lazy(() => import('./components/PlatformExportPanel').then((module) => ({ default: module.PlatformExportPanel })));
+const MixIntelligenceReport = React.lazy(() => import('./components/MixIntelligenceReport').then((module) => ({ default: module.MixIntelligenceReport })));
+const ReferenceComparePanel = React.lazy(() => import('./components/ReferenceComparePanel').then((module) => ({ default: module.ReferenceComparePanel })));
+const VocalChainControlsPanel = React.lazy(() => import('./components/VocalChainControlsPanel').then((module) => ({ default: module.VocalChainControlsPanel })));
+const BeatCreationPanel = React.lazy(() => import('./components/BeatCreationPanel').then((module) => ({ default: module.BeatCreationPanel })));
+const DrumMachinePanel = React.lazy(() => import('./components/DrumMachinePanel').then((module) => ({ default: module.DrumMachinePanel })));
+const CollaborationPanel = React.lazy(() => import('./components/CollaborationPanel').then((module) => ({ default: module.CollaborationPanel })));
+const MasteringCertificate = React.lazy(() => import('./components/MasteringCertificate').then((module) => ({ default: module.MasteringCertificate })));
+const MixCombinerPanel = React.lazy(() => import('./components/MixCombinerPanel').then((module) => ({ default: module.MixCombinerPanel })));
+const IndustryBenchmarkPanel = React.lazy(() => import('./components/IndustryBenchmarkPanel').then((module) => ({ default: module.IndustryBenchmarkPanel })));
 
 declare var process: { env: Record<string, string | undefined> };
 declare global {
@@ -127,6 +183,7 @@ const MODE_LABELS: Record<'SINGLE' | 'MULTI' | 'AI_STUDIO' | 'VIDEO', string> = 
   VIDEO: 'SFS Video Engine',
 };
 const TIMELINE_SNAPSHOT_INTERVAL = 50;
+const DEFAULT_TIMELINE_REGION_SOURCE_ID = 'uploaded-audio';
 const shellFallback = (
   <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] p-4 text-xs uppercase tracking-[0.18em] text-slate-500">
     Loading shell…
@@ -179,6 +236,47 @@ const INITIAL_TIMELINE_STATE: ReplayState = {
   },
 };
 
+function roundTimelineNumber(value: number, precision = 6): number {
+  if (!Number.isFinite(value)) return 0;
+  return Number(value.toFixed(precision));
+}
+
+function createTimelineStateFromAudioBuffer(buffer: AudioBufferLike): ReplayState {
+  const durationSec = Math.max(0.001, roundTimelineNumber(buffer.duration || 0, 6));
+  const sampleRate = Number.isFinite(buffer.sampleRate) && (buffer.sampleRate as number) > 0
+    ? Math.round(buffer.sampleRate as number)
+    : INITIAL_TIMELINE_STATE.metadata.sampleRate;
+  const channelCount = Number.isFinite(buffer.numberOfChannels) && (buffer.numberOfChannels as number) > 0
+    ? Math.round(buffer.numberOfChannels as number)
+    : INITIAL_TIMELINE_STATE.metadata.channelCount;
+  const now = Date.now();
+
+  return {
+    ...INITIAL_TIMELINE_STATE,
+    sessionId: `timeline-session-${now}`,
+    workspaceId: `timeline-workspace-${now}`,
+    tracks: INITIAL_TIMELINE_STATE.tracks.map((track) => ({
+      ...track,
+      appliedProposalIds: [],
+      trackStateHash: '',
+    })),
+    regions: INITIAL_TIMELINE_STATE.regions.map((region, index) => ({
+      ...region,
+      regionId: index === 0 ? 'region-main-1' : region.regionId,
+      sourceId: DEFAULT_TIMELINE_REGION_SOURCE_ID,
+      startTimeSec: 0,
+      offsetSec: 0,
+      durationSec,
+      gainDb: 0,
+    })),
+    automation: [],
+    metadata: {
+      sampleRate,
+      channelCount,
+    },
+  };
+}
+
 // Initialize Capability Authority (Phase 2.2.4)
 const processIdentity: ProcessIdentity = {
   appId: 'com.echo-sound-lab.app',
@@ -192,7 +290,11 @@ const capabilityAuthority = new CapabilityAuthority(
   processIdentity
 );
 
-const App: React.FC = () => {
+interface AppProps {
+  onNavigate?: (route: 'app' | 'pricing' | 'landing') => void;
+}
+
+const App: React.FC<AppProps> = ({ onNavigate }) => {
   const { t } = useTranslation();
   const studioEngine = useStudioEngine();
   const studioServices = studioEngine.services;
@@ -264,6 +366,7 @@ const App: React.FC = () => {
   const [referenceTrack, setReferenceTrack] = useState<ReferenceTrack | null>(null);
   const [referenceSignature, setReferenceSignature] = useState<MixSignature | null>(null);
   const [isLoadingReference, setIsLoadingReference] = useState(false);
+  const [currentSignature, setCurrentSignature] = useState<MixSignature | null>(null);
 
   // AI Recommendations state
   const [appliedSuggestionIds, setAppliedSuggestionIds] = useState<string[]>([]);
@@ -283,6 +386,7 @@ const App: React.FC = () => {
   } | null>(null);
   const [preservationMode, setPreservationMode] = useState<PreservationMode>('balanced');
   const [addNextUploadToAlbum, setAddNextUploadToAlbum] = useState(false);
+  const [albumFiles, setAlbumFiles] = useState<File[] | null>(null);
   const [cohesionTracks, setCohesionTracks] = useState<CohesionTrackReport[]>([]);
   const [batchState, setBatchState] = useState<BatchState>(() => batchMasterService.createInitialState(null));
   const [latestEngineVerdict, setLatestEngineVerdict] = useState<'accept' | 'warn' | 'block' | null>(null);
@@ -292,6 +396,7 @@ const App: React.FC = () => {
   const activeVerdictRunIdRef = useRef(0);
   const debugTelemetry = typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('debugTelemetry') === '1';
+  const isAutomation = typeof navigator !== 'undefined' && navigator.webdriver === true;
   const showLabDebugPanels = (
     typeof window !== 'undefined'
       && (
@@ -308,6 +413,27 @@ const App: React.FC = () => {
   // Phase 4: Listening Pass Card state
   const [listeningPassData, setListeningPassData] = useState<any>(null);
 
+  // Vocal intelligence — analysis pipeline results + auto genre
+  const [vocalAnalysisResult, setVocalAnalysisResult] = useState<import('./services/vocal/vocalAnalysisPipeline').VocalAnalysisResult | null>(null);
+  const [vocalAnalysisApplied, setVocalAnalysisApplied] = useState(false);
+  const [detectedGenre, setDetectedGenre] = useState<string | null>(null);
+
+  // Platform export — decoded AudioBuffer of the Grammy-mastered result
+  const [masteredBuffer, setMasteredBuffer] = useState<AudioBuffer | null>(null);
+  const [beatBpm, setBeatBpm] = useState<number | null>(null);
+
+  // Mix Intelligence Report state
+  const [mixIntelData, setMixIntelData] = useState<import('./components/MixIntelligenceReport').MixIntelligenceData | null>(null);
+  const [showMixIntel, setShowMixIntel] = useState(false);
+
+  // Mastering Certificate state
+  const [certificateData, setCertificateData] = useState<{
+    trackName?: string; gradeLabel: string; gradeEmoji: string;
+    lufs: number; truePeak?: number; genre?: string;
+    engine: 'python' | 'browser'; date: Date; dynamicRange?: number;
+  } | null>(null);
+  const [showCertificate, setShowCertificate] = useState(false);
+
   // Processing state
   const [currentConfig, setCurrentConfig] = useState<ProcessingConfig>({});
   const [isCommitting, setIsCommitting] = useState(false);
@@ -319,7 +445,9 @@ const App: React.FC = () => {
   const [snapshotALabel, setSnapshotALabel] = useState<string | null>(null);
   const [snapshotBLabel, setSnapshotBLabel] = useState<string | null>(null);
   const [hasAppliedChanges, setHasAppliedChanges] = useState(false); // Track if any processing has been applied
-  const [originalBuffer, setOriginalBuffer] = useState<AudioBuffer | null>(null); // Keep pristine original
+  const [originalBuffer, setOriginalBuffer] = useState<AudioBuffer | null>(null);
+  const [activeRackTab, setActiveRackTab] = useState<'tape' | 'rack' | 'diagnostics'>('tape');
+ // Keep pristine original
   const hasUserInitiatedProcessingRef = useRef(false);
   const autoMixAbortRef = useRef(false);
 
@@ -327,6 +455,8 @@ const App: React.FC = () => {
   const [showAdvancedTools, setShowAdvancedTools] = useState(false);
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [pendingSession, setPendingSession] = useState<SessionState | null>(null);
+  const [lastImportedSessionSummary, setLastImportedSessionSummary] = useState<ImportedSessionSummary | null>(null);
+  const [lastImportedStemBundleSummary, setLastImportedStemBundleSummary] = useState<ImportedStemBundleSummary | null>(null);
   const [showExportSharePrompt, setShowExportSharePrompt] = useState(false);
   const [exportShareCard, setExportShareCard] = useState<ShareableCard | null>(null);
   const [showExportShareModal, setShowExportShareModal] = useState(false);
@@ -347,20 +477,11 @@ const App: React.FC = () => {
 
   // ===== GHOST SYSTEM STATE =====
   const [showDemoMode, setShowDemoMode] = useState(false);
-  const demoDirector = getDemoDirector({
-    verbose: true,
-    pauseBetweenActions: 200,
-    onProgress: (progress) => {
-      // Progress updates handled by DemoDashboard
-      console.log(`[Demo] ${progress.current}/${progress.total}: ${progress.action}`);
-    },
-    onError: (error) => {
-      console.error('[Demo] Error:', error.message);
-    },
-    onComplete: () => {
-      console.log('[Demo] Completed successfully');
-    },
-  });
+
+  // Sprint 4B: Session Share
+  const [shareToastVisible, setShareToastVisible] = useState(false);
+  const [viewerMode, setViewerMode] = useState(false);
+  const [viewerSessionName, setViewerSessionName] = useState<string | null>(null);
 
   // Capability System - ACC Modal State (Phase 2.2.4)
   const [showAccModal, setShowAccModal] = useState(false);
@@ -431,6 +552,7 @@ const App: React.FC = () => {
   const AUTO_MIX_MAX_ITERATIONS = 4;
   const appVersion = 'RC 1.0 (Adversarial Hardened)';
   const serviceTemplates = useMemo(() => listServiceTemplates(), []);
+  const isFriendlyMode = engineMode === 'FRIENDLY';
   const premiumModeEnabled = isPremiumStackEnabled();
   const studioOperatingModeLabel = premiumModeEnabled ? 'Premium' : 'Sovereign (Zero-Cost)';
   const studioOperatingModeSubtitle = premiumModeEnabled
@@ -442,6 +564,25 @@ const App: React.FC = () => {
   useEffect(() => {
     debugTelemetryService.installGlobalErrorHandlers();
   }, []);
+
+  // Sprint 4B: Load shared session from URL hash on mount
+  useEffect(() => {
+    loadShareFromCurrentURL().then(session => {
+      if (session) {
+        setViewerMode(true);
+        setViewerSessionName(session.fileName);
+        setCurrentConfig(session.currentConfig);
+        if (session.originalMetrics) {
+          setOriginalMetrics(session.originalMetrics);
+        }
+        // Clear hash so refresh doesn't re-trigger
+        if (window.history.replaceState) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        }
+        showNotification(`Viewing shared session: "${session.fileName}"`, 'info', 4000);
+      }
+    }).catch(() => { /* ignore */ });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.theme = themeMode;
@@ -464,6 +605,31 @@ const App: React.FC = () => {
     setTimelineHashHistory(registry.getBranchHashHistory(branchId));
   }, []);
 
+  const initializeTimelineBranchRegistry = useCallback(async (baseState: ReplayState) => {
+    const registry = await DeterministicBranchRegistry.create(baseState, {
+      snapshotInterval: TIMELINE_SNAPSHOT_INTERVAL,
+      rootBranchName: 'main',
+      workspaceId: baseState.workspaceId,
+    });
+    timelineBranchRegistryRef.current = registry;
+    timelineActionCounterRef.current = 0;
+
+    const activeBranch = registry.getActiveBranch();
+    const checkout = await registry.checkoutBranch(activeBranch.id);
+    timelinePlayheadSecondsRef.current = 0;
+
+    startTransition(() => {
+      syncTimelineBranchState(activeBranch.id);
+      setTimelineState(checkout.state);
+      setTimelineOutputHash(checkout.outputStateHash);
+      setTimelineScrubIndex(activeBranch.headIndex);
+      setTimelineHydrationMetrics(checkout.metrics);
+      setTimelinePlayheadDisplaySec(0);
+      setTimelineDispatchError(null);
+      setMergeError(null);
+    });
+  }, [syncTimelineBranchState]);
+
   const bindTimelineBuffers = useCallback((nextState: ReplayState) => {
     if (!originalBuffer || !assetRegistry || !audioPlaybackEngine) return;
     const sourceIds = new Set(
@@ -479,30 +645,12 @@ const App: React.FC = () => {
   const getTimelinePlayheadSeconds = useCallback(() => timelinePlayheadSecondsRef.current, []);
 
   useEffect(() => {
-    if (!audioPlaybackEngine) return;
+    if (!audioPlaybackEngine || isAutomation) return;
     let cancelled = false;
     void (async () => {
       try {
-        const registry = await DeterministicBranchRegistry.create(INITIAL_TIMELINE_STATE, {
-          snapshotInterval: TIMELINE_SNAPSHOT_INTERVAL,
-          rootBranchName: 'main',
-          workspaceId: INITIAL_TIMELINE_STATE.workspaceId,
-        });
+        await initializeTimelineBranchRegistry(INITIAL_TIMELINE_STATE);
         if (cancelled) return;
-
-        timelineBranchRegistryRef.current = registry;
-        const activeBranch = registry.getActiveBranch();
-        const checkout = await registry.checkoutBranch(activeBranch.id);
-        if (cancelled) return;
-
-        startTransition(() => {
-          syncTimelineBranchState(activeBranch.id);
-          setTimelineState(checkout.state);
-          setTimelineOutputHash(checkout.outputStateHash);
-          setTimelineScrubIndex(activeBranch.headIndex);
-          setTimelineHydrationMetrics(checkout.metrics);
-          setTimelineDispatchError(null);
-        });
       } catch (error) {
         if (!cancelled) {
           console.error('[Timeline] Failed to initialize branching registry:', error);
@@ -514,9 +662,10 @@ const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [syncTimelineBranchState]);
+  }, [audioPlaybackEngine, initializeTimelineBranchRegistry, isAutomation]);
 
   useEffect(() => {
+    if (!audioPlaybackEngine || isAutomation) return;
     let cancelled = false;
 
     void (async () => {
@@ -551,7 +700,7 @@ const App: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [audioPlaybackEngine, bindTimelineBuffers, isTimelinePlaying, timelineState]);
+  }, [audioPlaybackEngine, bindTimelineBuffers, isTimelinePlaying, timelineState, isAutomation]);
 
   useEffect(() => {
     if (!audioPlaybackEngine) return;
@@ -996,22 +1145,27 @@ const App: React.FC = () => {
     {
       title: 'Upload a Track',
       body: 'Drop a WAV/MP3/AIFF to start. Uploading never changes your audio.',
+      targetSelector: '#studio-upload-card',
     },
     {
       title: 'Analyze',
       body: 'Analyze inspects your mix and suggests fixes. Nothing changes until you apply.',
+      targetSelector: '#studio-analysis-card',
     },
     {
       title: 'Auto Mix',
       body: 'Run a safe one-click pass. You can always A/B and undo.',
+      targetSelector: '#studio-processing-card',
     },
     {
       title: 'A/B Listen',
       body: 'Toggle Original vs Processed to confirm the change is real.',
+      targetSelector: '[data-tour-target="studio-ab-toggle"]',
     },
     {
       title: 'Export',
       body: 'Export when it sounds right. You stay in control.',
+      targetSelector: '[data-testid="timeline-export-wav"]',
     },
   ];
 
@@ -1141,28 +1295,51 @@ const App: React.FC = () => {
   ]);
 
   const handleTimelineExportOffline = useCallback(async () => {
+    console.log('[App] Export clicked', { isTimelineExporting, isTimelineDispatching, hasApplyingTemplate: isApplyingServiceTemplate });
     if (!offlineRenderService || !assetRegistry) {
       showNotification('Studio export engine is still initializing.', 'info', 2400);
       return;
     }
     if (isTimelineExporting) return;
+    console.log('[App] Starting export, isApplyingServiceTemplate=', isApplyingServiceTemplate);
     setIsTimelineExporting(true);
     try {
+      let exportState = timelineState;
+      console.log('[App] Export state prepared with', { regions: exportState.regions.length, tracks: exportState.tracks.length });
+      if (originalBuffer && timelineState.regions.length === 1) {
+        const onlyRegion = timelineState.regions[0];
+        const sourceDurationSec = Math.max(0.001, roundTimelineNumber(originalBuffer.duration || 0, 6));
+        const timelineDurationSec = Math.max(0.001, roundTimelineNumber(onlyRegion.durationSec || 0, 6));
+        const shouldHealDuration =
+          onlyRegion.sourceId === DEFAULT_TIMELINE_REGION_SOURCE_ID
+          && Math.abs(sourceDurationSec - timelineDurationSec) > 0.25;
+        if (shouldHealDuration) {
+          const healedState = createTimelineStateFromAudioBuffer(originalBuffer as AudioBufferLike);
+          const replayed = await runDeterministicReplay(healedState, timelineActionHistory, {
+            workspaceId: healedState.workspaceId,
+          });
+          exportState = replayed.outputState;
+          showNotification('Timeline duration auto-synced to uploaded audio before export.', 'info', 2200);
+        }
+      }
+
       const fallbackRegionBuffers: Record<string, AudioBufferLike> = {};
       if (originalBuffer) {
         const unresolvedSourceIds = Array.from(new Set(
-          timelineState.regions
+          exportState.regions
             .map((region) => region.sourceId)
             .filter((sourceId) => sourceId && !assetRegistry.hasAsset(sourceId))
         ));
         for (const sourceId of unresolvedSourceIds) {
-          fallbackRegionBuffers[sourceId] = originalBuffer;
+          if (typeof sourceId === 'string') {
+            fallbackRegionBuffers[sourceId] = originalBuffer;
+          }
         }
       }
 
       const baseFileName = (currentFileName || 'timeline-export').replace(/\.[^.]+$/, '');
       const result = await offlineRenderService.renderTimelineToWav({
-        timelineState,
+        timelineState: exportState,
         audioFileName: `${baseFileName}-timeline.wav`,
         creatorId: 'human:timeline-editor',
         fallbackRegionBuffers,
@@ -1180,7 +1357,7 @@ const App: React.FC = () => {
     } finally {
       setIsTimelineExporting(false);
     }
-  }, [assetRegistry, currentFileName, isTimelineExporting, offlineRenderService, originalBuffer, showNotification, timelineState]);
+  }, [assetRegistry, currentFileName, isTimelineExporting, offlineRenderService, originalBuffer, showNotification, timelineActionHistory, timelineState]);
 
   const beginVerdictRun = useCallback(() => {
     activeVerdictRunIdRef.current += 1;
@@ -1518,8 +1695,8 @@ const App: React.FC = () => {
   }, [accPolicyTemplate]);
 
   useEffect(() => {
-    const isStudioEntrySurface = appState === AppState.IDLE || appState === AppState.READY;
-    if (!isStudioEntrySurface || engineMode !== 'FRIENDLY' || activeMode !== 'SINGLE') {
+    const isFriendlyStudioSurface = engineMode === 'FRIENDLY' && activeMode === 'SINGLE';
+    if (!isFriendlyStudioSurface) {
       setShowFriendlyTour(false);
       return;
     }
@@ -1555,6 +1732,7 @@ const App: React.FC = () => {
       if (!isMounted) return;
       if (savedSession && savedSession.fileName) {
         setPendingSession(savedSession);
+        setLastImportedSessionSummary(buildImportedSessionSummary(savedSession));
         setShowRestoreDialog(true);
       }
     })();
@@ -1582,6 +1760,28 @@ const App: React.FC = () => {
 
       // Ignore if user is typing in an input/textarea
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      // Undo: Cmd+Z (no shift)
+      if (e.metaKey && !e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        const entry = historyManager.undo();
+        if (entry) {
+          setCurrentConfig(entry.config);
+          audioEngine.applyProcessingConfig(entry.config);
+        }
+        return;
+      }
+
+      // Redo: Cmd+Shift+Z
+      if (e.metaKey && e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        const entry = historyManager.redo();
+        if (entry) {
+          setCurrentConfig(entry.config);
+          audioEngine.applyProcessingConfig(entry.config);
+        }
+        return;
+      }
 
       if (e.key === 'ArrowRight') {
         e.preventDefault();
@@ -1745,6 +1945,7 @@ const App: React.FC = () => {
   // Handle restore session
   const handleRestoreSession = () => {
     if (pendingSession) {
+      setCurrentFileName(pendingSession.fileName);
       setCurrentConfig(pendingSession.config);
       setIsAbComparing(pendingSession.isAbComparing);
       setCurrentPlayheadSeconds(pendingSession.playheadSeconds);
@@ -1757,6 +1958,11 @@ const App: React.FC = () => {
         setAppState(AppState.READY);
       }
       // Note: We can't restore the actual audio file, user needs to re-upload
+      setGeneratedStems(null);
+      setReferenceTrack(null);
+      setReferenceSignature(null);
+      setCurrentSignature(null);
+      setLastImportedStemBundleSummary(null);
       setShowRestoreDialog(false);
       setPendingSession(null);
     }
@@ -1767,6 +1973,12 @@ const App: React.FC = () => {
     await sessionManager.clearSession();
     setShowRestoreDialog(false);
     setPendingSession(null);
+    setGeneratedStems(null);
+    setReferenceTrack(null);
+    setReferenceSignature(null);
+    setCurrentSignature(null);
+    setLastImportedStemBundleSummary(null);
+    setLastImportedSessionSummary(null);
   };
 
   const startAplSession = () => {
@@ -1793,6 +2005,99 @@ const App: React.FC = () => {
   const stopAplSession = () => {
     if (!FEATURE_FLAGS.APL_ENABLED) return;
     audioPerceptionLayer.stop();
+  };
+
+  const importStemBundleFromFiles = async (files: File[]) => {
+    const imported = classifySessionFiles(files);
+    const audioTracks = imported.tracks;
+    const stemTracks = imported.referenceFile
+      ? audioTracks.filter((track) => track.file !== imported.referenceFile)
+      : audioTracks;
+    const activeTracks = stemTracks.length > 0 ? stemTracks : audioTracks;
+    if (activeTracks.length === 0) {
+      showNotification('No usable audio files were detected in that folder.', 'error', 3000);
+      return false;
+    }
+
+    setAppState(AppState.LOADING);
+    setTimelineDispatchError(null);
+
+    try {
+      const stems: Stem[] = [];
+      for (let index = 0; index < activeTracks.length; index += 1) {
+        const track = activeTracks[index];
+        const buffer = await audioEngine.decodeFile(track.file as File);
+        stems.push({
+          id: `imported-stem-${Date.now()}-${index}`,
+          name: track.displayName,
+          type: track.stemType,
+          buffer,
+          metrics: audioEngine.analyzeStaticMetrics(buffer),
+          config: {},
+        });
+      }
+
+      setGeneratedStems(stems);
+      setLastImportedStemBundleSummary({
+        rootName: imported.packageGraph.rootName,
+        sourceApp: imported.sourceApp,
+        audioFileCount: imported.summary.audioFileCount,
+        beatCount: imported.summary.beatCount,
+        vocalCount: imported.summary.vocalCount,
+        referenceCount: imported.summary.referenceCount,
+        warnings: imported.warnings,
+      });
+      setLastImportedSessionSummary(null);
+      setCurrentFileName(imported.packageGraph.rootName || activeTracks[0]?.displayName || 'Imported stems');
+      setCurrentConfig({});
+      setIsAbComparing(false);
+      setAppliedSuggestionIds([]);
+      setEchoReport(null);
+      setEchoReportStatus('idle');
+      setShadowTelemetry(null);
+      setLatestEngineVerdict(null);
+      setLatestEngineVerdictReason(null);
+      setReferenceTrack(null);
+      setReferenceSignature(null);
+      setCurrentSignature(null);
+      setOriginalBuffer(null);
+      setHasAppliedChanges(false);
+      setRevisionLog([]);
+      setActiveMode('MULTI');
+
+      if (imported.referenceFile) {
+        try {
+          const referenceBuffer = await audioEngine.decodeFile(imported.referenceFile as File);
+          const referenceMetrics = audioEngine.analyzeStaticMetrics(referenceBuffer);
+          const referenceSignature = await mixAnalysisService.extractMixSignature(referenceBuffer);
+          setReferenceTrack({
+            id: `imported-reference-${Date.now()}`,
+            name: imported.referenceFile.name,
+            buffer: referenceBuffer,
+            metrics: referenceMetrics,
+            signature: referenceSignature,
+          });
+          setReferenceSignature(referenceSignature);
+        } catch (referenceError) {
+          console.warn('[App] Reference decode failed during multi-file import', referenceError);
+          showNotification('Reference track could not be decoded, but the stem set was imported.', 'info', 3200);
+        }
+      }
+
+      setAppState(AppState.READY);
+      const summaryParts = [
+        `${stems.length} audio file${stems.length === 1 ? '' : 's'}`,
+        imported.referenceFile ? 'reference included' : null,
+        imported.sourceApp !== 'unknown' ? imported.sourceApp : null,
+      ].filter(Boolean);
+      showNotification(`Imported ${summaryParts.join(' · ')} into Multi-Stem Workspace.`, 'success', 4200);
+      return true;
+    } catch (error) {
+      console.error('[App] Failed to import multi-file stem bundle', error);
+      setAppState(AppState.IDLE);
+      showNotification('Could not decode every file in that folder. Try a cleaner session export.', 'error', 4500);
+      return false;
+    }
   };
 
   // Phase 3: APL Executor Handlers
@@ -1921,13 +2226,49 @@ const App: React.FC = () => {
 
   // File upload handler
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files ?? []) as File[];
+    if (files.length === 0) return;
+
+    const sessionJsonFile = files.find((candidate) => /\.(esl-(?:session|recovery)\.json|json)$/i.test(candidate.name));
+    if (sessionJsonFile) {
+      const envelope = await sessionManager.importSessionEnvelope(sessionJsonFile);
+      if (envelope) {
+        setPendingSession(envelope.session);
+        setLastImportedSessionSummary(buildImportedSessionSummary(envelope.session));
+        setLastImportedStemBundleSummary(null);
+        setGeneratedStems(null);
+        setShowRestoreDialog(true);
+        setAppState(AppState.IDLE);
+        showNotification('Session package imported. Restore it to rehydrate the workspace.', 'success', 3500);
+      } else {
+        showNotification('That JSON file was not a recognized ESL session package.', 'error', 3500);
+      }
+      e.target.value = '';
+      return;
+    }
+
+    if (files.length > 1) {
+      const audioFiles = files.filter((file) => file.type.startsWith('audio/') || /\.(wav|wave|mp3|m4a|aac|flac|aiff|aif|ogg|caf|alac)$/i.test(file.name));
+      if (audioFiles.length > 1) {
+        const isLikelyStems = audioFiles.some(f => /vocal|drum|bass|synth|melody/i.test(f.name));
+        if (isLikelyStems) {
+          await importStemBundleFromFiles(files);
+        } else {
+          setAlbumFiles(audioFiles);
+        }
+        e.target.value = '';
+        return;
+      }
+    }
+
+    const file = files[0];
 
     if (snapshotABActive) {
       handleClearSnapshotAB();
     }
     stopAplSession();
+    setGeneratedStems(null);
+    setLastImportedStemBundleSummary(null);
 
     // Clear previous proposals before analyzing new file
     setAplProposals([]);
@@ -2027,6 +2368,11 @@ const App: React.FC = () => {
       const metrics = mixAnalysisService.analyzeStaticMetrics(buffer);
       console.log(`[3] Metrics calculated in ${Date.now() - metricsStart}ms`);
 
+      const signatureStart = Date.now();
+      const signature = await mixAnalysisService.extractMixSignature(buffer);
+      setCurrentSignature(signature);
+      console.log(`[3b] Mix signature extracted in ${Date.now() - signatureStart}ms`);
+
       // Quick LUFS estimation (RMS now in dB, add offset for LUFS)
       const estimatedLUFS = metrics.rms + 3;
       metrics.lufs = {
@@ -2040,10 +2386,18 @@ const App: React.FC = () => {
       setOriginalMetrics(metrics);
       setProcessedMetrics(null); // Don't set processed until actual processing happens
       setOriginalBuffer(buffer); // Store pristine original for A/B and reprocessing
+      setIsTimelinePlaying(false);
+      try {
+        await initializeTimelineBranchRegistry(createTimelineStateFromAudioBuffer(buffer as AudioBufferLike));
+      } catch (timelineInitError) {
+        console.error('[Timeline] Failed to rebuild timeline from uploaded audio:', timelineInitError);
+        setTimelineDispatchError(`Failed to initialize timeline for ${file.name}`);
+      }
       setHasAppliedChanges(false); // Reset on new file
       setShadowTelemetry(null);
       setLatestEngineVerdict(null);
       setLatestEngineVerdictReason(null);
+      setCurrentSignature(signature);
       setCurrentConfig({});
       hasUserInitiatedProcessingRef.current = false;
       setEqSettings(defaultEqSettings);
@@ -2109,9 +2463,52 @@ const App: React.FC = () => {
 
       setAppState(AppState.READY);
 
+      // Non-blocking: auto genre detection + vocal analysis pipeline
+      // Genre runs first (fast), then full 6-service vocal analysis
+      setVocalAnalysisResult(null);
+      setVocalAnalysisApplied(false);
+      setDetectedGenre(null);
+      void (async () => {
+        try {
+          // Step 1: auto-detect genre from audio features (~50ms)
+          const { GenreDetector } = await import('./services/genreDetector');
+          const genreResult = GenreDetector.detect(buffer);
+          setDetectedGenre(genreResult.genre);
+          console.log(`[GenreDetector] ${genreResult.genre} (${Math.round(genreResult.confidence * 100)}% conf, ${genreResult.bpm.toFixed(0)} BPM)`);
+
+          // Step 2: full vocal analysis with detected genre (~200-500ms)
+          const { runVocalAnalysisPipeline } = await import('./services/vocal/vocalAnalysisPipeline');
+          const analysis = await runVocalAnalysisPipeline(buffer, genreResult.genre);
+          setVocalAnalysisResult(analysis);
+
+          // Step 3: auto-apply the DSP config
+          if (analysis.config && Object.keys(analysis.config).length > 0) {
+            setCurrentConfig(analysis.config);
+            audioEngine.applyProcessingConfig(analysis.config);
+            setVocalAnalysisApplied(true);
+            console.log('[VocalPipeline] DSP auto-configured:', analysis.summary);
+          }
+        } catch (_err) {
+          // Non-fatal
+        }
+      })();
+
       // DON'T auto-load AI recommendations - let user request them manually
       // This prevents timeout in Google AI Studio environment
       setAddNextUploadToAlbum(false);
+      return true;
+    });
+
+    // Prevent infinite "Analyzing Audio" hang if runSafeAsync swallows an error
+    loadPromise.then((result) => {
+      if (!result) {
+        setAppState(AppState.IDLE);
+        setTimelineDispatchError("Audio analysis encountered an error and could not complete. Please check the file format or try another file.");
+      }
+    }).catch((err) => {
+      console.error("Fatal error in loadPromise chain:", err);
+      setAppState(AppState.IDLE);
+      setTimelineDispatchError("A critical error occurred during analysis.");
     });
   };
 
@@ -2966,6 +3363,7 @@ const App: React.FC = () => {
 
   // Handle config changes from processing panel
   const configChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const historyDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const isCompressionActive = (compression?: ProcessingConfig['compression']) => {
     if (!compression) return false;
@@ -3033,6 +3431,14 @@ const App: React.FC = () => {
     setCurrentConfig(config);
     audioEngine.applyProcessingConfig(config);
 
+    // Debounced history entry (300ms) for undo/redo support
+    if (historyDebounceRef.current) clearTimeout(historyDebounceRef.current);
+    historyDebounceRef.current = setTimeout(() => {
+      if (originalMetrics) {
+        historyManager.addEntry('eq_change', 'EQ adjusted', config, originalMetrics);
+      }
+    }, 300);
+
     if (isNoOpProcessingConfig(config)) {
       if (configChangeTimeoutRef.current) {
         clearTimeout(configChangeTimeoutRef.current);
@@ -3068,6 +3474,82 @@ const App: React.FC = () => {
     hasUserInitiatedProcessingRef.current = true;
     audioEngine.refreshExternalPluginChain();
   }, []);
+
+  // ── Engineer Style Matching ──────────────────────────────────────────────
+  const handleApplyEngineerStyle = useCallback(
+    (config: ProcessingConfig, engineerName: string) => {
+      hasUserInitiatedProcessingRef.current = true;
+      setHasAppliedChanges(true);
+      setCurrentConfig(config);
+      audioEngine.applyProcessingConfig(config);
+      showNotification(`${engineerName} style applied`, 'success', 3000);
+    },
+    [audioEngine, showNotification]
+  );
+
+  // Sprint 4A: MIDI Export from current audio buffer
+  const handleExportMIDI = useCallback(async () => {
+    const buffer = audioEngine.getProcessedBuffer() || audioEngine.getOriginalBuffer();
+    if (!buffer) {
+      showNotification('No audio loaded for MIDI export', 'warning', 3000);
+      return;
+    }
+    try {
+      const notes = NoteTranscriptionService.transcribeAudioBufferToNotes(buffer);
+      if (notes.length === 0) {
+        showNotification('No pitched notes detected in this audio — MIDI export requires tonal content', 'warning', 4000);
+        return;
+      }
+      // Convert to MidiData format
+      const midiDataArray = notes.map(n => ({
+        noteNumber: n.pitch,
+        note: NoteTranscriptionService.midiNumberToNoteName(n.pitch),
+        frequency: 440 * Math.pow(2, (n.pitch - 69) / 12),
+        velocity: n.velocity,
+        startTime: n.startTime * 1000, // seconds to ms
+        duration: (n.endTime - n.startTime) * 1000,
+        channel: 0,
+      }));
+      const trackName = currentFileName?.replace(/\.[^.]+$/, '') ?? 'Echo Track';
+      const midiBytes = NoteTranscriptionService.buildMidiFile(midiDataArray, 120, trackName);
+      const blob = new Blob([midiBytes], { type: 'audio/midi' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${trackName}.mid`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      showNotification(`MIDI exported: ${notes.length} notes`, 'success', 3000);
+    } catch (err: any) {
+      showNotification('MIDI export failed: ' + (err.message ?? 'Unknown error'), 'error', 4000);
+    }
+  }, [currentFileName]);
+
+  // Sprint 4B: Generate share URL
+  const handleShareSession = useCallback(async () => {
+    if (!originalMetrics) {
+      showNotification('No session to share — load and process a track first', 'warning', 3000);
+      return;
+    }
+    try {
+      const url = await generateShareURL(
+        currentFileName ?? 'Untitled',
+        currentConfig,
+        originalMetrics,
+        echoReport?.summary ?? null
+      );
+      const copied = await copyToClipboard(url);
+      if (copied) {
+        setShareToastVisible(true);
+        setTimeout(() => setShareToastVisible(false), 2500);
+        showNotification('Share link copied to clipboard', 'success', 2500);
+      } else {
+        showNotification('Share URL: ' + url, 'info', 8000);
+      }
+    } catch (err: any) {
+      showNotification('Failed to generate share link: ' + (err.message ?? ''), 'error', 4000);
+    }
+  }, [currentFileName, currentConfig, originalMetrics, echoReport]);
 
   // Handle config apply from Enhanced Control Panel
   const handleEnhancedConfigApply = async (config: ProcessingConfig) => {
@@ -3374,6 +3856,7 @@ const App: React.FC = () => {
     const savedSession = sessionManager.getSession();
     if (savedSession) {
       setPendingSession(savedSession);
+      setLastImportedSessionSummary(buildImportedSessionSummary(savedSession));
       setShowRestoreDialog(true);
     }
 
@@ -3623,6 +4106,159 @@ const App: React.FC = () => {
         )
       : null
   );
+  const currentTrackReport = useMemo(() => {
+    if (!originalMetrics || !currentFileName) return null;
+    return deriveCohesionTrackReportFromMetrics(
+      currentFileName.replace(/\.[^/.]+$/, '') || currentFileName,
+      currentFileName.replace(/\.[^/.]+$/, '') || 'Current Track',
+      originalMetrics,
+      displayTelemetry?.humanIntentIndex
+    );
+  }, [currentFileName, originalMetrics, displayTelemetry?.humanIntentIndex]);
+
+  const albumAuthorityAnalysis = useMemo(() => {
+    if (!batchState.profile || cohesionTracks.length === 0) return null;
+    return analyzeAlbumAuthority({
+      profile: batchState.profile,
+      tracks: cohesionTracks,
+      currentTrack: currentTrackReport,
+      preservationMode,
+    });
+  }, [batchState.profile, cohesionTracks, currentTrackReport, preservationMode]);
+
+  const referenceDeltaAnalysis = useMemo(() => {
+    if (!referenceTrack || !originalMetrics || !currentSignature) return null;
+    return analyzeReferenceDelta({
+      currentMetrics: originalMetrics,
+      referenceMetrics: referenceTrack.metrics,
+      currentSignature,
+      referenceSignature: referenceSignature ?? undefined,
+      lowEnd: analysisResult?.lowEndAnalysis,
+      phaseCMastering: analysisResult?.phaseCMasteringAnalysis,
+    });
+  }, [analysisResult?.lowEndAnalysis, analysisResult?.phaseCMasteringAnalysis, currentSignature, originalMetrics, referenceSignature, referenceTrack]);
+
+  const sessionFinishAuthorityAnalysis = useMemo(() => {
+    if (!analysisResult) return null;
+    return analyzeSessionFinishAuthority({
+      narrative: analysisResult.sessionNarrativeAnalysis,
+      consequence: analysisResult.perceptualConsequenceAnalysis,
+      album: albumAuthorityAnalysis,
+      referenceDelta: referenceDeltaAnalysis,
+      phaseCMastering: analysisResult.phaseCMasteringAnalysis,
+      lowEnd: analysisResult.lowEndAnalysis,
+      vocalIntent: analysisResult.vocalIntentAnalysis,
+    });
+  }, [analysisResult, albumAuthorityAnalysis, referenceDeltaAnalysis]);
+
+  const finishLoopAnalysis = useMemo(() => {
+    if (!analysisResult) return null;
+    return analyzeFinishLoop({
+      sessionNarrative: analysisResult.sessionNarrativeAnalysis,
+      consequence: analysisResult.perceptualConsequenceAnalysis,
+      album: albumAuthorityAnalysis,
+      referenceDelta: referenceDeltaAnalysis,
+      phaseCMastering: analysisResult.phaseCMasteringAnalysis,
+      lowEnd: analysisResult.lowEndAnalysis,
+      vocalIntent: analysisResult.vocalIntentAnalysis,
+      sessionFinish: sessionFinishAuthorityAnalysis,
+    });
+  }, [analysisResult, albumAuthorityAnalysis, referenceDeltaAnalysis, sessionFinishAuthorityAnalysis]);
+
+  const albumBatchPlan = useMemo(() => {
+    if (!batchState.profile || cohesionTracks.length === 0) return null;
+    return batchMasterService.buildHarmonizePlan(cohesionTracks, batchState.profile, preservationMode);
+  }, [batchState.profile, cohesionTracks, preservationMode]);
+
+  const currentExportBuffer = useMemo(() => {
+    return audioEngine.getProcessedBuffer() ?? originalBuffer ?? audioEngine.getBuffer();
+  }, [originalBuffer, processedMetrics]);
+
+  const downloadJsonFile = useCallback((fileName: string, payload: unknown) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleExportCurrentMaster = useCallback(async (format: 'wav' | 'mp3') => {
+    const buffer = currentExportBuffer;
+    if (!buffer) {
+      showNotification('Load a track first before exporting masters.', 'info', 2400);
+      return;
+    }
+
+    try {
+      const blob = format === 'mp3'
+        ? await encoderService.exportAsMp3(buffer, 320)
+        : await encoderService.exportAsWav(buffer);
+      const fileName = `${(currentFileName || 'echo-master').replace(/\.[^.]+$/, '')}-master.${format}`;
+      const result = await downloadAudioWithManifest({
+        audioBlob: blob,
+        audioFileName: fileName,
+        creatorId: 'human:master-export',
+      });
+      setLatestExportVerification({
+        fileName: result.audioFileName,
+        manifestHash: result.signedManifest.manifestHash,
+        signature: result.signedManifest.signature,
+        signedAt: result.signedManifest.signedAt,
+      });
+      showNotification(`Exported ${fileName} with signed provenance.`, 'success', 3000);
+    } catch (error) {
+      showNotification(`Master export failed: ${(error as Error).message}`, 'error', 3600);
+    }
+  }, [currentExportBuffer, currentFileName, showNotification]);
+
+  const handleExportAltLoudnessVariants = useCallback(async () => {
+    const buffer = currentExportBuffer;
+    if (!buffer) {
+      showNotification('Load a track first before exporting variants.', 'info', 2400);
+      return;
+    }
+
+    try {
+      const baseName = (currentFileName || 'echo-master').replace(/\.[^.]+$/, '');
+      for (const variant of LOUDNESS_VARIANT_SPECS) {
+        const variantBuffer = cloneBufferWithGain(buffer, variant.gainDb);
+        const blob = await encoderService.exportAsWav(variantBuffer);
+        const fileName = resolveVariantFilename(baseName, variant);
+        await downloadAudioWithManifest({
+          audioBlob: blob,
+          audioFileName: fileName,
+          creatorId: 'human:delivery-pack',
+        });
+      }
+      showNotification('Exported loudness variants with signed manifests.', 'success', 3200);
+    } catch (error) {
+      showNotification(`Variant export failed: ${(error as Error).message}`, 'error', 3600);
+    }
+  }, [currentExportBuffer, currentFileName, showNotification]);
+
+  const handleExportComplianceReport = useCallback(() => {
+    const report = {
+      exportedAt: new Date().toISOString(),
+      trackName: currentFileName || 'Current Track',
+      finishLoop: finishLoopAnalysis,
+      albumAuthority: albumAuthorityAnalysis,
+      referenceDelta: referenceDeltaAnalysis,
+      sessionFinish: sessionFinishAuthorityAnalysis,
+      phaseCMastering: analysisResult?.phaseCMasteringAnalysis,
+      narrative: analysisResult?.sessionNarrativeAnalysis,
+      consequence: analysisResult?.perceptualConsequenceAnalysis,
+      batch: {
+        profile: batchState.profile,
+        tracks: cohesionTracks,
+        plan: albumBatchPlan,
+        progress: batchState.progress,
+      },
+    };
+    downloadJsonFile(`${(currentFileName || 'echo-release').replace(/\.[^.]+$/, '')}-compliance.json`, report);
+    showNotification('Exported compliance report.', 'success', 2200);
+  }, [analysisResult, albumAuthorityAnalysis, albumBatchPlan, batchState.profile, batchState.progress, cohesionTracks, currentFileName, downloadJsonFile, finishLoopAnalysis, referenceDeltaAnalysis, sessionFinishAuthorityAnalysis, showNotification]);
 
   useEffect(() => {
     if (!normalizedCurrentTrackName || typeof displayTelemetry?.humanIntentIndex !== 'number') return;
@@ -3647,6 +4283,25 @@ const App: React.FC = () => {
       processIdentity={processIdentity}
     >
       <div className="min-h-screen bg-[#0a0c12] text-slate-300 font-sans flex flex-col pb-24 relative overflow-hidden">
+
+      {/* Sprint 4B: Viewer Mode Banner */}
+      {viewerMode && viewerSessionName && (
+        <div className="fixed top-0 left-0 right-0 z-[200] bg-cyan-900/90 border-b border-cyan-500/40 px-4 py-2 flex items-center justify-between backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-cyan-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+            <span className="text-xs font-semibold text-cyan-200">View Only — Shared Session: "{viewerSessionName}"</span>
+          </div>
+          <button
+            onClick={() => setViewerMode(false)}
+            className="text-xs text-cyan-400 hover:text-cyan-200 underline"
+          >
+            Exit viewer mode
+          </button>
+        </div>
+      )}
 
       {/* ===== PHASE 5: LOCKDOWN BANNER ===== */}
       {isInLockdown && (
@@ -3824,13 +4479,14 @@ const App: React.FC = () => {
             </button>
             {/* Ghost Demo Mode Button */}
             <button
+              data-testid="demo-launch-button"
               onClick={() => setShowDemoMode(true)}
               className="p-2 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 hover:from-purple-500/30 hover:to-pink-500/30 border border-purple-400/50 hover:border-purple-400 transition-all"
-              title="Launch autonomous demo (Ghost System)"
+              title="Watch a 90-second demo"
             >
               <span className="flex items-center gap-1.5 text-sm font-bold text-purple-300 hover:text-purple-200">
                 <span>🎬</span>
-                <span className="hidden sm:inline text-xs">Demo</span>
+                <span className="hidden sm:inline text-xs">Watch demo</span>
               </span>
             </button>
             <div className="hidden lg:flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-[10px] uppercase tracking-[0.14em] text-slate-300">
@@ -3877,6 +4533,55 @@ const App: React.FC = () => {
         onRefresh={handleRefreshSSC}
       />
 
+      {lastImportedSessionSummary && !showRestoreDialog && (
+        <div className="mx-auto mt-4 max-w-7xl px-3 sm:px-6">
+          <div className="rounded-2xl border border-cyan-400/20 bg-cyan-500/[0.04] px-4 py-3 text-xs text-cyan-100 shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-semibold text-cyan-50">
+                Imported session cached: {lastImportedSessionSummary.fileName}
+              </p>
+              <p className="text-cyan-100/80">
+                {lastImportedSessionSummary.sourceLabel}
+              </p>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-3 text-cyan-100/75">
+              <span>{lastImportedSessionSummary.canRestoreAudioLess ? 'Audio-less restore ready' : 'Audio re-upload required'}</span>
+              {lastImportedSessionSummary.engineSummary && (
+                <span>
+                  {lastImportedSessionSummary.engineSummary.masteringQualityMode} · {lastImportedSessionSummary.engineSummary.recommendedRenderPath} · Chain {lastImportedSessionSummary.engineSummary.chainSignature ?? 'unbuilt'} · {lastImportedSessionSummary.engineSummary.noteCount} notes
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {lastImportedStemBundleSummary && (
+        <div className="mx-auto mt-4 max-w-7xl px-3 sm:px-6">
+          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.05] px-4 py-3 text-xs text-emerald-100 shadow-[0_8px_24px_rgba(0,0,0,0.18)]">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-semibold text-emerald-50">
+                Multi-file import ready: {lastImportedStemBundleSummary.rootName}
+              </p>
+              <p className="text-emerald-100/80">
+                {lastImportedStemBundleSummary.sourceApp}
+              </p>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-3 text-emerald-100/75">
+              <span>{lastImportedStemBundleSummary.audioFileCount} audio files</span>
+              <span>{lastImportedStemBundleSummary.beatCount} beat candidate(s)</span>
+              <span>{lastImportedStemBundleSummary.vocalCount} vocal candidate(s)</span>
+              <span>{lastImportedStemBundleSummary.referenceCount} reference candidate(s)</span>
+            </div>
+            {lastImportedStemBundleSummary.warnings.length > 0 && (
+              <p className="mt-2 text-emerald-100/70">
+                {lastImportedStemBundleSummary.warnings.join(' • ')}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Session Restore Dialog */}
       {showRestoreDialog && pendingSession && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -3899,10 +4604,22 @@ const App: React.FC = () => {
               <p className="text-xs text-slate-400">
                 Mode: {pendingSession.activeMode} <span className="text-slate-600">//</span> {pendingSession.appliedSuggestionIds.length} suggestions applied
               </p>
+              {pendingSession.importContext && (
+                <p className="mt-2 text-xs text-cyan-300">
+                  Source: {pendingSession.importContext.sourceLabel}
+                </p>
+              )}
+              {pendingSession.importContext?.engineSummary && (
+                <p className="mt-2 text-xs text-slate-300">
+                  Engine: {pendingSession.importContext.engineSummary.masteringQualityMode} · {pendingSession.importContext.engineSummary.recommendedRenderPath} · Chain {pendingSession.importContext.engineSummary.chainSignature ?? 'unbuilt'} · {pendingSession.importContext.engineSummary.noteCount} notes
+                </p>
+              )}
             </div>
 
             <p className="text-xs text-slate-500 mb-6 uppercase tracking-wider">
-              Your DSP settings will be restored. You'll need to re-upload the audio file.
+              {pendingSession.importContext?.canRestoreAudioLess
+                ? 'Your session state will be restored from the imported package. Re-upload audio only if you want to continue editing the source file.'
+                : 'Your DSP settings will be restored. You\'ll need to re-upload the audio file.'}
             </p>
 
             <div className="flex gap-3">
@@ -3949,19 +4666,23 @@ const App: React.FC = () => {
               <span>Master with intent.</span>
             </div>
           </section>
-          <label className="relative cursor-pointer group block">
+          <label id="studio-upload-card" data-testid="studio-upload-card" className="relative cursor-pointer group block" title="Drop a WAV, folder, or stems set to begin mastering.">
             {/* Glass card */}
-            <div className="relative bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-3xl p-7 sm:p-10 md:p-16 border-[0.5px] border-orange-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)] hover:border-orange-500/40 hover:shadow-[inset_4px_4px_12px_rgba(0,0,0,0.6),inset_-2px_-2px_8px_rgba(255,255,255,0.02)] hover:translate-y-[2px] active:shadow-[inset_6px_6px_16px_rgba(0,0,0,0.7),inset_-2px_-2px_6px_rgba(255,255,255,0.01)] active:translate-y-[4px] transition-all duration-200">
+            <div className="relative bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-3xl p-7 sm:p-10 md:p-16 border-[0.5px] border-orange-500/30 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)] hover:border-orange-500/40 hover:shadow-[inset_4px_4px_12px_rgba(0,0,0,0.6),inset_-2px_-2px_8px_rgba(255,255,255,0.02)] active:shadow-[inset_6px_6px_16px_rgba(0,0,0,0.7),inset_-2px_-2px_6px_rgba(255,255,255,0.01)] active:translate-y-[4px] transition-all duration-200">
 
             <div className="relative z-10 text-center">
               {/* Icon */}
-              <div className="w-14 h-14 sm:w-20 sm:h-20 mx-auto mb-6 rounded-2xl bg-slate-900 border border-orange-500/30 shadow-[inset_2px_2px_4px_#050710,inset_-2px_-2px_4px_#0f1828] flex items-center justify-center group-hover:translate-y-[2px] group-active:translate-y-[4px] transition-transform duration-200">
+              <div className="w-14 h-14 sm:w-20 sm:h-20 mx-auto mb-6 rounded-2xl bg-slate-900 border border-orange-500/30 shadow-[inset_2px_2px_4px_#050710,inset_-2px_-2px_4px_#0f1828] flex items-center justify-center group-active:translate-y-[4px] transition-transform duration-200">
                 <svg className="w-10 h-10 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
                 </svg>
               </div>
 
-              <h2 className="text-2xl font-bold text-white mb-2">{t('upload.title')}</h2>
+              <h2 className="text-2xl font-bold text-white mb-2">
+                <span data-tour-target="studio-upload-title" className="inline-block">
+                  {t('upload.title')}
+                </span>
+              </h2>
               <p className="text-sm text-slate-500">{t('upload.description')}</p>
 
               {/* Supported formats */}
@@ -3972,7 +4693,15 @@ const App: React.FC = () => {
               </div>
             </div>
           </div>
-          <input data-testid="single-upload-input" type="file" onChange={handleFileUpload} className="hidden" accept="audio/*" />
+          <input
+            data-testid="single-upload-input"
+            type="file"
+            multiple
+            {...({ webkitdirectory: '', directory: '' } as any)}
+            onChange={handleFileUpload}
+            className="hidden"
+            accept="audio/*,.wav,.wave,.mp3,.m4a,.aac,.flac,.aiff,.aif,.ogg,.caf,.alac,.json,.esl-session.json,.esl-recovery.json"
+          />
         </label>
 
         <div className="mt-5 flex items-center justify-center">
@@ -3997,12 +4726,12 @@ const App: React.FC = () => {
         </div>
 
         <section className="mt-12 grid gap-4 md:grid-cols-3">
-          <article className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5">
+          <article id="studio-analysis-card" className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5" title="Read loudness, dynamics, spectral balance, and transient behavior in seconds.">
             <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Step 01</p>
             <h3 className="mt-2 text-lg font-semibold text-slate-100">Analyze</h3>
             <p className="mt-2 text-sm text-slate-400">Read loudness, dynamics, spectral balance, and transient behavior in seconds.</p>
           </article>
-          <article className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5">
+          <article id="studio-processing-card" className="rounded-2xl border border-white/10 bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-5" title="Apply safe processing or review suggested changes before export.">
             <p className="text-[10px] uppercase tracking-[0.22em] text-slate-500">Step 02</p>
             <h3 className="mt-2 text-lg font-semibold text-slate-100">Feel the AI Boost</h3>
             <p className="mt-2 text-sm text-slate-400">See your Match Score and the extra magic the engine can safely add.</p>
@@ -4060,6 +4789,7 @@ const App: React.FC = () => {
       {/* Main Workspace - Second Light OS */}
       {appState === AppState.READY && activeMode === 'SINGLE' && (
         <SessionShell
+          friendlyMode={isFriendlyMode}
           serviceTemplateBar={{
             templates: serviceTemplates,
             isBusy: isApplyingServiceTemplate || isTimelineDispatching,
@@ -4067,6 +4797,27 @@ const App: React.FC = () => {
           }}
           workspace={
             <>
+          
+          <div className="mb-6">
+            <div className="flex justify-center gap-2 bg-slate-950/80 p-1.5 rounded-full border border-slate-800/50 shadow-[inset_2px_2px_4px_#000000,inset_-2px_-2px_4px_#0a0c12] mx-auto max-w-fit">
+              {(['tape', 'rack', 'diagnostics'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveRackTab(tab)}
+                  className={`px-8 py-2 rounded-full text-xs font-bold uppercase tracking-widest transition-all duration-200 ${
+                    activeRackTab === tab
+                      ? 'bg-slate-900 text-orange-400 shadow-[inset_3px_3px_6px_#050710,inset_-3px_-3px_6px_#0f1828] border border-orange-500/30'
+                      : 'bg-transparent text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {tab === 'tape' ? 'TAPE' : tab === 'rack' ? 'HARDWARE RACK' : 'DIAGNOSTICS'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ display: activeRackTab === 'tape' ? 'block' : 'none' }} className="w-full">
+
           {/* Visualizer Module */}
           <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.1),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden">
             {/* Module Header */}
@@ -4079,6 +4830,7 @@ const App: React.FC = () => {
                 <button
                   onClick={handlePlayRawAudio}
                   disabled={!originalBuffer}
+                  title={!originalBuffer ? 'Load audio first to audition the raw file.' : 'Listen to the original unprocessed audio.'}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                     !originalBuffer
                       ? 'bg-white/5 text-slate-600 border border-white/5 cursor-not-allowed opacity-50'
@@ -4088,8 +4840,10 @@ const App: React.FC = () => {
                   RAW
                 </button>
                 <button
+                  data-tour-target="studio-ab-toggle"
                   onClick={handleToggleAB}
                   disabled={!hasAppliedChanges}
+                  title={!hasAppliedChanges ? 'Apply a change first to compare original vs processed.' : 'Toggle original vs processed audio.'}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
                     !hasAppliedChanges
                       ? 'bg-white/5 text-slate-600 border border-white/5 cursor-not-allowed opacity-50'
@@ -4146,6 +4900,10 @@ const App: React.FC = () => {
             </div>
           </div>
 
+          
+          </div>
+          <div style={{ display: activeRackTab === 'diagnostics' ? 'block' : 'none' }} className="w-full space-y-6">
+
           {/* Sonic Analysis - Above Advanced Tools */}
           <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden p-5">
             <div className="flex items-center gap-3 mb-6">
@@ -4177,6 +4935,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
+          {!isFriendlyMode && (
           <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden p-5">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
@@ -4234,14 +4993,16 @@ const App: React.FC = () => {
               />
             </div>
           </div>
+          )}
 
-          {/* Listening Pass Card - Phase 4 */}
-          <Suspense fallback={shellFallback}>
-            <ListeningPassCard
-              listeningPassData={listeningPassData}
-              llmGuidance={llmGuidance}
-            />
-          </Suspense>
+          {!isFriendlyMode && (
+            <Suspense fallback={shellFallback}>
+              <ListeningPassCard
+                listeningPassData={listeningPassData}
+                llmGuidance={llmGuidance}
+              />
+            </Suspense>
+          )}
 
           {/* AI Recommendations Panel - Full Width */}
           <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden">
@@ -4252,6 +5013,9 @@ const App: React.FC = () => {
                 onReferenceUpload={handleReferenceUpload}
                 referenceMetrics={referenceTrack?.metrics || null}
                 referenceTrack={referenceTrack}
+                originalMetrics={originalMetrics}
+                processedMetrics={processedMetrics}
+                currentConfig={currentConfig}
                 onClearReference={handleClearReference}
                 isLoadingReference={isLoadingReference}
                 onApplySuggestions={handleApplySuggestions}
@@ -4284,37 +5048,267 @@ const App: React.FC = () => {
                 engineVerdict={latestEngineVerdict}
                 engineVerdictReason={latestEngineVerdictReason}
                 debugTelemetry={debugTelemetry}
+                albumAuthorityAnalysis={albumAuthorityAnalysis}
+                referenceDeltaAnalysis={referenceDeltaAnalysis}
+                sessionFinishAuthorityAnalysis={sessionFinishAuthorityAnalysis}
+                finishLoopAnalysis={finishLoopAnalysis}
+                batchState={batchState}
+                cohesionTracks={cohesionTracks}
+                albumBatchPlan={albumBatchPlan}
+                albumCohesionProfile={batchState.profile}
+                snapshotABActive={snapshotABActive}
+                onQueueAlbumFinish={handleHarmonizeAlbum}
+                onExportCurrentMasterWav={() => void handleExportCurrentMaster('wav')}
+                onExportCurrentMasterMp3={() => void handleExportCurrentMaster('mp3')}
+                onExportAltLoudnessVariants={() => void handleExportAltLoudnessVariants()}
+                onExportComplianceReport={handleExportComplianceReport}
               />
             </Suspense>
           </div>
 
-          {/* Echo Report Panel */}
-          <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden">
+          {/* Collaboration — invite team members, share projects */}
+          {!isFriendlyMode && (
             <Suspense fallback={shellFallback}>
-              <EchoReportPanel
-                echoReport={echoReport}
-                onApplyEchoAction={handleApplyEchoAction}
-                isProcessing={showProcessingOverlay}
-                echoActionStatus={echoActionStatus}
-                echoActionError={echoActionError}
-                revisionLog={revisionLog}
-                onRevertRevision={async () => {}}
-                onShowRevisionLogModal={() => {}}
-                echoReportStatus={echoReportStatus}
-                onRetryEchoReport={handleGenerateEchoReport}
-                onShowSystemCheck={() => {}}
-                onCopyDebugLog={async () => {}}
-                referenceTrackName={referenceTrack?.name}
-                beforeMetrics={originalMetrics}
-                afterMetrics={processedMetrics}
-                trackName={currentFileName}
-                processedConfig={currentConfig}
+              <CollaborationPanel
+                projectId="current-session"
+                userId="user-current"
+                isOwner={true}
               />
             </Suspense>
-          </div>
+          )}
 
-          {/* Processing Controls - Below Echo Report */}
-          {originalMetrics && (
+          
+          </div>
+          <div style={{ display: activeRackTab === 'rack' ? 'block' : 'none' }} className="w-full space-y-6">
+
+          {/* Beat Creation Studio — build backing tracks from loop library */}
+          {!isFriendlyMode && (
+            <Suspense fallback={shellFallback}>
+              <BeatCreationPanel
+                vocalBpm={beatBpm || 95}
+                onBeatCreated={(beatFile) => {
+                  // User created a beat, offer to mix with vocal
+                  showNotification('Beat created! Drop it into Mix Combiner with your vocal to bounce the full mix.', 'success', 5000);
+                }}
+              />
+            </Suspense>
+          )}
+
+          {/* Drum Machine — 16-step sequencer */}
+          {!isFriendlyMode && (
+            <Suspense fallback={shellFallback}>
+              <DrumMachinePanel
+                vocalBpm={beatBpm || 95}
+                onBeatCreated={(beatFile) => {
+                  showNotification('Drums created! Combine with your beat and vocal in Mix Combiner.', 'success', 5000);
+                }}
+              />
+            </Suspense>
+          )}
+
+          {/* Mix Combiner — vocal + beat → mastered stereo bounce */}
+          {!isFriendlyMode && (
+            <Suspense fallback={shellFallback}>
+              <MixCombinerPanel
+                onMixComplete={(buffer) => {
+                  // Load the mix result as the main working buffer for platform export
+                  setMasteredBuffer(buffer);
+                  showNotification('Mix complete — now use Platform Export Suite below to deliver to all platforms', 'success', 4000);
+                }}
+              />
+            </Suspense>
+          )}
+
+          {/* Vocal Chain Controls — process raw vocals with artist-style presets */}
+          {!isFriendlyMode && (
+            <Suspense fallback={shellFallback}>
+              <VocalChainControlsPanel />
+            </Suspense>
+          )}
+
+          {!isFriendlyMode && (
+            <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden p-1">
+              <Suspense fallback={shellFallback}>
+                <EngineerStylePanel
+                  audioBuffer={originalBuffer}
+                  onApplyStyle={handleApplyEngineerStyle}
+                  isProcessing={showProcessingOverlay}
+                />
+              </Suspense>
+            </div>
+          )}
+
+          {!isFriendlyMode && (
+            <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden">
+              <Suspense fallback={shellFallback}>
+                <EchoReportPanel
+                  echoReport={echoReport}
+                  onApplyEchoAction={handleApplyEchoAction}
+                  isProcessing={showProcessingOverlay}
+                  echoActionStatus={echoActionStatus}
+                  echoActionError={echoActionError}
+                  revisionLog={revisionLog}
+                  onRevertRevision={async () => {}}
+                  onShowRevisionLogModal={() => {}}
+                  echoReportStatus={echoReportStatus}
+                  onRetryEchoReport={handleGenerateEchoReport}
+                  onShowSystemCheck={() => {}}
+                  onCopyDebugLog={async () => {}}
+                  referenceTrackName={referenceTrack?.name}
+                  beforeMetrics={originalMetrics}
+                  afterMetrics={processedMetrics}
+                  trackName={currentFileName}
+                  processedConfig={currentConfig}
+                />
+              </Suspense>
+            </div>
+          )}
+
+          {/* Industry Benchmark Panel — how does this mix stack up against famous releases? */}
+          {originalMetrics && !isFriendlyMode && (
+            <Suspense fallback={shellFallback}>
+              <IndustryBenchmarkPanel
+                metrics={processedMetrics ?? originalMetrics}
+                lufs={(processedMetrics ?? originalMetrics).lufs?.integrated ?? null}
+                genre={detectedGenre}
+                stereoWidth={((processedMetrics ?? originalMetrics).advancedMetrics?.stereoWidth ?? 55) / 100}
+              />
+            </Suspense>
+          )}
+
+          {/* Voice Intel Card — vocal analysis results + auto-applied DSP config */}
+          {vocalAnalysisResult && !isFriendlyMode && (
+            <React.Suspense fallback={null}>
+              {React.createElement(
+                React.lazy(() => import('./components/VoiceIntelCard').then(m => ({ default: m.VoiceIntelCard }))),
+                {
+                  analysis: vocalAnalysisResult,
+                  isApplied: vocalAnalysisApplied,
+                  onApply: () => {
+                    if (vocalAnalysisResult?.config) {
+                      setCurrentConfig(vocalAnalysisResult.config);
+                      audioEngine.applyProcessingConfig(vocalAnalysisResult.config);
+                      setVocalAnalysisApplied(true);
+                    }
+                  },
+                  onDismiss: () => setVocalAnalysisResult(null),
+                }
+              )}
+            </React.Suspense>
+          )}
+
+          {/* Reference Compare Panel — load a reference track to see spectral + FX delta */}
+          {originalMetrics && !isFriendlyMode && (
+            <Suspense fallback={shellFallback}>
+              <ReferenceComparePanel
+                userBuffer={audioEngine.getProcessedBuffer() ?? originalBuffer}
+                onApplyConfig={(config, explanations) => {
+                  setCurrentConfig(prev => ({ ...prev, ...config }));
+                  audioEngine.applyProcessingConfig(config);
+                  showNotification(
+                    `Reference FX applied — ${explanations[0] ?? 'config updated'}`,
+                    'success',
+                    3000,
+                  );
+                }}
+              />
+            </Suspense>
+          )}
+
+          {/* Grammy Master Panel — below Echo Report, full mastering chain */}
+          {originalMetrics && !isFriendlyMode && (
+            <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_50px_rgba(251,191,36,0.12)] transition-shadow duration-300 overflow-hidden">
+              <Suspense fallback={shellFallback}>
+                <GrammyMasterPanel
+                  audioBuffer={audioEngine.getProcessedBuffer() ?? originalBuffer}
+                  originalMetrics={originalMetrics}
+                  isProcessing={showProcessingOverlay}
+                  detectedGenre={detectedGenre}
+                  onMasterComplete={(masteredArrayBuffer, grammyResult) => {
+                    void (async () => {
+                      try {
+                        const ctx = new AudioContext();
+                        const decoded = await ctx.decodeAudioData(masteredArrayBuffer.slice(0));
+                        setMasteredBuffer(decoded);
+                        // Build Mix Intelligence data from all pipeline results
+                        const { lufsMeteringService } = await import('./services/lufsMetering');
+                        const mastLufs = await lufsMeteringService.calculateIntegratedLUFS(decoded);
+                        setMixIntelData({
+                          fileName: currentFileName ?? undefined,
+                          genre: detectedGenre,
+                          vocalAnalysis: vocalAnalysisResult,
+                          grammyResult,
+                          masteredLufs: mastLufs,
+                          originalLufs: originalMetrics?.integratedLufs ?? null,
+                          processedAt: new Date(),
+                        });
+                        setShowMixIntel(true);
+                        // Build mastering certificate
+                        const gradeStr = grammyResult?.gradeLabel ?? '';
+                        const GRADE_EMOJIS: Record<string, string> = {
+                          Platinum: '💿', Gold: '🥇', 'A+': '⭐', A: '🎖',
+                          'B+': '🎵', B: '🎤', C: '🎙',
+                        };
+                        const emoji = Object.entries(GRADE_EMOJIS).find(([k]) => gradeStr.includes(k))?.[1] ?? '🎛';
+                        setCertificateData({
+                          trackName: currentFileName ?? 'Untitled',
+                          gradeLabel: gradeStr || 'Mastered',
+                          gradeEmoji: emoji,
+                          lufs: mastLufs,
+                          truePeak: grammyResult?.metrics?.truePeakDbfs,
+                          genre: detectedGenre ?? undefined,
+                          engine: (grammyResult as unknown as { __engine?: 'python' | 'browser' }).__engine ?? 'browser',
+                          date: new Date(),
+                          dynamicRange: grammyResult?.metrics?.lra,
+                        });
+                        setShowCertificate(true);
+                      } catch {
+                        setMasteredBuffer(audioEngine.getProcessedBuffer() ?? originalBuffer);
+                      }
+                    })();
+                  }}
+                />
+              </Suspense>
+            </div>
+          )}
+
+          {/* Mastering Certificate — shareable visual grade card */}
+          {showCertificate && certificateData && !isFriendlyMode && (
+            <Suspense fallback={shellFallback}>
+              <MasteringCertificate
+                data={certificateData}
+                onClose={() => setShowCertificate(false)}
+              />
+            </Suspense>
+          )}
+
+          {/* Mix Intelligence Report — synthesizes all analysis + Grammy result */}
+          {showMixIntel && mixIntelData && !isFriendlyMode && (
+            <Suspense fallback={shellFallback}>
+              <MixIntelligenceReport
+                data={mixIntelData}
+                onClose={() => setShowMixIntel(false)}
+                onExport={() => {
+                  document.querySelector('[data-platform-export]')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              />
+            </Suspense>
+          )}
+
+          {/* Platform Export Suite — appears after Grammy mastering completes */}
+          {masteredBuffer && !isFriendlyMode && (
+            <div data-platform-export>
+              <Suspense fallback={shellFallback}>
+                <PlatformExportPanel
+                  masterBuffer={masteredBuffer}
+                  fileName={currentFileName ?? 'master.wav'}
+                />
+              </Suspense>
+            </div>
+          )}
+
+          {/* Processing Controls - Below Grammy Master */}
+          {originalMetrics && !isFriendlyMode && (
             <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)] hover:shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_50px_rgba(251,146,60,0.08)] transition-shadow duration-300 overflow-hidden">
               <Suspense fallback={shellFallback}>
                 <ProcessingPanel
@@ -4344,6 +5338,7 @@ const App: React.FC = () => {
             </div>
           )}
 
+            </div>
             </>
           }
           timelineShell={
@@ -4360,6 +5355,16 @@ const App: React.FC = () => {
                       setMergeError(null);
                       setShowMergeModal(true);
                     },
+                  }}
+                  branchComparePanelProps={{
+                    branches: timelineBranches,
+                    activeBranchId: activeTimelineBranchId,
+                    compareBranchId: null, // Hardcoded for now unless you have state for it
+                    activeState: timelineState,
+                    compareState: null,
+                    activeHash: timelineOutputHash,
+                    compareHash: null,
+                    onSelectCompareBranch: () => {}, // Provide real handler if available
                   }}
                   transportBarProps={{
                     isPlaying: isTimelinePlaying,
@@ -4463,48 +5468,14 @@ const App: React.FC = () => {
 
       </main>
 
-      {showFriendlyTour && (
-        <div className="fixed right-6 top-24 z-[90] w-[340px] max-w-[90vw]">
-          <div className="bg-slate-900/95 backdrop-blur-xl border border-orange-500/20 rounded-2xl p-5 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
-            <div className="flex items-center justify-between mb-3">
-              <div className="text-xs text-orange-300 uppercase tracking-wider font-bold">
-                Start Here · {friendlyTourStep + 1}/{friendlyTourSteps.length}
-              </div>
-              <button
-                onClick={dismissFriendlyTour}
-                className="text-slate-500 hover:text-slate-300 text-xs uppercase tracking-wider font-semibold"
-              >
-                Skip
-              </button>
-            </div>
-            <h4 className="text-lg font-bold text-white mb-2">
-              {friendlyTourSteps[friendlyTourStep]?.title}
-            </h4>
-            <p className="text-sm text-slate-400 mb-4">
-              {friendlyTourSteps[friendlyTourStep]?.body}
-            </p>
-            <div className="flex items-center justify-between">
-              <button
-                onClick={handleFriendlyTourBack}
-                disabled={friendlyTourStep === 0}
-                className={`text-xs uppercase tracking-wider font-semibold px-3 py-2 rounded-lg border ${
-                  friendlyTourStep === 0
-                    ? 'border-slate-800 text-slate-600 cursor-not-allowed'
-                    : 'border-slate-700 text-slate-300 hover:text-white hover:border-slate-500'
-                }`}
-              >
-                Back
-              </button>
-              <button
-                onClick={handleFriendlyTourNext}
-                className="text-xs uppercase tracking-wider font-semibold px-4 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 text-white hover:from-orange-600 hover:to-orange-700 shadow-[0_6px_16px_rgba(249,115,22,0.3)]"
-              >
-                {friendlyTourStep >= friendlyTourSteps.length - 1 ? 'Done' : 'Next'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <StudioCoachmarkTour
+        isVisible={showFriendlyTour}
+        stepIndex={friendlyTourStep}
+        steps={friendlyTourSteps}
+        onBack={handleFriendlyTourBack}
+        onNext={handleFriendlyTourNext}
+        onSkip={dismissFriendlyTour}
+      />
 
       <FeedbackButton onClick={() => {}} />
 
@@ -4623,7 +5594,7 @@ const App: React.FC = () => {
                 </svg>
               </button>
             </div>
-            <div className="flex-1 overflow-auto p-6">
+            <div className="flex-1 overflow-auto p-6 space-y-4">
               <Suspense fallback={shellFallback}>
                 <EnhancedControlPanel
                   onConfigApply={handleEnhancedConfigApply}
@@ -4635,6 +5606,33 @@ const App: React.FC = () => {
                   setDynamicEq={setDynamicEq}
                 />
               </Suspense>
+
+              {/* Sprint 4A: MIDI Export */}
+              {appState === AppState.READY && (
+                <div className="pt-4 border-t border-white/10">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Export</p>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      onClick={handleExportMIDI}
+                      className="px-4 py-2.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300 font-semibold text-sm hover:bg-purple-500/25 transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                      </svg>
+                      Export MIDI
+                    </button>
+                    <button
+                      onClick={handleShareSession}
+                      className="px-4 py-2.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-semibold text-sm hover:bg-cyan-500/25 transition-colors flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                      </svg>
+                      Share Session
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -4670,7 +5668,15 @@ const App: React.FC = () => {
             {/* Chat Content */}
             <div className="flex-1 overflow-hidden">
               <Suspense fallback={shellFallback}>
-                <ChatInterface />
+                <ChatInterface
+                  currentLufs={processedMetrics?.lufs?.integrated ?? null}
+                  currentTruePeak={processedMetrics?.lufs?.truePeak ?? null}
+                  currentTrackTitle={currentFile?.name?.replace(/\.[^/.]+$/, '') ?? null}
+                  currentPhase={appState}
+                  hasReference={!!referenceTrack}
+                  albumTrackCount={albumFiles?.length ?? null}
+                  eliteProfile={currentConfig?.eliteProfile ?? null}
+                />
               </Suspense>
             </div>
           </div>
@@ -4842,14 +5848,7 @@ const App: React.FC = () => {
             onDismiss: handleAccDismiss,
             isLoading: accIsLoading,
           }}
-          proposalPanelProps={appState === AppState.READY && aplProposals.length > 0 ? {
-            proposals: aplProposals,
-            isScanning: isAplScanning,
-            dataSource: aplDataSource,
-            dataSourceReason: aplDataSourceReason,
-            onApplyDirect: handleAplApplyDirect,
-            onAuthorizeGated: handleAplAuthorizeGated,
-          } : null}
+          proposalPanelProps={null /* Disabled per user request */}
         />
       </Suspense>
 
@@ -4862,12 +5861,21 @@ const App: React.FC = () => {
       {/* Demo Dashboard (Ghost System Modal) */}
       {showDemoMode && (
         <Suspense fallback={null}>
-          <DemoDashboard
-            onClose={() => setShowDemoMode(false)}
-            demoDirector={demoDirector}
-          />
+          <DemoDashboard onClose={() => setShowDemoMode(false)} />
         </Suspense>
       )}
+
+      {/* Album Mode Phase 3 Wrapper */}
+      <AnimatePresence>
+        {albumFiles && (
+          <Suspense fallback={null}>
+            <AlbumModeRoute
+              initialFiles={albumFiles}
+              onExit={() => setAlbumFiles(null)}
+            />
+          </Suspense>
+        )}
+      </AnimatePresence>
 
       </div>
     </CapabilityProvider>

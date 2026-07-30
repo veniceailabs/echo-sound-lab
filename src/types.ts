@@ -1,4 +1,8 @@
 import { GenreProfile } from './services/genreProfiles';
+import type { PhaseCMasteringAnalysis } from './services/master/phaseCMastering';
+import type { SessionNarrativeAnalysis } from './services/finishing/sessionNarrativeEngine';
+import type { PerceptualConsequenceAnalysis } from './services/finishing/perceptualConsequenceEngine';
+import type { ReferenceWorldAnalysis } from './services/finishing/referenceWorldEngine';
 
 export type ProcessingMode = 'default' | 'vocal_presence';
 export type EngineMode = 'FRIENDLY' | 'ADVANCED';
@@ -110,6 +114,8 @@ export interface AudioMetrics {
   };
 }
 
+import type { EliteEngineerProfileId } from './services/finishing/eliteEngineerProfiles';
+
 export interface ProcessingConfig {
   inputTrimDb?: number;
   outputTrimDb?: number;
@@ -132,6 +138,7 @@ export interface ProcessingConfig {
   dynamicEq?: DynamicEQConfig;
   colorFilter?: ColorFilterType;
   pitch?: PitchCorrectionConfig;
+  eliteProfile?: EliteEngineerProfileId;
 }
 
 export type LiveProcessingConfig = Omit<ProcessingConfig, 'targetGainDb' | 'compression' | 'stereoWidener' | 'limiter'> & {
@@ -390,6 +397,10 @@ export interface AnalysisResult {
     genrePrediction?: string;
     frequencyData: any[];
     mixReadiness?: MixReadiness;
+    phaseCMasteringAnalysis?: PhaseCMasteringAnalysis;
+    sessionNarrativeAnalysis?: SessionNarrativeAnalysis;
+    perceptualConsequenceAnalysis?: PerceptualConsequenceAnalysis;
+    referenceWorldAnalysis?: ReferenceWorldAnalysis;
 }
 export interface ChatMessage { id: string; role: 'user' | 'model'; text: string; timestamp: number; }
 export enum AppState { 
@@ -812,6 +823,8 @@ export interface GeneratedSong {
   name: string;
   coverArtUrl?: string;
   coverArtPath?: string;
+  sourceSongPath?: string;
+  sourceSongUrl?: string;
   buffer: AudioBuffer;
   stems: {
     vocals: AudioBuffer;

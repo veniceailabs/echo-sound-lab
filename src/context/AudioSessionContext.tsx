@@ -10,7 +10,6 @@
  */
 
 import React, { createContext, useContext, useReducer, useCallback } from 'react';
-import { AudioBuffer } from 'web-audio-api';
 import { ProcessingAction, AnalysisResult, AudioMetrics } from '../types';
 
 export interface AudioSession {

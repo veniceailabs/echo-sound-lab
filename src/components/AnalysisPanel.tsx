@@ -1,6 +1,19 @@
 import React, { useState } from 'react';
-import { AnalysisResult, AudioMetrics, Suggestion, MixReadiness, ReferenceTrack, PreservationMode } from '../types';
+import { AnalysisResult, AudioMetrics, Suggestion, MixReadiness, ReferenceTrack, PreservationMode, ProcessingConfig } from '../types';
 import ShadowDeltaBadge from './ShadowDeltaBadge';
+import FinishAuthorityPanel from './FinishAuthorityPanel';
+import SessionFinishAuthorityPanel from './SessionFinishAuthorityPanel';
+import FinishLoopPanel from './FinishLoopPanel';
+import EliteMixingPanel from './EliteMixingPanel';
+import ReferenceWorldPanel from './ReferenceWorldPanel';
+import FinalDeliverablesPanel from './FinalDeliverablesPanel';
+import APLAutomationPlanPanel from './APLAutomationPlanPanel';
+import type { AlbumAuthorityAnalysis } from '../services/finishing/albumAuthorityEngine';
+import type { ReferenceDeltaAnalysis } from '../services/finishing/referenceDeltaEngine';
+import type { SessionFinishAuthorityAnalysis } from '../services/finishing/sessionFinishAuthority';
+import type { FinishLoopAnalysis } from '../services/finishing/finishLoopEngine';
+import type { HarmonizePlan } from '../services/batchMasterService';
+import type { BatchState, CohesionTrackReport, AlbumCohesionProfile } from '../types';
 
 // White Plugin Icons for AI Recommendations
 const PluginIcon: React.FC<{ category: string }> = ({ category }) => {
@@ -114,6 +127,9 @@ interface AnalysisPanelProps {
   onReferenceUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   referenceMetrics: AudioMetrics | null;
   referenceTrack?: ReferenceTrack | null;
+  originalMetrics?: AudioMetrics | null;
+  processedMetrics?: AudioMetrics | null;
+  currentConfig?: ProcessingConfig | null;
   onClearReference?: () => void;
   isLoadingReference?: boolean;
   onApplySuggestions: () => Promise<boolean>;
@@ -151,6 +167,24 @@ interface AnalysisPanelProps {
   engineVerdict?: 'accept' | 'warn' | 'block' | null;
   engineVerdictReason?: string | null;
   debugTelemetry?: boolean;
+  albumAuthorityAnalysis?: AlbumAuthorityAnalysis | null;
+  referenceDeltaAnalysis?: ReferenceDeltaAnalysis | null;
+  sessionFinishAuthorityAnalysis?: SessionFinishAuthorityAnalysis | null;
+  finishLoopAnalysis?: FinishLoopAnalysis | null;
+  batchState?: BatchState | null;
+  cohesionTracks?: CohesionTrackReport[];
+  albumBatchPlan?: HarmonizePlan | null;
+  albumCohesionProfile?: AlbumCohesionProfile | null;
+  snapshotABActive?: boolean;
+  onQueueAlbumFinish?: () => void;
+  onExportCurrentMasterWav?: () => void;
+  onExportCurrentMasterMp3?: () => void;
+  onExportAltLoudnessVariants?: () => void;
+  onExportComplianceReport?: () => void;
+  onApplyAutomationPlan?: () => Promise<void> | void;
+  isApplyingAutomationPlan?: boolean;
+  onSimpleStart?: () => Promise<void> | void;
+  isSimpleStarting?: boolean;
 }
 
 const FRIENDLY_CATEGORY_LABELS: Record<string, string> = {
@@ -176,12 +210,41 @@ const resolveFriendlyCategory = (category: string) => {
   return matchKey ? FRIENDLY_CATEGORY_LABELS[matchKey] : category;
 };
 
+const summarizeIntent = (intent?: string) => {
+  switch (intent) {
+    case 'intimate':
+      return 'close and emotional';
+    case 'aggressive':
+      return 'punchy and forward';
+    case 'melodic':
+      return 'musical and open';
+    case 'conversational':
+      return 'natural and spoken';
+    case 'whispered':
+      return 'soft and delicate';
+    case 'belted':
+      return 'big and powerful';
+    default:
+      return 'balanced';
+  }
+};
+
+const summarizeFriendlyStage = (
+  label: string,
+  status: string,
+  detail: string,
+  tone: 'good' | 'warn' | 'info'
+) => ({ label, status, detail, tone });
+
 const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   engineMode,
   analysisResult,
   onReferenceUpload,
   referenceMetrics,
   referenceTrack,
+  originalMetrics,
+  processedMetrics,
+  currentConfig,
   onClearReference,
   isLoadingReference,
   onApplySuggestions,
@@ -212,15 +275,70 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   onPreservationModeChange,
   engineVerdict,
   engineVerdictReason,
-  debugTelemetry
+  debugTelemetry,
+  albumAuthorityAnalysis,
+  referenceDeltaAnalysis,
+  sessionFinishAuthorityAnalysis,
+  finishLoopAnalysis,
+  batchState,
+  cohesionTracks = [],
+  albumBatchPlan,
+  albumCohesionProfile,
+  snapshotABActive = false,
+  onQueueAlbumFinish,
+  onExportCurrentMasterWav,
+  onExportCurrentMasterMp3,
+  onExportAltLoudnessVariants,
+  onExportComplianceReport,
+  onApplyAutomationPlan,
+  isApplyingAutomationPlan,
+  onSimpleStart,
+  isSimpleStarting,
 }) => {
   if (!analysisResult) return null;
-  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(true);
   const [isImprovingMix, setIsImprovingMix] = useState(false);
   const isFriendly = engineMode === 'FRIENDLY';
   const showFullStudio = !isFriendly && !!onFullStudioAutoMix;
   const autoMixLabel = autoMixMode === 'FULL_STUDIO' ? 'Full Studio Auto Mix' : 'Auto Mix';
   const isAnalyzerCalculating = analysisResult.genrePrediction === 'Analyzing...' && analysisResult.suggestions.length === 0;
+  const vocalStatus = analysisResult.vocalIntentAnalysis?.intent ? 'Stable' : 'Waiting';
+  const lowEndStatus = analysisResult.lowEndAnalysis?.verdict === 'stable' || analysisResult.lowEndAnalysis?.verdict === 'tight' ? 'Stable' : 'Needs attention';
+  const finishStatus = analysisResult.phaseCMasteringAnalysis?.verdict === 'ready' || analysisResult.phaseCMasteringAnalysis?.finalTranslation.verdict === 'translation_ready'
+    ? 'Ready'
+    : 'Needs a final pass';
+  const isReleaseReady =
+    analysisResult.vocalIntentAnalysis &&
+    analysisResult.lowEndAnalysis &&
+    analysisResult.phaseCMasteringAnalysis &&
+    (analysisResult.lowEndAnalysis.verdict === 'stable' || analysisResult.lowEndAnalysis.verdict === 'tight') &&
+    (analysisResult.phaseCMasteringAnalysis.verdict === 'ready' || analysisResult.phaseCMasteringAnalysis.finalTranslation.verdict === 'translation_ready');
+  const friendlyStageSummary = [
+    summarizeFriendlyStage(
+      'Vocal',
+      vocalStatus,
+      analysisResult.vocalIntentAnalysis
+        ? `The vocal feels ${summarizeIntent(analysisResult.vocalIntentAnalysis.intent)}.`
+        : 'We check the vocal first so it sits cleanly in the track.',
+      analysisResult.vocalIntentAnalysis && analysisResult.guardrailAnalysis && analysisResult.guardrailAnalysis.score >= 75 ? 'good' : 'info'
+    ),
+    summarizeFriendlyStage(
+      'Low End',
+      lowEndStatus,
+      analysisResult.lowEndAnalysis
+        ? analysisResult.lowEndAnalysis.rationale
+        : 'We check kick and bass so the track stays solid on phone, car, and earbuds.',
+      analysisResult.lowEndAnalysis?.verdict === 'stable' || analysisResult.lowEndAnalysis?.verdict === 'tight' ? 'good' : 'warn'
+    ),
+    summarizeFriendlyStage(
+      'Finish',
+      finishStatus,
+      analysisResult.phaseCMasteringAnalysis
+        ? analysisResult.phaseCMasteringAnalysis.rationale
+        : 'We check the final loudness, tone, and translation before export.',
+      analysisResult.phaseCMasteringAnalysis?.verdict === 'ready' || analysisResult.phaseCMasteringAnalysis?.finalTranslation.verdict === 'translation_ready' ? 'good' : 'warn'
+    ),
+  ];
   const handleImproveMyMixClick = async () => {
     if (!onImproveMyMix || isImprovingMix || isProcessing) return;
     setIsImprovingMix(true);
@@ -232,18 +350,145 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
   };
 
   return (
-    <div className="bg-gradient-to-br from-slate-900/90 to-slate-800/90 backdrop-blur-xl rounded-3xl p-8 shadow-[6px_6px_20px_rgba(0,0,0,0.4),-2px_-2px_10px_rgba(255,255,255,0.02)] border border-slate-700/30 mb-6">
-      <div className="mb-6 rounded-2xl border border-slate-700/60 bg-gradient-to-b from-slate-800 to-slate-900 p-8 text-center shadow-xl">
+    <div className="bg-gradient-to-br from-slate-900/90 to-slate-800/90 backdrop-blur-xl rounded-3xl p-5 sm:p-8 shadow-[6px_6px_20px_rgba(0,0,0,0.4),-2px_-2px_10px_rgba(255,255,255,0.02)] border border-slate-700/30 mb-6">
+      <div className="mb-6 rounded-2xl border border-slate-700/60 bg-gradient-to-b from-slate-800 to-slate-900 p-5 sm:p-8 text-center shadow-xl">
         <h2 className="text-2xl font-bold text-white">Ready to finish your track?</h2>
         <p className="mt-2 text-slate-400">Our AI will polish your sound while keeping your drums punchy.</p>
         <button
           onClick={handleImproveMyMixClick}
           disabled={!onImproveMyMix || isImprovingMix || isProcessing}
-          className="mt-6 rounded-full bg-emerald-500 px-10 py-4 font-bold text-black transition-all hover:scale-105 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+          className="mt-6 rounded-full bg-emerald-500 px-8 sm:px-10 py-3.5 sm:py-4 font-bold text-black transition-all hover:scale-105 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
         >
-          {isImprovingMix || isProcessing ? 'âœ¨ Working Magic...' : 'âœ¨ Improve My Mix'}
+          {isImprovingMix || isProcessing ? 'âœWorking Magic...' : 'âœImprove My Mix'}
         </button>
       </div>
+
+      {isFriendly && (
+        <div className="mb-6 rounded-2xl border border-slate-700/60 bg-slate-950/50 p-5 sm:p-6 shadow-lg">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.28em] text-orange-300">Simple next steps</p>
+              <h3 className="mt-2 text-lg font-bold text-white">
+                {isReleaseReady ? 'Your track is ready.' : 'One button gets you to a strong first master.'}
+              </h3>
+            </div>
+            <p className="text-xs text-slate-400">
+              This is the short version for first-time users.
+            </p>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {[
+              { label: 'Vocal', value: vocalStatus, note: analysisResult.vocalIntentAnalysis ? `Feels ${summarizeIntent(analysisResult.vocalIntentAnalysis.intent)}.` : 'Waiting for analysis.' },
+              { label: 'Low End', value: lowEndStatus, note: analysisResult.lowEndAnalysis ? analysisResult.lowEndAnalysis.rationale : 'Kick and bass are being checked.' },
+              { label: 'Finish', value: finishStatus, note: analysisResult.phaseCMasteringAnalysis ? analysisResult.phaseCMasteringAnalysis.rationale : 'Final loudness and translation are being checked.' },
+            ].map((item) => (
+              <div key={item.label} className="rounded-xl border border-slate-700/60 bg-slate-900/60 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{item.label}</span>
+                  <span
+                    className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                      item.value === 'Ready' || item.value === 'Stable'
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : 'bg-amber-500/15 text-amber-300'
+                    }`}
+                  >
+                    {item.value}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm font-semibold text-white">{item.note}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {friendlyStageSummary.map((stage) => (
+              <div
+                key={stage.label}
+                className="rounded-xl border border-slate-700/60 bg-slate-900/60 p-4"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">{stage.label}</span>
+                  <span
+                    className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${
+                      stage.tone === 'good'
+                        ? 'bg-emerald-500/15 text-emerald-300'
+                        : stage.tone === 'warn'
+                          ? 'bg-amber-500/15 text-amber-300'
+                          : 'bg-slate-700/60 text-slate-300'
+                    }`}
+                  >
+                    {stage.status}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm font-semibold text-white">{stage.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {onSimpleStart && (
+        <section className="mb-5 rounded-2xl border border-emerald-400/20 bg-emerald-500/5 p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-emerald-200/70">One-Button Studio</p>
+              <h3 className="mt-2 text-lg font-semibold text-slate-100">Do It For Me, safely</h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
+                Let ESL run the strongest safe pass, then place the perceptual automation plan on top. Beginners can stop here; experts can still edit everything.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void onSimpleStart()}
+              disabled={isProcessing || isAutoMixing || isApplyingAutomationPlan || isSimpleStarting}
+              className="rounded-2xl border border-emerald-400/35 bg-emerald-500/15 px-5 py-3 text-sm font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/5 disabled:text-slate-500"
+            >
+              {isSimpleStarting ? 'Building your master...' : 'Do It For Me'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      <FinishAuthorityPanel analysisResult={analysisResult} />
+      <SessionFinishAuthorityPanel
+        albumAuthority={albumAuthorityAnalysis}
+        referenceDelta={referenceDeltaAnalysis}
+        sessionFinish={sessionFinishAuthorityAnalysis}
+      />
+      <EliteMixingPanel
+        analysisResult={analysisResult}
+        originalMetrics={originalMetrics}
+        processedMetrics={processedMetrics}
+        currentConfig={currentConfig}
+        referenceTrack={referenceTrack}
+        referenceDelta={referenceDeltaAnalysis}
+        finishLoop={finishLoopAnalysis}
+        sessionFinish={sessionFinishAuthorityAnalysis}
+        snapshotABActive={snapshotABActive}
+      />
+      <ReferenceWorldPanel analysis={analysisResult.referenceWorldAnalysis ?? null} />
+      <APLAutomationPlanPanel
+        automationPlan={analysisResult.automationPlan ?? null}
+        targetTrackName={'current track'}
+        onApplyAutomationPlan={onApplyAutomationPlan}
+        isApplying={isApplyingAutomationPlan}
+      />
+      <FinishLoopPanel finishLoop={finishLoopAnalysis} />
+      <FinalDeliverablesPanel
+        finishLoop={finishLoopAnalysis}
+        albumAuthority={albumAuthorityAnalysis}
+        referenceDelta={referenceDeltaAnalysis}
+        sessionFinish={sessionFinishAuthorityAnalysis}
+        batchState={batchState ?? { isBatching: false, profile: null, progress: {} }}
+        cohesionTracks={cohesionTracks}
+        albumPlan={albumBatchPlan ?? null}
+        albumProfile={albumCohesionProfile ?? null}
+        isBusy={isProcessing}
+        onQueueAlbumFinish={onQueueAlbumFinish}
+        onExportCurrentMasterWav={onExportCurrentMasterWav}
+        onExportCurrentMasterMp3={onExportCurrentMasterMp3}
+        onExportAltLoudnessVariants={onExportAltLoudnessVariants}
+        onExportComplianceReport={onExportComplianceReport}
+      />
 
       <div className="mb-5 border-t border-slate-700/60 pt-4">
         <button
@@ -419,12 +664,18 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             </div>
           )}
 
+        <div className="mb-4 rounded-lg border border-orange-500/25 bg-orange-500/5 px-3 py-2 text-[11px] text-slate-300">
+          <span className="font-semibold text-orange-300">Defender License Policy:</span>{' '}
+          Founding Defender ($199) is limited to the first 500 users and grants v2.x lifetime access.
+          Unlimited usage is for human creators; high-frequency headless automation is not allowed on standard licenses.
+        </div>
+
         {onAutoMix && (isAutoMixing || autoMixProgress || autoMixError) && (
           <div className="mb-5 rounded-xl border border-slate-700/60 bg-slate-900/40 px-4 py-3 text-sm">
             <div className="flex items-center justify-between gap-3">
               <div className="text-slate-200 font-semibold">
                 {autoMixProgress
-                  ? `${autoMixLabel} Pass ${autoMixProgress.iteration}/${autoMixProgress.maxIterations} Â· ${autoMixProgress.stage}`
+                  ? `${autoMixLabel} Pass ${autoMixProgress.iteration}/${autoMixProgress.maxIterations} Â${autoMixProgress.stage}`
                   : autoMixLabel}
               </div>
               {isAutoMixing && onCancelAutoMix && (
@@ -582,8 +833,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
                       </>
                     ) : (
                       selectedSuggestionCount > 0
-                        ? `âœ¨ Improve My Mix (${selectedSuggestionCount})`
-                        : 'âœ¨ Improve My Mix'
+                        ? `âœImprove My Mix (${selectedSuggestionCount})`
+                        : 'âœImprove My Mix'
                     )}
                   </span>
                 </button>
@@ -598,8 +849,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
         )}
       </div>
 
-      {/* Reference Track - Second - Hidden when Echo Report is active */}
-      {!isFriendly && (echoReportStatus !== 'loading' && echoReportStatus !== 'success') && (
+      {/* Reference Profiling - always available in Advanced mode */}
+      {!isFriendly && (
       <div>
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-blue-500 flex items-center justify-center shadow-lg">
@@ -608,8 +859,8 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
             </svg>
           </div>
           <div>
-            <h3 className="text-lg font-black text-white tracking-tight">Reference Track</h3>
-            <p className="text-xs text-slate-400">Optional AI matching</p>
+            <h3 className="text-lg font-black text-white tracking-tight">Reference Profiling</h3>
+            <p className="text-xs text-slate-400">Upload a target record and master toward its intent</p>
           </div>
         </div>
 
@@ -623,7 +874,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({
               type="file"
               onChange={onReferenceUpload}
               className="hidden"
-              accept="audio/*"
+              accept="audio/*,.wav,.wave,.mp3,.m4a,.aac,.flac,.aiff,.aif,.ogg,.caf,.alac"
               disabled={isLoadingReference}
             />
             <div className="text-center relative z-10">

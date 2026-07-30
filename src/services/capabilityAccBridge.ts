@@ -18,7 +18,7 @@
 import { CapabilityRequest, CapabilityGrant } from './capabilities';
 
 // Import Self Session v0 types (from previous phase)
-interface ConfirmationToken {
+export interface ConfirmationToken {
   token_id: string;
   session_id: string;
   acc_event_id: string;
@@ -29,7 +29,7 @@ interface ConfirmationToken {
   was_valid: boolean | null;
 }
 
-interface ACCCheckpoint {
+export interface ACCCheckpoint {
   acc_id: string;
   timestamp: number;
   capabilityRequested: CapabilityRequest;
@@ -40,12 +40,81 @@ interface ACCCheckpoint {
   validatedAt: number | null;
 }
 
+interface ConfirmationManagerLike {
+  issue_confirmation: (
+    sessionId: string,
+    accEventId: string,
+    confirmationType: string,
+    ttlSeconds: number
+  ) => ConfirmationToken;
+  validate_confirmation: (
+    tokenId: string,
+    userResponse: string,
+    now: Date
+  ) => boolean;
+  revoke_token: (tokenId: string, now: Date) => void;
+}
+
+type InMemoryTokenState = ConfirmationToken & {
+  expires_at: number;
+};
+
+class InMemoryConfirmationManager implements ConfirmationManagerLike {
+  private tokens = new Map<string, InMemoryTokenState>();
+
+  issue_confirmation(
+    sessionId: string,
+    accEventId: string,
+    confirmationType: string,
+    ttlSeconds: number
+  ): ConfirmationToken {
+    const tokenId = `token-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const challenge = `confirm ${confirmationType.toLowerCase()} ${Math.random().toString(36).slice(2, 6)}`;
+    const token: InMemoryTokenState = {
+      token_id: tokenId,
+      session_id: sessionId,
+      acc_event_id: accEventId,
+      confirmation_type: confirmationType,
+      challenge_payload: challenge,
+      challenge_hash: challenge,
+      is_used: false,
+      was_valid: null,
+      expires_at: Date.now() + ttlSeconds * 1000,
+    };
+
+    this.tokens.set(tokenId, token);
+    return token;
+  }
+
+  validate_confirmation(tokenId: string, userResponse: string, now: Date): boolean {
+    const token = this.tokens.get(tokenId);
+    if (!token || token.is_used || now.getTime() > token.expires_at) {
+      return false;
+    }
+
+    const normalizedResponse = userResponse.trim();
+    const isValid = normalizedResponse === token.challenge_payload;
+    token.is_used = true;
+    token.was_valid = isValid;
+    this.tokens.set(tokenId, token);
+    return isValid;
+  }
+
+  revoke_token(tokenId: string): void {
+    const token = this.tokens.get(tokenId);
+    if (!token) return;
+    token.is_used = true;
+    token.was_valid = false;
+    this.tokens.set(tokenId, token);
+  }
+}
+
 export class CapabilityAccBridge {
   private pendingACCs: Map<string, ACCCheckpoint> = new Map();
 
   constructor(
     private sessionId: string,
-    private confirmationManager: any  // Self_Session_v0_Confirmation.ConfirmationManager
+    private confirmationManager: ConfirmationManagerLike = new InMemoryConfirmationManager()
   ) {}
 
   /**

@@ -17,6 +17,13 @@ if (typeof process !== 'undefined' && process.versions && process.versions.node)
 }
 
 export class AppleScriptActuator {
+  private static readonly dangerousPatterns = [
+    'do shell script',
+    'run script',
+    'open location',
+    'rm -rf',
+  ];
+
   /**
    * Executes a raw AppleScript string on the host OS.
    * @param script The AppleScript code to run
@@ -26,11 +33,11 @@ export class AppleScriptActuator {
       throw new Error('AppleScriptActuator requires Node.js runtime. Not available in browser context.');
     }
 
-    // 1. Sanitize: Escape double quotes to prevent shell injection (basic)
-    const sanitizedScript = script.replace(/"/g, '\\"');
+    if (!this.validateScript(script)) {
+      throw new Error('AppleScriptActuator rejected unsafe script');
+    }
 
-    // 2. Command: osascript -e "tell app..."
-    const command = `osascript -e "${sanitizedScript}"`;
+    const command = `osascript -e ${this.quoteForShell(script)}`;
 
     try {
       console.log(`[Actuator] Executing OS Command...`);
@@ -58,5 +65,14 @@ export class AppleScriptActuator {
     } catch (e) {
       return false;
     }
+  }
+
+  public static validateScript(script: string): boolean {
+    const normalized = script.toLowerCase();
+    return !this.dangerousPatterns.some((pattern) => normalized.includes(pattern));
+  }
+
+  private static quoteForShell(script: string): string {
+    return `'${script.replace(/'/g, `'\"'\"'`)}'`;
   }
 }

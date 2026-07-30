@@ -1,0 +1,215 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    FIVERR GIG SETUP — VISUAL WALKTHROUGH                     ║
+║                          (Click-by-click guide)                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+BEFORE YOU START:
+  • Go to: https://www.fiverr.com
+  • Login with your account
+  • Open tab: https://www.fiverr.com/gig_editor
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1: CREATE GIG #1 (VOCAL MIXING)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Screen 1: Fiverr Gig Editor Homepage
+┌─────────────────────────────────────────────────────────────┐
+│  Fiverr.com                                                 │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ 🟢 Create New Gig                                       ││
+│  │                                                          ││
+│  │ What do you want to call your gig?                      ││
+│  │ [____________________________________]                  ││
+│  │ [PASTE: Professional Vocal Mixing - Mix Your Song... ]  ││
+│  │                                                          ││
+│  │ Category *                                              ││
+│  │ [Dropdown: Music & Audio]                              ││
+│  │ [Dropdown: Mixing & Mastering]                         ││
+│  │ [Dropdown: Mixing]                                     ││
+│  │                                                          ││
+│  │ [Next Button →]                                         ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+
+Actions:
+  1. Click in GIG TITLE field
+  2. Paste: "Professional Vocal Mixing - Mix Your Song Like a Pro"
+  3. Select Category: Music & Audio
+  4. Select Subcategory: Mixing & Mastering
+  5. Select Category: Mixing
+  6. Click [Next Button]
+
+Screen 2: Description Page
+┌─────────────────────────────────────────────────────────────┐
+│  Fiverr.com                                                 │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ Gig Description *                                       ││
+│  │ ┌─────────────────────────────────────────────────────┐││
+│  │ │                                                      │││
+│  │ │ 🎤 PROFESSIONAL VOCAL MIXING                       │││
+│  │ │                                                      │││
+│  │ │ Need your vocals mixed like a pro? You've come   │││
+│  │ │ to the right place...                             │││
+│  │ │                                                      │││
+│  │ │ [PASTE ENTIRE DESCRIPTION HERE]                   │││
+│  │ │                                                      │││
+│  │ └─────────────────────────────────────────────────────┘││
+│  │                                                          ││
+│  │ [Next Button →]                                         ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+
+Actions:
+  1. Click in the description field
+  2. Clear any existing text (Ctrl+A, Delete)
+  3. Paste the FULL DESCRIPTION from FIVERR_5MINUTE_SETUP.md
+  4. Click [Next Button]
+
+Screen 3: Pricing
+┌─────────────────────────────────────────────────────────────┐
+│  Fiverr.com                                                 │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ Create Pricing Packages                                ││
+│  │                                                          ││
+│  │ Package 1: Basic                                       ││
+│  │ Price: [50] ✓                                         ││
+│  │ Delivery: [3] days                                    ││
+│  │ Description: Single vocal mix, standard effects        ││
+│  │                                                          ││
+│  │ + Add Package                                          ││
+│  │                                                          ││
+│  │ Package 2: Standard                                    ││
+│  │ Price: [100] ✓                                        ││
+│  │ Delivery: [2] days                                    ││
+│  │ Description: Full mix with detailed processing...      ││
+│  │                                                          ││
+│  │ + Add Package                                          ││
+│  │                                                          ││
+│  │ Package 3: Premium                                     ││
+│  │ Price: [150] ✓                                        ││
+│  │ Delivery: [1] day                                     ││
+│  │ Description: Multiple takes mixed, stems...            ││
+│  │                                                          ││
+│  │ [Next Button →]                                         ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+
+Actions:
+  1. Enter prices: $50, $100, $150
+  2. Enter deliveries: 3 days, 2 days, 1 day
+  3. Add descriptions for each package
+  4. Click [Next Button]
+
+Screen 4: Gallery
+┌─────────────────────────────────────────────────────────────┐
+│  Fiverr.com                                                 │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ Add Images                                             ││
+│  │                                                          ││
+│  │ [Upload Image] or [Search Canva]                       ││
+│  │                                                          ││
+│  │ (Optional - you can skip this)                         ││
+│  │                                                          ││
+│  │ [Next Button →]                                         ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+
+Actions:
+  1. Skip or upload a simple image (optional)
+  2. Click [Next Button]
+
+Screen 5: Requirements
+┌─────────────────────────────────────────────────────────────┐
+│  Fiverr.com                                                 │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ Buyer Requirements                                     ││
+│  │                                                          ││
+│  │ + Add Question                                         ││
+│  │                                                          ││
+│  │ Question 1:                                            ││
+│  │ "Upload your vocal file (WAV, 44.1kHz or higher)"     ││
+│  │ Required: ✓ Yes                                        ││
+│  │ Type: File Upload                                      ││
+│  │                                                          ││
+│  │ Question 2:                                            ││
+│  │ "Upload your beat file (MP3 or WAV)"                 ││
+│  │ Required: ✓ Yes                                        ││
+│  │ Type: File Upload                                      ││
+│  │                                                          ││
+│  │ [Save & Publish Button →]                              ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+
+Actions:
+  1. Click "+ Add Question"
+  2. Add file upload requirements (see FIVERR_5MINUTE_SETUP.md)
+  3. Click [Save & Publish]
+
+✅ GIG #1 IS NOW LIVE!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 2: CREATE GIG #2 (MASTERING)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Repeat the same process:
+  1. Go back to: https://www.fiverr.com/gig_editor
+  2. Click "Create New Gig"
+  3. Title: "Grammy-Level Mastering - Professional Audio Mastering (48-hour turnaround)"
+  4. Category: Music & Audio → Mixing & Mastering → Mastering
+  5. Paste FULL description from FIVERR_5MINUTE_SETUP.md (GIG #2 section)
+  6. Add prices: $75, $150, $250
+  7. Add descriptions for each package
+  8. Add requirements (genre selection, style, etc.)
+  9. Click [Save & Publish]
+
+✅ GIG #2 IS NOW LIVE!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 3: CREATE GIG #3 (A/B MASTERING)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+One more time:
+  1. Go back to: https://www.fiverr.com/gig_editor
+  2. Click "Create New Gig"
+  3. Title: "A/B Mastering Comparison - Professional Mastering with Scientific Voting"
+  4. Category: Music & Audio → Mixing & Mastering → Mastering
+  5. Paste FULL description from FIVERR_5MINUTE_SETUP.md (GIG #3 section)
+  6. Add prices: $150, $250
+  7. Add descriptions for each package
+  8. Add requirements
+  9. Click [Save & Publish]
+
+✅ GIG #3 IS NOW LIVE!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DONE! YOU NOW HAVE 3 LIVE GIGS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+To verify they're live:
+  1. Go to your seller profile
+  2. Click "My Gigs"
+  3. You should see all 3 gigs with ✅ "Active" status
+
+When orders come in:
+  1. You'll get notifications on Fiverr
+  2. Download the files
+  3. Use Echo Sound Lab to mix/master
+  4. Upload results back to Fiverr
+  5. Get paid!
+
+With automation (FIVERR_AUTOMATION_SETUP.md):
+  • Download: Automatic
+  • Process: Automatic
+  • Upload: Automatic
+  • You just click "Approve" in your dashboard
+
+Total time to set this up: 5 minutes
+Time per order with automation: 30 seconds
+Revenue per order: $50-300
+Monthly potential: $10,000-30,000+
+
+Let's go make money. 🚀

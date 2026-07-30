@@ -111,8 +111,8 @@ export class QualityAssurance {
     if (shouldBlock) severity = 'critical';
 
     return {
-      verdict: shouldBlock ? 'fail' : verdict.verdict === 'pass' ? 'pass' : 'warn',
-      uiVerdict: shouldBlock ? 'block' : verdict.verdict === 'pass' ? 'accept' : 'warn',
+      verdict: shouldBlock ? 'fail' : (verdict.verdict === 'improvement' || verdict.verdict === 'no_change') ? 'pass' : 'warn',
+      uiVerdict: shouldBlock ? 'block' : (verdict.verdict === 'improvement' || verdict.verdict === 'no_change') ? 'accept' : 'warn',
       severity,
       issues: uniqueIssues,
       recommendation: shouldBlock ? 'REVIEW' : verdict.recommendation.toUpperCase(),
@@ -137,8 +137,40 @@ export class QualityAssurance {
       artifacts.push('Over-compression detected (very flat dynamics)');
     }
 
-    // Check for phase weirdness
-    // (This would need actual phase analysis - placeholder for now)
+    // Check for phase weirdness using the phase / mono diagnostics already
+    // captured in the metrics payload. The quality layer should stay
+    // deterministic and should not require a waveform re-read here.
+    const advanced = afterMetrics.advancedMetrics;
+    const monoCompatibility = advanced?.monoCompatibility;
+    const phaseCoherence = advanced?.phaseCoherence;
+    const stereoImbalance = advanced?.stereoImbalance;
+    const stereoWidth = advanced?.stereoWidth;
+
+    if (typeof monoCompatibility === 'number') {
+      if (monoCompatibility < 45) {
+        artifacts.push(`Severe mono-compatibility loss detected (${monoCompatibility.toFixed(0)} / 100)`);
+      } else if (monoCompatibility < 70) {
+        artifacts.push(`Mono compatibility is weaker than ideal (${monoCompatibility.toFixed(0)} / 100)`);
+      }
+    }
+
+    if (typeof phaseCoherence === 'number') {
+      if (phaseCoherence < 40) {
+        artifacts.push(`Phase coherence is critically low (${phaseCoherence.toFixed(0)} / 100)`);
+      } else if (phaseCoherence < 65) {
+        artifacts.push(`Phase coherence has fallen below the safe zone (${phaseCoherence.toFixed(0)} / 100)`);
+      }
+    }
+
+    if (typeof stereoImbalance === 'number' && Math.abs(stereoImbalance) > 3) {
+      artifacts.push(`Stereo imbalance detected (${stereoImbalance.toFixed(1)} dB L/R difference)`);
+    }
+
+    if (typeof stereoWidth === 'number' && typeof monoCompatibility === 'number') {
+      if (stereoWidth > 85 && monoCompatibility < 65) {
+        artifacts.push('Very wide stereo image is colliding with mono compatibility');
+      }
+    }
 
     return artifacts;
   }

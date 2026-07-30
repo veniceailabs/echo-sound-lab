@@ -84,6 +84,66 @@ export class PluginRegistry {
 
 export const pluginRegistry = new PluginRegistry();
 
+export function estimatePluginLatencyMs(
+  manifestId: string,
+  parameters: Record<string, number | boolean | string> = {}
+): number {
+  const baseLatencyByPattern: Array<[RegExp, number]> = [
+    [/^echo\.utility\.gain\.v1$/, 0.02],
+    [/^echo\.vocal\.deesser$/, 0.18],
+    [/^echo\.vocal\.gate$/, 0.22],
+    [/^echo\.vocal\.rider$/, 0.28],
+    [/^echo\.vocal\.expander$/, 0.22],
+    [/^echo\.vocal\.comp\./, 0.35],
+    [/^echo\.vocal\.eq\./, 0.12],
+    [/^echo\.bus\./, 0.45],
+    [/^echo\.master\./, 0.4],
+    [/^echo\.space\.reverb\./, 4.5],
+    [/^echo\.mod\.delay\./, 2.4],
+    [/^echo\.mod\.chorus$/, 1.2],
+    [/^echo\.fx\./, 1.0],
+  ];
+
+  let estimate = 0.08;
+  for (const [pattern, value] of baseLatencyByPattern) {
+    if (pattern.test(manifestId)) {
+      estimate = value;
+      break;
+    }
+  }
+
+  if (manifestId.includes('delay')) {
+    const delayTime = typeof parameters.delayTime === 'number'
+      ? parameters.delayTime
+      : typeof parameters.delayMs === 'number'
+        ? parameters.delayMs / 1000
+        : typeof parameters.time === 'number'
+          ? parameters.time
+          : 0;
+    estimate += Math.min(6, Math.max(0, delayTime * 1.2));
+  }
+
+  if (manifestId.includes('reverb')) {
+    const decay = typeof parameters.decay === 'number' ? parameters.decay : 0;
+    estimate += Math.min(8, Math.max(0, decay * 0.4));
+  }
+
+  if (manifestId.includes('comp')) {
+    const ratio = typeof parameters.ratio === 'number' ? parameters.ratio : 1;
+    estimate += Math.min(0.8, Math.max(0, (ratio - 1) * 0.06));
+  }
+
+  if (manifestId.includes('limiter')) {
+    estimate += 0.15;
+  }
+
+  if (manifestId.includes('autowah') || manifestId.includes('flanger') || manifestId.includes('phaser') || manifestId.includes('rotary')) {
+    estimate += 0.75;
+  }
+
+  return Number(estimate.toFixed(3));
+}
+
 const floatParam = (
   id: string,
   label: string,

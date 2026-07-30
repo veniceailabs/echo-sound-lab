@@ -5,6 +5,7 @@ interface MergeModalProps {
   isOpen: boolean;
   branches: BranchEntity[];
   defaultTargetBranchId: string | null;
+  defaultSourceBranchId?: string | null;
   isMerging?: boolean;
   error?: string | null;
   onClose: () => void;
@@ -19,6 +20,7 @@ function MergeModal({
   isOpen,
   branches,
   defaultTargetBranchId,
+  defaultSourceBranchId = null,
   isMerging = false,
   error = null,
   onClose,
@@ -31,11 +33,11 @@ function MergeModal({
   useEffect(() => {
     if (!isOpen) return;
     const fallbackTarget = defaultTargetBranchId || branches[0]?.id || '';
-    const fallbackSource = branches.find((b) => b.id !== fallbackTarget)?.id || '';
+    const fallbackSource = defaultSourceBranchId || branches.find((b) => b.id !== fallbackTarget)?.id || '';
     setTargetBranchId(fallbackTarget);
     setSourceBranchId(fallbackSource);
     setStrategy('THEIRS');
-  }, [isOpen, branches, defaultTargetBranchId]);
+  }, [branches, defaultSourceBranchId, defaultTargetBranchId, isOpen]);
 
   if (!isOpen) return null;
 
@@ -137,4 +139,3 @@ function MergeModal({
 }
 
 export default React.memo(MergeModal);
-

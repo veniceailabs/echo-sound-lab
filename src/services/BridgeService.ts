@@ -40,6 +40,7 @@ export interface VoiceRoutingConfig {
 
 export interface BridgeMessage {
   status: BridgeStatus;
+  action?: string;
   progress?: number;              // 0-100
   stage?: string;                 // "Loading Model", "Separating Vocals", etc.
   message?: string;               // Human-readable status
@@ -619,6 +620,235 @@ class BridgeServiceImpl {
       } catch (error) {
         reject(error);
       }
+    });
+  }
+
+  /**
+   * Save an uploaded video blob to bridge storage and return filesystem path.
+   */
+  async saveVideoFile(
+    videoBlob: Blob,
+    filename: string
+  ): Promise<{ videoPath: string; duration: number; videoUrl?: string }> {
+    return new Promise((resolve, reject) => {
+      try {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64Data = (reader.result as string).split(',')[1];
+          const request = {
+            action: 'SAVE_VIDEO_FILE',
+            file_name: filename,
+            mime_type: videoBlob.type,
+            video_data: base64Data,
+            file_size: videoBlob.size,
+          };
+
+          const unsubscribe = this.subscribe((response: BridgeMessage) => {
+            if (response.status === 'complete' && response.action === 'SAVE_VIDEO_FILE' && response.result?.video_path) {
+              unsubscribe();
+              resolve({
+                videoPath: response.result.video_path,
+                videoUrl: response.result.video_url,
+                duration: response.result.duration || 0,
+              });
+            } else if (response.status === 'error') {
+              unsubscribe();
+              reject(new Error(response.error || response.message || 'Video save failed'));
+            }
+          });
+
+          this.send(request);
+          setTimeout(() => {
+            unsubscribe();
+            reject(new Error('Video save timeout'));
+          }, 60000);
+        };
+
+        reader.onerror = () => reject(new Error('Failed to read video blob'));
+        reader.readAsDataURL(videoBlob);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  async extractVideoAudio(
+    inputVideoPath: string,
+    outputName: string,
+    onEvent?: (event: { percent?: number; message?: string }) => void
+  ): Promise<{ audioPath: string; audioUrl?: string }> {
+    const requestId = `extract-audio-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    if (!this.getIsConnected()) {
+      this.connect();
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    return new Promise((resolve, reject) => {
+      const unsubscribe = this.subscribe((response: BridgeMessage & { action?: string; request_id?: string }) => {
+        if (response.action !== 'EXTRACT_VIDEO_AUDIO' || response.request_id !== requestId) {
+          return;
+        }
+
+        if (response.status === 'processing' || response.status === 'loading') {
+          onEvent?.({ percent: response.progress, message: response.message || response.stage });
+          return;
+        }
+
+        if (response.status === 'complete' && response.result?.audio_path) {
+          unsubscribe();
+          resolve({
+            audioPath: response.result.audio_path,
+            audioUrl: response.result.audio_url,
+          });
+          return;
+        }
+
+        if (response.status === 'error') {
+          unsubscribe();
+          reject(new Error(response.error || response.message || 'EXTRACT_VIDEO_AUDIO failed'));
+        }
+      });
+
+      this.send({
+        action: 'EXTRACT_VIDEO_AUDIO',
+        request_id: requestId,
+        input_video: inputVideoPath,
+        output_name: outputName,
+      });
+
+      setTimeout(() => {
+        unsubscribe();
+        reject(new Error('EXTRACT_VIDEO_AUDIO timeout'));
+      }, 180000);
+    });
+  }
+
+  async cleanupDialogueVideo(
+    params: {
+      inputVideoPath: string;
+      outputPath: string;
+      cleanupInstruction?: string;
+      cleanupMode: 'dialogue-focus' | 'balanced';
+      useStemIsolation: boolean;
+      backgroundReductionDb: number;
+      noiseReductionStrength: number;
+      restorationTools: {
+        highpass: boolean;
+        highpassHz: number;
+        lowpass: boolean;
+        lowpassHz: number;
+        denoiseFft: boolean;
+        denoiseFftAmount: number;
+        denoiseNlm: boolean;
+        denoiseNlmStrength: number;
+        declick: boolean;
+        declip: boolean;
+        deesser: boolean;
+        deesserAmount: number;
+        dehum: boolean;
+        dehumFrequencyHz: number;
+        dehumHarmonics: number;
+        dynamicEq: boolean;
+        dynamicEqFrequencyHz: number;
+        dynamicEqRangeDb: number;
+        speechLevel: boolean;
+        compress: boolean;
+        compressThresholdDb: number;
+        compressRatio: number;
+        gate: boolean;
+        gateThresholdDb: number;
+        gateRatio: number;
+        trimSilence: boolean;
+        trimSilenceThresholdDb: number;
+        limiter: boolean;
+        limiterCeilingDb: number;
+      };
+    },
+    onEvent?: (event: { percent?: number; message?: string }) => void
+  ): Promise<{ videoPath: string; videoUrl?: string; cleanedAudioPath?: string; cleanedAudioUrl?: string }> {
+    const requestId = `dialogue-cleanup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    if (!this.getIsConnected()) {
+      this.connect();
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+
+    return new Promise((resolve, reject) => {
+      const unsubscribe = this.subscribe((response: BridgeMessage & { action?: string; request_id?: string }) => {
+        if (response.action !== 'CLEANUP_DIALOGUE_VIDEO' || response.request_id !== requestId) {
+          return;
+        }
+
+        if (response.status === 'processing' || response.status === 'loading' || response.status === 'rendering') {
+          onEvent?.({ percent: response.progress, message: response.message || response.stage });
+          return;
+        }
+
+        if (response.status === 'complete' && response.result?.video_path) {
+          unsubscribe();
+          resolve({
+            videoPath: response.result.video_path,
+            videoUrl: response.result.video_url,
+            cleanedAudioPath: response.result.cleaned_audio_path,
+            cleanedAudioUrl: response.result.cleaned_audio_url,
+          });
+          return;
+        }
+
+        if (response.status === 'error') {
+          unsubscribe();
+          reject(new Error(response.error || response.message || 'CLEANUP_DIALOGUE_VIDEO failed'));
+        }
+      });
+
+      this.send({
+        action: 'CLEANUP_DIALOGUE_VIDEO',
+        request_id: requestId,
+        input_video: params.inputVideoPath,
+        output_path: params.outputPath,
+        cleanup_instruction: params.cleanupInstruction || '',
+        cleanup_mode: params.cleanupMode,
+        use_stem_isolation: params.useStemIsolation,
+        background_reduction_db: params.backgroundReductionDb,
+        noise_reduction_strength: params.noiseReductionStrength,
+        restoration_tools: {
+          highpass: params.restorationTools.highpass,
+          highpass_hz: params.restorationTools.highpassHz,
+          lowpass: params.restorationTools.lowpass,
+          lowpass_hz: params.restorationTools.lowpassHz,
+          denoise_fft: params.restorationTools.denoiseFft,
+          denoise_fft_amount: params.restorationTools.denoiseFftAmount,
+          denoise_nlm: params.restorationTools.denoiseNlm,
+          denoise_nlm_strength: params.restorationTools.denoiseNlmStrength,
+          declick: params.restorationTools.declick,
+          declip: params.restorationTools.declip,
+          deesser: params.restorationTools.deesser,
+          deesser_amount: params.restorationTools.deesserAmount,
+          dehum: params.restorationTools.dehum,
+          dehum_frequency_hz: params.restorationTools.dehumFrequencyHz,
+          dehum_harmonics: params.restorationTools.dehumHarmonics,
+          dynamic_eq: params.restorationTools.dynamicEq,
+          dynamic_eq_frequency_hz: params.restorationTools.dynamicEqFrequencyHz,
+          dynamic_eq_range_db: params.restorationTools.dynamicEqRangeDb,
+          speech_level: params.restorationTools.speechLevel,
+          compress: params.restorationTools.compress,
+          compress_threshold_db: params.restorationTools.compressThresholdDb,
+          compress_ratio: params.restorationTools.compressRatio,
+          gate: params.restorationTools.gate,
+          gate_threshold_db: params.restorationTools.gateThresholdDb,
+          gate_ratio: params.restorationTools.gateRatio,
+          trim_silence: params.restorationTools.trimSilence,
+          trim_silence_threshold_db: params.restorationTools.trimSilenceThresholdDb,
+          limiter: params.restorationTools.limiter,
+          limiter_ceiling_db: params.restorationTools.limiterCeilingDb,
+        },
+      });
+
+      setTimeout(() => {
+        unsubscribe();
+        reject(new Error('CLEANUP_DIALOGUE_VIDEO timeout'));
+      }, 300000);
     });
   }
 

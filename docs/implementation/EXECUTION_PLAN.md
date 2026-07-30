@@ -2,6 +2,8 @@
 
 Status: Locked to AUDIO_ENGINE_CONTRACT.md (keystone decisions already set).
 
+AI-native moat board: `docs/implementation/AI_NATIVE_EXECUTION_BOARD.md`
+
 Goal: Execute Phase 1-4 to reduce ambiguity, align preview/export parity, and clean up UI/engine/docs/tests.
 
 ## Phase 1 - High-clarity removals (fast, low risk)

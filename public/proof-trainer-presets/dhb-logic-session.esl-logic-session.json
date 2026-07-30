@@ -1,0 +1,38 @@
+{
+  "format": "esl-logic-session-snapshot",
+  "version": 1,
+  "exportedAt": 1782456515540,
+  "sourceApp": "logic-pro",
+  "projectName": "dontHoldback. prod. Kenneth English ",
+  "projectPackageName": "dontHoldback. prod. Kenneth English .logicx",
+  "sourcePackagePath": "/Users/DRA/SESSIONS/\"dontHoldback.\" prod. Kenneth English /dontHoldback. prod. Kenneth English .logicx",
+  "logicVersion": "Logic Pro X 11.0.1 (6029)",
+  "bundleVersion": 2,
+  "hasProjectFolder": true,
+  "bpm": 80,
+  "sampleRate": 48000,
+  "frameRateIndex": 1,
+  "trackCount": 9,
+  "timeSignature": {
+    "numerator": 4,
+    "denominator": 4
+  },
+  "keySignature": {
+    "tonic": "C",
+    "scale": "major",
+    "signatureKey": 7
+  },
+  "audioFiles": [
+    "Audio Files/Verse Take 2#02.wav",
+    "Audio Files/dontHoldback. prod. Kenneth English _4#03.wav",
+    "Audio Files/Hook Dub#06.wav",
+    "Audio Files/Kanye West late registration type beat - Plant roots.wav",
+    "Audio Files/dontHoldback. prod. Kenneth English _3#03.wav",
+    "Audio Files/dontHoldback. prod. Kenneth English _1#04.wav"
+  ],
+  "unusedAudioFiles": [
+    "Audio Files/Untitled 1_1#01.wav"
+  ],
+  "hasGrid": false,
+  "isTimeCodeBased": false
+}

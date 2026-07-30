@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FeedbackPayload, RevisionLog, RevisionEntry, TestChecklistState } from '../types';
 
-export const FeedbackButton: React.FC<{ onClick?: () => void }> = ({ onClick }) => {
+export const FeedbackButton: React.FC<{ onClick?: () => void; side?: 'left' | 'right' }> = ({ onClick, side = 'right' }) => {
   const handleClick = () => {
     const email = 'liveconsciouslyllc@gmail.com';
     const subject = encodeURIComponent('Echo Sound Lab Beta Feedback');
@@ -36,12 +36,24 @@ ${window.location.href}
   return (
     <button
       onClick={handleClick}
-      className="fixed bottom-[62px] right-4 z-40 bg-slate-900 text-orange-400 border border-orange-500/40 backdrop-blur-sm px-3.5 py-1.5 rounded-full shadow-[4px_4px_12px_rgba(0,0,0,0.5),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[6px_6px_16px_rgba(0,0,0,0.6)] hover:text-orange-300 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 group"
+      title="Send feedback to the Echo Sound Lab team."
+      style={{ top: '56%' }}
+      className={`esl-floating-chrome fixed z-40 -translate-y-1/2 overflow-hidden bg-slate-950/92 text-orange-300 border border-orange-500/18 backdrop-blur-sm shadow-[3px_3px_10px_rgba(0,0,0,0.42),_1px_1px_3px_rgba(255,255,255,0.03)] hover:shadow-[5px_5px_14px_rgba(0,0,0,0.5)] hover:text-orange-200 transition-[width,box-shadow,color,transform] duration-700 ease-out hover:duration-500 active:scale-95 flex items-center group will-change-transform focus:outline-none ${
+        side === 'left'
+          ? 'left-0 w-[2px] rounded-r-full border-l-0 justify-start hover:w-[118px] hover:shadow-[0_0_0_1px_rgba(249,115,22,0.12),5px_5px_14px_rgba(0,0,0,0.5)]'
+          : 'right-0 w-[2px] rounded-l-full border-r-0 justify-end hover:w-[118px] hover:shadow-[0_0_0_1px_rgba(249,115,22,0.12),5px_5px_14px_rgba(0,0,0,0.5)]'
+      }`}
+      aria-label="Send feedback"
     >
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-      </svg>
-      <span className="text-xs font-bold">Feedback</span>
+      <span className="relative flex h-10 items-center justify-center">
+        <span className={`absolute inset-y-2 ${side === 'left' ? 'left-[1px]' : 'right-[1px]'} w-px rounded-full bg-orange-400/90 shadow-[0_0_10px_rgba(249,115,22,0.4)]`} />
+        <span className={`flex h-10 items-center ${side === 'left' ? 'pl-3 pr-3.5' : 'pr-3 pl-3.5'} opacity-0 ${side === 'left' ? '-translate-x-2' : 'translate-x-2'} group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-500 delay-75 whitespace-nowrap`}>
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          <span className="ml-2 text-[11px] font-bold tracking-[0.16em] uppercase">Feedback</span>
+        </span>
+      </span>
     </button>
   );
 };
@@ -59,8 +71,8 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ isOpen, onClose, o
   };
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/90 flex items-center justify-center p-4">
-      <div className="bg-slate-900 p-6 rounded-2xl w-full max-w-md border border-slate-800 shadow-xl">
+    <div className="fixed inset-0 z-50 bg-slate-900/90 flex items-stretch sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-slate-900 p-6 rounded-none sm:rounded-2xl w-full h-[100dvh] sm:h-auto max-w-none sm:max-w-md border border-slate-800 shadow-xl overflow-y-auto pt-[calc(18px+var(--esl-safe-top))] sm:pt-6 pb-[calc(18px+var(--esl-safe-bottom))] sm:pb-6">
         {status === 'sent' ? (
             <div className="text-center"><h3 className="text-xl font-bold text-slate-200">Sent!</h3><button onClick={onClose} className="mt-4 px-4 py-2 bg-slate-700 rounded">Close</button></div>
         ) : (
@@ -94,8 +106,8 @@ export const SystemCheckPasscodeModal: React.FC<any> = ({ open, onClose, onSubmi
     const [code, setCode] = useState('');
     if (!open) return null;
     return (
-        <div className="fixed inset-0 z-[110] bg-slate-900/90 flex items-center justify-center p-4">
-            <div className="bg-slate-900 p-6 rounded-2xl w-full max-w-sm border border-slate-800">
+        <div className="fixed inset-0 z-[110] bg-slate-900/90 flex items-stretch sm:items-center justify-center p-0 sm:p-4">
+            <div className="bg-slate-900 p-6 rounded-none sm:rounded-2xl w-full h-[100dvh] sm:h-auto max-w-none sm:max-w-sm border border-slate-800 overflow-y-auto pt-[calc(18px+var(--esl-safe-top))] sm:pt-6 pb-[calc(18px+var(--esl-safe-bottom))] sm:pb-6">
                 <h3 className="text-xl font-bold text-slate-300 mb-4">Admin Check</h3>
                 <input type="password" value={code} onChange={e => setCode(e.target.value)} className="w-full bg-slate-800 rounded p-2 mb-4 text-white" placeholder="Passcode" />
                 <div className="flex gap-2"><button onClick={onClose} className="flex-1 bg-slate-700 text-white rounded p-2">Cancel</button><button onClick={() => onSubmit(code)} className="flex-1 bg-blue-600 text-white rounded p-2">Run</button></div>
@@ -105,8 +117,8 @@ export const SystemCheckPasscodeModal: React.FC<any> = ({ open, onClose, onSubmi
 };
 
 export const RevisionLogModal: React.FC<{ revisionLog: RevisionLog; onRevert: (entry: RevisionEntry) => Promise<void>; onClose: () => void }> = ({ revisionLog, onRevert, onClose }) => (
-    <div className="fixed inset-0 z-50 bg-slate-900/90 flex items-center justify-center p-4">
-        <div className="bg-slate-900 p-6 rounded-2xl w-full max-w-xl border border-slate-800 max-h-[80vh] overflow-auto">
+    <div className="fixed inset-0 z-50 bg-slate-900/90 flex items-stretch sm:items-center justify-center p-0 sm:p-4">
+        <div className="bg-slate-900 p-6 rounded-none sm:rounded-2xl w-full h-[100dvh] sm:h-auto max-w-none sm:max-w-xl border border-slate-800 overflow-y-auto pt-[calc(18px+var(--esl-safe-top))] sm:pt-6 pb-[calc(18px+var(--esl-safe-bottom))] sm:pb-6 sm:max-h-[80vh]">
             <h3 className="text-xl font-bold text-slate-300 mb-4">Revision History</h3>
             {revisionLog.slice().reverse().map(entry => (
                 <div key={entry.id} className="bg-slate-800 p-4 rounded mb-2">
@@ -123,8 +135,8 @@ export const RevisionLogModal: React.FC<{ revisionLog: RevisionLog; onRevert: (e
 export const EchoReportConfirmationModal: React.FC<any> = ({ isOpen, onConfirm, onCancel, isProcessing }) => {
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 z-50 bg-slate-900/90 flex items-center justify-center p-4">
-            <div className="bg-slate-900 p-6 rounded-2xl w-full max-w-sm border border-slate-800 text-center">
+        <div className="fixed inset-0 z-50 bg-slate-900/90 flex items-stretch sm:items-center justify-center p-0 sm:p-4">
+            <div className="bg-slate-900 p-6 rounded-none sm:rounded-2xl w-full h-[100dvh] sm:h-auto max-w-none sm:max-w-sm border border-slate-800 text-center overflow-y-auto pt-[calc(18px+var(--esl-safe-top))] sm:pt-6 pb-[calc(18px+var(--esl-safe-bottom))] sm:pb-6">
                 <h3 className="text-xl font-bold text-slate-300 mb-2">Generate Report?</h3>
                 <div className="flex gap-4 mt-6">
                     <button onClick={onCancel} className="flex-1 bg-slate-800 text-slate-300 rounded p-2">Cancel</button>

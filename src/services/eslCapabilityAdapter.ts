@@ -94,8 +94,9 @@ export class ESLCapabilityAdapter {
    * Each action is reversibility-classified and checked.
    */
   async guardProcessingAction(action: ProcessingAction): Promise<CapabilityRequest> {
+    const reversibility = (action as any).reversibility as string | undefined;
     // Reversible actions (EQ, compression, etc.) = PARAMETER_ADJUSTMENT
-    if (action.reversibility === 'Fully') {
+    if (reversibility === 'Fully') {
       return {
         capability: Capability.PARAMETER_ADJUSTMENT,
         scope: {
@@ -107,7 +108,7 @@ export class ESLCapabilityAdapter {
     }
 
     // Non-reversible actions (bounce, export) = RENDER_EXPORT
-    if (action.reversibility === 'Non-Reversible') {
+    if (reversibility === 'Non-Reversible') {
       return {
         capability: Capability.RENDER_EXPORT,
         scope: {

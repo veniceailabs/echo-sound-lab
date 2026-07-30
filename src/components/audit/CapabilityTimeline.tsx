@@ -111,7 +111,7 @@ export function CapabilityTimeline({ auditLog, className = '' }: CapabilityTimel
             </p>
             {!revokeAllEvent && hoursRemaining >= 0 && (
               <p className="text-xs text-blue-700 font-mono mt-1">
-                ‚è± {hoursRemaining}h {minutesRemaining}m remaining
+                ‚è{hoursRemaining}h {minutesRemaining}m remaining
               </p>
             )}
           </div>
@@ -135,17 +135,17 @@ export function CapabilityTimeline({ auditLog, className = '' }: CapabilityTimel
                   <td className="px-3 py-2">
                     {cap.isActive && (
                       <span className="bg-green-100 text-green-900 px-2 py-1 rounded font-medium text-xs">
-                        ‚úì ACTIVE
+                        ‚úACTIVE
                       </span>
                     )}
                     {cap.isExpired && (
                       <span className="bg-gray-100 text-gray-900 px-2 py-1 rounded font-medium text-xs">
-                        ‚è± EXPIRED
+                        ‚èEXPIRED
                       </span>
                     )}
                     {cap.isRevoked && (
                       <span className="bg-red-100 text-red-900 px-2 py-1 rounded font-medium text-xs">
-                        üõë REVOKED
+                        üõREVOKED
                       </span>
                     )}
                   </td>

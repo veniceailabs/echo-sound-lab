@@ -1,0 +1,98 @@
+{
+  "meta": {
+    "id": "paper-perfector",
+    "title": "Paper Perfector - AI Document Assistant",
+    "duration_target": 55,
+    "style": "professional",
+    "useHybridFeatures": true
+  },
+  "voice": {
+    "provider": "auto",
+    "persona": "professional"
+  },
+  "intro": {
+    "enabled": true,
+    "prompt": "Professional document analysis, AI technology",
+    "style": "cinematic",
+    "duration": 3,
+    "music": true,
+    "effects": "minimal"
+  },
+  "scenes": [
+    {
+      "id": 1,
+      "action": "WAIT",
+      "voiceover": "Introducing Paper Perfector. Intelligent document analysis powered by advanced AI.",
+      "duration": 4
+    },
+    {
+      "id": 2,
+      "action": "CLICK",
+      "targetSelector": ".assistant-toggle",
+      "voiceover": "Open the assistant to choose a starting point.",
+      "duration": 3
+    },
+    {
+      "id": 3,
+      "action": "CLICK",
+      "targetSelector": ".assistant-actions button:nth-of-type(1)",
+      "voiceover": "Start with a blank document so we can share your narrative.",
+      "duration": 3
+    },
+    {
+      "id": 4,
+      "action": "WAIT",
+      "voiceover": "The workspace now loads your new paper in structured mode.",
+      "duration": 3
+    },
+    {
+      "id": 5,
+      "action": "TYPE",
+      "selector": "#editor-title",
+      "value": "Enterprise-ready White Paper",
+      "voiceover": "Type a bold title that frames the presentation.",
+      "duration": 4
+    },
+    {
+      "id": 6,
+      "action": "CLICK",
+      "targetSelector": ".save-btn",
+      "voiceover": "Save the latest edits to lock in the story.",
+      "duration": 3
+    },
+    {
+      "id": 7,
+      "action": "SCROLL",
+      "targetSelector": ".editor-main",
+      "voiceover": "Scroll through the structured sections to highlight research.",
+      "duration": 4
+    },
+    {
+      "id": 8,
+      "action": "CLICK",
+      "targetSelector": ".editor-mode-button:last-of-type",
+      "voiceover": "Switch to freeform editing to fine-tune tone and spacing.",
+      "duration": 3
+    },
+    {
+      "id": 9,
+      "action": "WAIT",
+      "voiceover": "Every change is governed by Action Authority, so revisions stay compliant.",
+      "duration": 3
+    },
+    {
+      "id": 10,
+      "action": "WAIT",
+      "voiceover": "Paper Perfector. Transform how you work with documents. Enterprise-grade intelligence at your fingertips.",
+      "duration": 4
+    }
+  ],
+  "postProduction": {
+    "fadeOutDuration": 1,
+    "credits": {
+      "enabled": true,
+      "text": "Paper Perfector - AI Document Intelligence | Powered by Action Authority",
+      "duration": 2
+    }
+  }
+}

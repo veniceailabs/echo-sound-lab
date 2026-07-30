@@ -29,12 +29,18 @@ import {
   type AAFSM,
   type AAContext
 } from '../../action-authority/src/action-authority/fsm';
+import { PolicyEngine } from '../../action-authority/src/action-authority/governance/semantic/PolicyEngine';
+import { buildSemanticContext } from '../../action-authority/src/action-authority/governance/semantic/utils';
+import type { PolicyResult } from '../../action-authority/src/action-authority/governance/semantic/types';
 
 // Re-export for consumers of the hook
 export { AAState, AAEvent };
 
 // Configuration: The Dead Man's Switch Threshold
 const HOLD_THRESHOLD_MS = 400;
+
+// Configuration: Policy check interval during holding
+const POLICY_CHECK_INTERVAL_MS = 100;
 
 /**
  * Public Interface: What the Citizen receives from the Law
@@ -47,6 +53,11 @@ export interface ActionAuthorityHook {
   // Use for drawing progress bar, opacity, etc.
   holdProgress: number;
 
+  // Policy evaluation result (if any violations detected)
+  // undefined = no evaluation yet or policies passed
+  // PolicyResult.isValid = false = violations detected
+  policyResult?: PolicyResult;
+
   // The Law: Interface methods the Citizen must use
   actions: {
     arm: () => void;      // Call on gesture start (MouseDown, KeyDown)
@@ -56,7 +67,13 @@ export interface ActionAuthorityHook {
   };
 
   // Audit metadata for the Citizen to pass downstream
-  metadata: {
+  metaparameters: {
+    contextId: string;
+    sourceHash: string;
+  };
+
+  // Backward-compatible alias used by some UI callers
+  metadata?: {
     contextId: string;
     sourceHash: string;
   };
@@ -91,6 +108,12 @@ export const useActionAuthority = (
   // Progress of hold gesture (0.0 to 1.0) for visual feedback
   const [holdProgress, setHoldProgress] = useState(0);
 
+  // Policy evaluation result (for displaying violations to user)
+  const [policyResult, setPolicyResult] = useState<PolicyResult | undefined>(undefined);
+
+  // Timer for periodic policy checks during holding
+  const policyCheckTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // ===== INITIALIZATION =====
 
   /**
@@ -110,6 +133,12 @@ export const useActionAuthority = (
 
     fsmRef.current = createAAFSM(context);
 
+    try {
+      fsmRef.current.transition(AAEvent.SHOW);
+    } catch (error) {
+      console.error('[useActionAuthority] Failed to transition FSM to visible state:', error);
+    }
+
     // Sync initial state
     const initialState = fsmRef.current.getState();
     setStatus(initialState);
@@ -125,6 +154,12 @@ export const useActionAuthority = (
         rafRef.current = null;
       }
 
+      // Cancel policy check timer
+      if (policyCheckTimerRef.current) {
+        clearInterval(policyCheckTimerRef.current);
+        policyCheckTimerRef.current = null;
+      }
+
       // Reset refs
       holdStartRef.current = null;
     };
@@ -133,10 +168,70 @@ export const useActionAuthority = (
   // ===== INTERACTION HANDLERS (The Law) =====
 
   /**
+   * Check policies during holding
+   * Evaluates semantic policies and auto-revokes if violation detected
+   */
+  const checkPoliciesDuringHolding = useCallback((fsm: AAFSM, contextId: string) => {
+    try {
+      // Skip if PolicyEngine not initialized
+      if (!PolicyEngine) {
+        console.warn('[useActionAuthority] PolicyEngine not available, skipping policy check');
+        return;
+      }
+
+      // Build semantic context from action proposal
+      const context = buildSemanticContext({
+        id: contextId,
+        type: 'USER_GESTURE',
+        parameters: {
+          holdingState: 'PREVIEW_ARMED',
+          timestamp: Date.now()
+        }
+      });
+
+      // Evaluate policies
+      const result = PolicyEngine.evaluate(context);
+
+      // Store result for UI display
+      setPolicyResult(result);
+
+      // If violations detected, auto-revoke
+      if (!result.isValid) {
+        console.warn(
+          `[useActionAuthority] 🛑 Policy violation detected during holding: ${result.reason}`
+        );
+
+        // Log violations for user feedback
+        result.violations.forEach(v => {
+          console.warn(`  - ${v.type} (${v.severity}): ${v.reason}`);
+        });
+
+        // Auto-expire the action (revoke during hold)
+        console.log('[useActionAuthority] Revoking action due to policy violation...');
+        fsm.transition(AAEvent.EXPIRE);
+
+        const newState = fsm.getState();
+        setStatus(newState);
+        onStateChange?.(newState);
+
+        // Clear timer to stop further checks
+        if (policyCheckTimerRef.current) {
+          clearInterval(policyCheckTimerRef.current);
+          policyCheckTimerRef.current = null;
+        }
+      }
+    } catch (error) {
+      console.error('[useActionAuthority] Policy check error:', error);
+      // Fail-safe: don't block on policy check errors
+    }
+  }, [onStateChange]);
+
+  /**
    * ARM: User starts gesture (presses key or mouse button)
    *
    * This transitions FSM from VISIBLE_GHOST to HOLDING,
    * and starts the 400ms countdown animation.
+   * Also starts periodic policy checking during hold.
    */
   const arm = useCallback(() => {
     const fsm = fsmRef.current;
@@ -161,6 +256,14 @@ export const useActionAuthority = (
 
       console.log('[useActionAuthority] FSM transitioned to HOLDING, starting 400ms countdown');
 
+      // Clear any previous policy result
+      setPolicyResult(undefined);
+
+      // Start periodic policy checking during hold (every 100ms)
+      policyCheckTimerRef.current = setInterval(() => {
+        checkPoliciesDuringHolding(fsm, contextId);
+      }, POLICY_CHECK_INTERVAL_MS);
+
       // Start the animation loop (UI visual feedback only)
       // Logic is in FSM, animation is for rendering
       const animate = () => {
@@ -176,6 +279,13 @@ export const useActionAuthority = (
         } else {
           // Threshold crossed - tell FSM
           console.log('[useActionAuthority] 400ms threshold crossed, triggering HOLD_TIMEOUT');
+
+          // Stop policy checking
+          if (policyCheckTimerRef.current) {
+            clearInterval(policyCheckTimerRef.current);
+            policyCheckTimerRef.current = null;
+          }
+
           fsm.transition(AAEvent.HOLD_TIMEOUT);
 
           const newState = fsm.getState();
@@ -188,7 +298,7 @@ export const useActionAuthority = (
     } catch (error) {
       console.error('[useActionAuthority] arm() FSM transition failed:', error);
     }
-  }, [onStateChange]);
+  }, [contextId, onStateChange, checkPoliciesDuringHolding]);
 
   /**
    * RELEASE: User stops gesture (releases key or mouse button)
@@ -207,6 +317,12 @@ export const useActionAuthority = (
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
+    }
+
+    // Stop policy checking
+    if (policyCheckTimerRef.current) {
+      clearInterval(policyCheckTimerRef.current);
+      policyCheckTimerRef.current = null;
     }
 
     holdStartRef.current = null;
@@ -304,16 +420,21 @@ export const useActionAuthority = (
   return {
     status,
     holdProgress,
+    policyResult,
     actions: {
       arm,
       release,
       confirm,
       cancel
     },
+    metaparameters: {
+      contextId: fsmContext?.contextId || contextId,
+      sourceHash: fsmContext?.sourceHash || sourceHash,
+    },
     metadata: {
       contextId: fsmContext?.contextId || contextId,
-      sourceHash: fsmContext?.sourceHash || sourceHash
-    }
+      sourceHash: fsmContext?.sourceHash || sourceHash,
+    },
   };
 };
 

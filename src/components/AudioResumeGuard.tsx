@@ -22,9 +22,15 @@ export const AudioResumeGuard: React.FC<AudioResumeGuardProps> = ({
   onCancel,
 }) => {
   const running = isContextRunning(contextState);
-  const needsResume = playIntent && !isPlaying && !running;
+  const needsResume = playIntent && !isPlaying;
 
   if (!needsResume) return null;
+
+  const needsContextResume = !running;
+  const title = needsContextResume ? 'Tap to enable playback' : 'Playback needs another tap';
+  const body = needsContextResume
+    ? 'iOS and some browsers pause audio until you resume it with a user gesture.'
+    : 'The audio engine is ready, but the current transport path still needs a fresh user tap.';
 
   return (
     <div className="absolute inset-0 z-[120] flex items-center justify-center rounded-xl bg-slate-950/55 backdrop-blur-sm">
@@ -35,10 +41,10 @@ export const AudioResumeGuard: React.FC<AudioResumeGuardProps> = ({
               Audio Permission
             </p>
             <p className="mt-1 text-sm font-semibold text-slate-100">
-              Tap to enable playback
+              {title}
             </p>
             <p className="mt-1 text-xs leading-5 text-slate-400">
-              iOS pauses audio until you resume it with a tap.
+              {body}
             </p>
           </div>
           <button
@@ -80,4 +86,3 @@ export const AudioResumeGuard: React.FC<AudioResumeGuardProps> = ({
     </div>
   );
 };
-

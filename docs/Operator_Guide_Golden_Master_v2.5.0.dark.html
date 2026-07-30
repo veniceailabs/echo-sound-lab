@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Echo Sound Lab Operator Guide (Golden Master v2.5.0)</title>
+    <style>
+      :root {
+        --bg: #060b16;
+        --surface: #0d1526;
+        --surface-2: #111c33;
+        --ink: #e5edf9;
+        --muted: #98a7c3;
+        --line: #24324f;
+        --accent: #5aa7ff;
+        --good: #38d39f;
+        --warn: #f7c45a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Inter", "Avenir Next", "SF Pro Text", "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      main {
+        width: 100%;
+      }
+
+      .page {
+        min-height: 0;
+        break-inside: avoid;
+        page-break-after: always;
+        padding: 0;
+      }
+
+      .page:last-child {
+        page-break-after: auto;
+      }
+
+      .title {
+        letter-spacing: 0.26em;
+        text-transform: uppercase;
+        font-size: 13px;
+        color: #c7d6f4;
+        margin: 0 0 8px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.25fr 1fr;
+        gap: 14px;
+      }
+
+      h1 {
+        font-size: 36px;
+        line-height: 1.05;
+        margin: 4px 0 12px;
+      }
+
+      h2 {
+        font-size: 20px;
+        margin: 0 0 10px;
+      }
+
+      h3 {
+        margin: 0 0 8px;
+        font-size: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #bdd2fa;
+      }
+
+      p {
+        margin: 0 0 8px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .badge {
+        display: inline-block;
+        border: 1px solid #2a3a5f;
+        background: rgba(90, 167, 255, 0.14);
+        color: #cfe3ff;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+        padding: 12px;
+      }
+
+      .grid-2 {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .grid-3 {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .steps {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+
+      .step {
+        border: 1px solid #2a3b60;
+        border-radius: 12px;
+        background: var(--surface);
+        padding: 10px;
+      }
+
+      .step-num {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.09em;
+        color: #8eb9f3;
+        margin-bottom: 6px;
+      }
+
+      .step-title {
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+
+      .tiny {
+        font-size: 11px;
+      }
+
+      ul {
+        margin: 6px 0 0 16px;
+        padding: 0;
+      }
+
+      li {
+        margin: 3px 0;
+        font-size: 12.5px;
+        line-height: 1.45;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 4px;
+      }
+
+      th,
+      td {
+        border: 1px solid #2b3959;
+        padding: 8px 9px;
+        text-align: left;
+        vertical-align: top;
+        font-size: 12px;
+      }
+
+      th {
+        background: #121d35;
+        color: #cae0ff;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-size: 11px;
+      }
+
+      .kicker {
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #8ca1c4;
+        font-size: 11px;
+        margin-bottom: 5px;
+      }
+
+      .callout {
+        border-left: 4px solid var(--accent);
+        background: #0c1a33;
+        border-radius: 10px;
+        padding: 10px 12px;
+      }
+
+      .ok {
+        color: var(--good);
+        font-weight: 700;
+      }
+
+      .warn {
+        color: var(--warn);
+        font-weight: 700;
+      }
+
+      code {
+        font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+        background: #121f3d;
+        border: 1px solid #30446f;
+        border-radius: 6px;
+        padding: 1px 5px;
+        font-size: 11px;
+        color: #d5e6ff;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="page">
+        <div class="kicker">Echo Sound Lab · Operator Guide</div>
+        <h1>Golden Master v2.5.0</h1>
+        <div class="hero">
+          <div class="panel">
+            <p><strong>Purpose:</strong> run sessions end to end without breaking governance, determinism, or export provenance.</p>
+            <p class="muted">This guide is for creators, operators, and support teams who need practical execution steps, not engineering theory.</p>
+            <p><span class="badge">Recommended Profile: First Song</span></p>
+            <p><span class="badge">Recommended Mode: Friendly</span></p>
+          </div>
+          <div class="panel">
+            <h3>Core Model</h3>
+            <ul>
+              <li>Intent -> Proposal (APL)</li>
+              <li>Proposal -> ACC Authorization</li>
+              <li>Authorization -> Deterministic State Change</li>
+              <li>State -> Offline Export + Signed Provenance</li>
+            </ul>
+          </div>
+        </div>
+        <div style="height: 12px"></div>
+        <h2>Quick Start (Shortest Path)</h2>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">Step 1</div>
+            <div class="step-title">Choose Profile</div>
+            <p class="tiny">Pick <strong>First Song</strong> for guided flow.</p>
+          </div>
+          <div class="step">
+            <div class="step-num">Step 2</div>
+            <div class="step-title">Record or Upload</div>
+            <p class="tiny">Use mic/interface or drag existing audio.</p>
+          </div>
+          <div class="step">
+            <div class="step-num">Step 3</div>
+            <div class="step-title">Analyze</div>
+            <p class="tiny">Review loudness, dynamics, and balance.</p>
+          </div>
+          <div class="step">
+            <div class="step-num">Step 4</div>
+            <div class="step-title">Authorize Changes</div>
+            <p class="tiny">Approve only understood proposals in ACC.</p>
+          </div>
+          <div class="step">
+            <div class="step-num">Step 5</div>
+            <div class="step-title">Export + Verify</div>
+            <p class="tiny">Output WAV + manifest and verify marker.</p>
+          </div>
+        </div>
+        <div style="height: 12px"></div>
+        <div class="callout">
+          <p><strong>Main Promise:</strong> you can move fast without blind automation. Every critical action remains reviewable, replayable, and verifiable.</p>
+        </div>
+      </section>
+
+      <section class="page">
+        <div class="title">Session Setup</div>
+        <h2>Profiles, Modes, and Device Prep</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Choice</th>
+              <th>Best For</th>
+              <th>Operator Outcome</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>First Song</td>
+              <td>Beginners, guided operation</td>
+              <td>Highest assistance, lowest risk of skipped steps</td>
+            </tr>
+            <tr>
+              <td>Artist Fast Path</td>
+              <td>Experienced creators</td>
+              <td>Faster completion with fewer explanations</td>
+            </tr>
+            <tr>
+              <td>Engineer Advanced</td>
+              <td>Power users and mixers</td>
+              <td>Direct control and quicker iteration loops</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="height: 10px"></div>
+        <div class="grid-2">
+          <div class="panel">
+            <h3>Preflight Checklist</h3>
+            <ul>
+              <li>Audio route confirmed (headphones recommended)</li>
+              <li>Browser audio resumed (Safari/iOS tap once)</li>
+              <li>Mode selected correctly before ingest</li>
+              <li>File naming convention set</li>
+              <li>Goal statement written in one sentence</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>Recording Baseline</h3>
+            <ul>
+              <li>Mic distance: 4-8 inches</li>
+              <li>Quiet room preferred</li>
+              <li>One clean level-check take first</li>
+              <li>Smart Comping for patching weak lines</li>
+              <li>Honest Tuner for subtle correction first</li>
+            </ul>
+          </div>
+        </div>
+        <div style="height: 12px"></div>
+        <div class="callout">
+          <p><strong>Rule of thumb:</strong> if anything feels confusing, switch back to Friendly mode and execute only the next guided step.</p>
+        </div>
+      </section>
+
+      <section class="page">
+        <div class="title">Operating Procedure</div>
+        <h2>Standard Session SOP</h2>
+        <div class="grid-2">
+          <div class="panel">
+            <h3>Stage A: Ingest</h3>
+            <ul>
+              <li>Upload source or record into session</li>
+              <li>Confirm waveform loads cleanly</li>
+              <li>Do not batch edits before analysis completes</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>Stage B: Analyze</h3>
+            <ul>
+              <li>Confirm loudness/dynamics/balance are populated</li>
+              <li>Read plain-language summary first</li>
+              <li>Treat incomplete analysis as a blocking condition</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>Stage C: Propose</h3>
+            <ul>
+              <li>Use clear prompts: “aggressive vocals + slap delay”</li>
+              <li>Review Intelligence Feed proposals one by one</li>
+              <li>Skip unclear proposals</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>Stage D: Authorize</h3>
+            <ul>
+              <li>Hold proposal button to arm</li>
+              <li>Press <code>Enter</code> to confirm</li>
+              <li>Verify state hash/history update after execution</li>
+            </ul>
+          </div>
+        </div>
+        <div style="height: 10px"></div>
+        <div class="grid-2">
+          <div class="panel">
+            <h3>Stage E: Review</h3>
+            <ul>
+              <li>Use loudness-matched A/B only</li>
+              <li>Check active chain matches intent</li>
+              <li>Reject over-bright or over-limited outcomes</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>Stage F: Export</h3>
+            <ul>
+              <li>WAV for archive/delivery</li>
+              <li>MP3 for approval/share</li>
+              <li>Use queue when continuing active edits</li>
+            </ul>
+          </div>
+        </div>
+        <div style="height: 10px"></div>
+        <div class="callout">
+          <p><span class="warn">Do not authorize what you cannot explain.</span> The fastest safe workflow is selective approval, not blanket approval.</p>
+        </div>
+      </section>
+
+      <section class="page">
+        <div class="title">Governance + Determinism</div>
+        <h2>ACC Enforcement and Timeline Safety</h2>
+        <div class="grid-3">
+          <div class="panel">
+            <h3>LOW Risk</h3>
+            <p class="tiny muted">Read-only and low-cost actions.</p>
+            <p class="tiny">Often auto-approved under Co-Pilot/Full Autonomy.</p>
+          </div>
+          <div class="panel">
+            <h3>MEDIUM Risk</h3>
+            <p class="tiny muted">State-mutating actions with moderate impact.</p>
+            <p class="tiny">Typically review-gated except autonomy presets.</p>
+          </div>
+          <div class="panel">
+            <h3>HIGH Risk</h3>
+            <p class="tiny muted">Destructive/heavy/export-level actions.</p>
+            <p class="tiny"><strong>Explicit ACC approval required.</strong></p>
+          </div>
+        </div>
+        <div style="height: 10px"></div>
+        <div class="panel">
+          <h3>Deterministic Timeline Rules</h3>
+          <ul>
+            <li>Use history scrub as read-only preview first.</li>
+            <li>Use <strong>Restore</strong> explicitly before rewriting forward history.</li>
+            <li>Create branches before risky experimental edits.</li>
+            <li>Merge only after conflict review (OURS/THEIRS decision).</li>
+            <li>Treat state hash mismatches as incident-level issues.</li>
+          </ul>
+        </div>
+        <div style="height: 12px"></div>
+        <div class="callout">
+          <p><strong>Threat model in one line:</strong> tamper-evident history, replay-protected execution, cryptographically verified output.</p>
+        </div>
+      </section>
+
+      <section class="page">
+        <div class="title">Stems + Content</div>
+        <h2>Stems, Arrangement, Collaboration, and Video</h2>
+        <div class="grid-2">
+          <div class="panel">
+            <h3>Stem Strategy</h3>
+            <ul>
+              <li>Manual stems: highest control and accuracy</li>
+              <li>Splitter fallback: use confidence to decide next step</li>
+              <li><span class="ok">High confidence</span>: continue</li>
+              <li><span class="warn">Medium confidence</span>: continue with caution</li>
+              <li><span class="warn">Low confidence</span>: source manual stems for release</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>Arrangement + Revision</h3>
+            <ul>
+              <li>Label Intro/Verse/Chorus/Bridge/Outro</li>
+              <li>Duplicate sections for alt options</li>
+              <li>Revision comments must be specific and measurable</li>
+              <li>Use compare mode before final sign-off</li>
+            </ul>
+          </div>
+        </div>
+        <div style="height: 10px"></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Mode</th>
+              <th>When to Use</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Record directly</td>
+              <td>Single Track</td>
+              <td>Fastest path from idea to mix/master</td>
+            </tr>
+            <tr>
+              <td>Isolate control</td>
+              <td>Stems</td>
+              <td>When vocal/drum/bass separation matters</td>
+            </tr>
+            <tr>
+              <td>Prompt generation</td>
+              <td>AI Studio</td>
+              <td>Ideation and structured proposal pipelines</td>
+            </tr>
+            <tr>
+              <td>Content packaging</td>
+              <td>Video</td>
+              <td>Post-master social clip generation</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="page">
+        <div class="title">Export Assurance</div>
+        <h2>Provenance Verification Runbook</h2>
+        <div class="panel">
+          <h3>Required Deliverables per Export</h3>
+          <ul>
+            <li><code>.wav</code> (or <code>.mp3</code>)</li>
+            <li><code>.manifest.json</code> sidecar</li>
+            <li>Verified embedded provenance marker for WAV/MP3</li>
+          </ul>
+        </div>
+        <div style="height: 10px"></div>
+        <div class="panel">
+          <h3>Quick Marker Check (WAV)</h3>
+          <p class="tiny">Run from terminal at project root:</p>
+          <p><code>node -e "const fs=require('fs');const b=fs.readFileSync(process.argv[1]);console.log(b.includes(Buffer.from('ESL_PROVENANCE_REF'))?'marker-present':'marker-missing')" ./exported-track.wav</code></p>
+          <p class="tiny">Expected output: <span class="ok">marker-present</span></p>
+        </div>
+        <div style="height: 10px"></div>
+        <div class="grid-2">
+          <div class="panel">
+            <h3>Manifest Fields to Validate</h3>
+            <ul>
+              <li><code>signature</code></li>
+              <li><code>manifestHash</code></li>
+              <li><code>signatureAlgorithm</code></li>
+              <li>Entries map to approved actions</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>No-Go Triggers</h3>
+            <ul>
+              <li>Missing sidecar manifest</li>
+              <li>Marker missing in WAV/MP3</li>
+              <li>ACC bypass behavior observed</li>
+              <li>Determinism gate failure in CI</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="page">
+        <div class="title">Troubleshooting + Support</div>
+        <h2>Operator Incident Response</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Problem</th>
+              <th>Likely Cause</th>
+              <th>Corrective Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>No sound on iPhone/iPad</td>
+              <td>Safari audio context suspended</td>
+              <td>Tap resume/play once in-player</td>
+            </tr>
+            <tr>
+              <td>Proposal does not execute</td>
+              <td>Not armed, ACC blocked, or policy denied</td>
+              <td>Hold to arm, press Enter, inspect policy reason</td>
+            </tr>
+            <tr>
+              <td>Export failed or absent</td>
+              <td>Render/signing path interrupted</td>
+              <td>Re-run export and verify manifest endpoint availability</td>
+            </tr>
+            <tr>
+              <td>Unexpected session close</td>
+              <td>Refresh/crash/navigation</td>
+              <td>Restore session and verify hash continuity</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="height: 10px"></div>
+        <div class="panel">
+          <h3>Support Escalation Packet</h3>
+          <ul>
+            <li>Exact repro steps</li>
+            <li>Device / browser / OS version</li>
+            <li>Timestamp</li>
+            <li>Copy Debug Info payload</li>
+            <li>If export issue: WAV + manifest + marker-check result</li>
+          </ul>
+        </div>
+        <div style="height: 10px"></div>
+        <div class="callout">
+          <p><strong>Escalation quality rule:</strong> one complete packet is better than multiple partial reports.</p>
+        </div>
+      </section>
+
+      <section class="page">
+        <div class="title">Daily Operations</div>
+        <h2>Checklists + Release Gate</h2>
+        <div class="grid-3">
+          <div class="panel">
+            <h3>Start of Day</h3>
+            <ul>
+              <li>Confirm version/build</li>
+              <li>Confirm output device path</li>
+              <li>Run ingest+analyze smoke pass</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>During Session</h3>
+            <ul>
+              <li>Branch before risky edits</li>
+              <li>Approve only understood proposals</li>
+              <li>A/B before any export sign-off</li>
+            </ul>
+          </div>
+          <div class="panel">
+            <h3>End of Day</h3>
+            <ul>
+              <li>Archive final audio + manifest</li>
+              <li>Document unresolved issues</li>
+              <li>Record deliverable status</li>
+            </ul>
+          </div>
+        </div>
+        <div style="height: 12px"></div>
+        <div class="panel">
+          <h3>Go / No-Go Criteria</h3>
+          <ul>
+            <li><span class="ok">GO</span>: determinism gate passed, exports signed, marker present, A/B approved.</li>
+            <li><span class="warn">NO-GO</span>: any ACC bypass signal, provenance mismatch, or determinism failure.</li>
+          </ul>
+        </div>
+        <div style="height: 12px"></div>
+        <div class="callout">
+          <p><strong>Final reference:</strong> Echo Sound Lab removes production friction, but operator taste and approval remain the final authority.</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

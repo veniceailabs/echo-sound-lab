@@ -8,6 +8,73 @@
 
 import { SpectralAnalyzer } from './dsp/SpectralAnalyzer';
 import {
+  VocalIntakeConditioningReport,
+  VocalIntakeConditioningService,
+} from './vocal/intakeConditioning';
+import {
+  VocalProfile,
+  VocalProfiler,
+} from './vocal/vocalProfiler';
+import {
+  DeEssingAnalysis,
+  VocalDeEssingZoneDetector,
+} from './vocal/deEssingZones';
+import {
+  CompressionStackAnalysis,
+  VocalCompressionStackLogic,
+} from './vocal/compressionStackLogic';
+import {
+  PresenceAirAnalysis,
+  VocalPresenceAirTuning,
+} from './vocal/presenceAirTuning';
+import {
+  DelayAutomationAnalysis,
+  VocalDelayAutomationLogic,
+} from './vocal/delayAutomationLogic';
+import {
+  VocalIntentAnalysis,
+  VocalIntentDetector,
+} from './vocal/vocalIntentDetector';
+import {
+  HookLiftAnalysis,
+  VocalHookLiftLogic,
+} from './vocal/hookLiftLogic';
+import {
+  AdLibPlacementAnalysis,
+  VocalAdLibPlacementLogic,
+} from './vocal/adlibPlacement';
+import {
+  VocalGuardrailAnalysis,
+  VocalGuardrails,
+} from './vocal/guardrails';
+import {
+  VocalContextAwarenessAnalysis,
+  VocalContextAwareness,
+} from './vocal/contextAwareness';
+import {
+  LowEndDisciplineAnalysis,
+  LowEndDiscipline,
+} from './lowend/lowEndDiscipline';
+import {
+  PhaseCMasteringAnalysis,
+  PhaseCMastering,
+} from './master/phaseCMastering';
+import {
+  SessionNarrativeAnalysis,
+  SessionNarrativeEngine,
+} from './finishing/sessionNarrativeEngine';
+import {
+  PerceptualConsequenceAnalysis,
+  PerceptualConsequenceEngine,
+} from './finishing/perceptualConsequenceEngine';
+import {
+  ReferenceWorldAnalysis,
+  ReferenceWorldEngine,
+} from './finishing/referenceWorldEngine';
+import { analyzeArrangement, ArrangementAnalysis } from './arrangementAnalyzer';
+import { buildAPLPerceptualField, type APLPerceptualField } from './aplPerceptualField';
+import { buildAPLAutomationPlan, type APLAutomationPlan } from './aplAutomationPlanner';
+import {
   APLSignalIntelligence,
   APLSignalMetrics,
   APLAnomaly,
@@ -26,6 +93,25 @@ export interface AnalysisResult {
   success: boolean;
   proposals: APLProposal[];
   signalIntelligence?: APLSignalIntelligence;
+  intakeConditioning?: VocalIntakeConditioningReport;
+  vocalProfile?: VocalProfile;
+  deEssingAnalysis?: DeEssingAnalysis;
+  compressionStack?: CompressionStackAnalysis;
+  presenceAirAnalysis?: PresenceAirAnalysis;
+  delayAutomationAnalysis?: DelayAutomationAnalysis;
+  vocalIntentAnalysis?: VocalIntentAnalysis;
+  arrangementAnalysis?: ArrangementAnalysis;
+  contextAwarenessAnalysis?: VocalContextAwarenessAnalysis;
+  hookLiftAnalysis?: HookLiftAnalysis;
+  adLibPlacementAnalysis?: AdLibPlacementAnalysis;
+  guardrailAnalysis?: VocalGuardrailAnalysis;
+  lowEndAnalysis?: LowEndDisciplineAnalysis;
+  phaseCMasteringAnalysis?: PhaseCMasteringAnalysis;
+  sessionNarrativeAnalysis?: SessionNarrativeAnalysis;
+  perceptualConsequenceAnalysis?: PerceptualConsequenceAnalysis;
+  referenceWorldAnalysis?: ReferenceWorldAnalysis;
+  perceptualMixField?: APLPerceptualField;
+  automationPlan?: APLAutomationPlan;
   error?: string;
 }
 
@@ -48,20 +134,168 @@ export class APLAnalysisService {
     try {
       // 1. Decode audio file to AudioBuffer
       const audioBuffer = await this.decodeAudioFile(request.file);
-
-      // 2. Run spectral analysis
-      const spectralProfile = SpectralAnalyzer.analyze(audioBuffer);
-
-      // 3. Build signal metrics
-      const metrics = this.buildSignalMetrics(spectralProfile);
-
-      // 4. Detect anomalies
-      const anomalies = this.detectAnomalies(spectralProfile, metrics);
-
-      // 5. Create signal intelligence
       const trackId = request.trackId || this.buildDeterministicTrackId(request.file);
       const trackName = request.trackName || request.file.name.replace(/\.[^/.]+$/, '');
       const sessionId = request.sessionId || `session_${trackId}`;
+
+      // 2. Run intake conditioning before spectral analysis
+      const conditioning = VocalIntakeConditioningService.condition(audioBuffer);
+
+      // 3. Build vocal profile from the conditioned view and intake report
+      const vocalProfile = VocalProfiler.profile(conditioning.conditionedBuffer, conditioning.report);
+
+      // 4. Build de-essing zones from the conditioned view, profile, and intake report
+      const deEssingAnalysis = VocalDeEssingZoneDetector.analyze(
+        conditioning.conditionedBuffer,
+        vocalProfile,
+        conditioning.report
+      );
+
+      const compressionStack = VocalCompressionStackLogic.analyze(
+        vocalProfile,
+        conditioning.report,
+        deEssingAnalysis
+      );
+
+      const presenceAirAnalysis = VocalPresenceAirTuning.analyze(
+        vocalProfile,
+        conditioning.report,
+        deEssingAnalysis,
+        compressionStack
+      );
+
+      const delayAutomationAnalysis = VocalDelayAutomationLogic.analyze(
+        vocalProfile,
+        compressionStack,
+        presenceAirAnalysis
+      );
+
+      const vocalIntentAnalysis = VocalIntentDetector.analyze(
+        vocalProfile,
+        conditioning.report,
+        compressionStack,
+        presenceAirAnalysis,
+        delayAutomationAnalysis
+      );
+
+      const arrangementAnalysis = analyzeArrangement(conditioning.conditionedBuffer as AudioBuffer);
+
+      const contextAwarenessAnalysis = VocalContextAwareness.analyze(
+        vocalProfile,
+        compressionStack,
+        presenceAirAnalysis,
+        delayAutomationAnalysis,
+        arrangementAnalysis,
+        vocalIntentAnalysis
+      );
+
+      const hookLiftAnalysis = VocalHookLiftLogic.analyze(
+        vocalProfile,
+        compressionStack,
+        presenceAirAnalysis,
+        delayAutomationAnalysis,
+        arrangementAnalysis,
+        vocalIntentAnalysis,
+        contextAwarenessAnalysis
+      );
+
+      const adLibPlacementAnalysis = VocalAdLibPlacementLogic.analyze(
+        vocalProfile,
+        compressionStack,
+        presenceAirAnalysis,
+        delayAutomationAnalysis,
+        hookLiftAnalysis,
+        arrangementAnalysis,
+        vocalIntentAnalysis,
+        contextAwarenessAnalysis
+      );
+
+      const guardrailAnalysis = VocalGuardrails.analyze(
+        vocalProfile,
+        deEssingAnalysis,
+        compressionStack,
+        presenceAirAnalysis,
+        delayAutomationAnalysis,
+        hookLiftAnalysis,
+        adLibPlacementAnalysis,
+        arrangementAnalysis
+      );
+
+      const lowEndAnalysis = LowEndDiscipline.analyze(
+        conditioning.conditionedBuffer,
+        arrangementAnalysis,
+        contextAwarenessAnalysis
+      );
+
+      // 5. Run spectral analysis on the conditioned view
+      const spectralProfile = SpectralAnalyzer.analyze(conditioning.conditionedBuffer);
+
+      // 6. Build signal metrics
+      const metrics = this.buildSignalMetrics(spectralProfile);
+
+      // 7. Detect anomalies
+      const anomalies = this.detectAnomalies(spectralProfile, metrics);
+
+      const phaseCMasteringAnalysis = PhaseCMastering.analyze(
+        metrics,
+        spectralProfile,
+        arrangementAnalysis,
+        lowEndAnalysis,
+        vocalProfile,
+        vocalIntentAnalysis
+      );
+
+      const sessionNarrativeAnalysis = SessionNarrativeEngine.analyze({
+        arrangement: arrangementAnalysis,
+        lowEnd: lowEndAnalysis,
+        phaseCMastering: phaseCMasteringAnalysis,
+        vocalIntent: vocalIntentAnalysis,
+        sessionId,
+        trackName,
+        narrativePriorityBias: contextAwarenessAnalysis.densityScore,
+      });
+
+      const perceptualConsequenceAnalysis = PerceptualConsequenceEngine.analyze({
+        metrics,
+        spectralProfile,
+        arrangement: arrangementAnalysis,
+        lowEnd: lowEndAnalysis,
+        phaseCMastering: phaseCMasteringAnalysis,
+        vocalProfile,
+        sessionNarrative: sessionNarrativeAnalysis,
+      });
+
+      const referenceWorldAnalysis = ReferenceWorldEngine.analyze({
+        referenceDelta: undefined,
+        phaseCMastering: phaseCMasteringAnalysis,
+        lowEnd: lowEndAnalysis,
+        vocalIntent: vocalIntentAnalysis,
+        sessionFinish: undefined,
+        album: undefined,
+        finishLoop: undefined,
+        perceptualConsequence: perceptualConsequenceAnalysis,
+      });
+
+      const perceptualMixField = buildAPLPerceptualField({
+        arrangement: arrangementAnalysis,
+        vocalIntent: vocalIntentAnalysis,
+        contextAwareness: contextAwarenessAnalysis,
+        hookLift: hookLiftAnalysis,
+        adLibPlacement: adLibPlacementAnalysis,
+        delayAutomation: delayAutomationAnalysis,
+        guardrails: guardrailAnalysis,
+      });
+
+      const automationPlan = buildAPLAutomationPlan({
+        trackId,
+        trackName,
+        arrangement: arrangementAnalysis,
+        perceptualField: perceptualMixField,
+        hookLift: hookLiftAnalysis,
+        adLibPlacement: adLibPlacementAnalysis,
+      });
+
+      // 8. Create signal intelligence
       const analyzedAt = request.file.lastModified || Date.now();
 
       const signalIntelligence = createSignalIntelligence({
@@ -73,14 +307,33 @@ export class APLAnalysisService {
         analyzedAt,
       });
 
-      // 6. Generate proposals
+      // 9. Generate proposals
       const engine = getAPLProposalEngine();
       const proposals = engine.generateProposals(signalIntelligence);
 
       return {
         success: true,
         proposals,
-        signalIntelligence
+        signalIntelligence,
+        intakeConditioning: conditioning.report,
+        vocalProfile,
+        deEssingAnalysis,
+        compressionStack,
+        presenceAirAnalysis,
+        delayAutomationAnalysis,
+        vocalIntentAnalysis,
+        arrangementAnalysis,
+        contextAwarenessAnalysis,
+        hookLiftAnalysis,
+        adLibPlacementAnalysis,
+        guardrailAnalysis,
+        lowEndAnalysis,
+        phaseCMasteringAnalysis,
+        sessionNarrativeAnalysis,
+        perceptualConsequenceAnalysis,
+        referenceWorldAnalysis,
+        perceptualMixField,
+        automationPlan,
       };
     } catch (error) {
       console.error('[APLAnalysisService] Analysis failed:', error);
@@ -90,6 +343,10 @@ export class APLAnalysisService {
         error: error instanceof Error ? error.message : 'Unknown analysis error'
       };
     }
+  }
+
+  public async analyzeFile(request: AnalysisRequest): Promise<AnalysisResult> {
+    return APLAnalysisService.analyzeFile(request);
   }
 
   /**

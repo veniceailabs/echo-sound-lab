@@ -1,19 +1,21 @@
 import React from 'react';
 import { debugTelemetryService } from '../services/debugTelemetryService';
 
+type ErrorBoundaryProps = React.PropsWithChildren<{
+  title?: string;
+  onReset?: () => void;
+}>;
+
 type ErrorBoundaryState = {
   hasError: boolean;
   error?: Error;
   errorId?: string;
 };
 
-export class ErrorBoundary extends React.Component<
-  React.PropsWithChildren<{
-    title?: string;
-    onReset?: () => void;
-  }>,
-  ErrorBoundaryState
-> {
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  declare props: Readonly<ErrorBoundaryProps>;
+  declare setState: React.Component<ErrorBoundaryProps, ErrorBoundaryState>['setState'];
+
   state: ErrorBoundaryState = { hasError: false };
 
   static getDerivedStateFromError(err: Error): ErrorBoundaryState {

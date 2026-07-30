@@ -23,22 +23,19 @@ export interface WAMPluginStatus extends WAMPluginInfo {
   error?: string;
 }
 
-// WAM Plugin Registry - Official plugins from webaudiomodules.com community
-// Source: https://www.webaudiomodules.com/community/plugins.json
-// NOTE: WAM plugins require proper CORS-enabled hosting and may not be available from all CDNs.
-// When unavailable, Echo falls back to built-in DSP (Airwindows saturation, native EQ, etc.)
-// To use external WAM plugins: Ensure the hosting domain has CORS headers enabled
-// To self-host: download plugin bundles and serve from /public/wam/ with correct MIME types and CORS headers
+// WAM Plugin Registry — hosted on Supabase Storage (public bucket: wam-plugins)
+// CORS is handled by Supabase Storage public buckets (Access-Control-Allow-Origin: *)
+// To add a plugin: upload bundle to https://xaddryqbbfgzjbhwrxyl.supabase.co/storage/v1/object/public/wam-plugins/<id>/index.js
+const SUPABASE_WAM_BASE = 'https://xaddryqbbfgzjbhwrxyl.supabase.co/storage/v1/object/public/wam-plugins';
+
 export const WAM_PLUGIN_REGISTRY: WAMPluginInfo[] = [
-  // Self-hosted WAM 2.0 plugins served from /public/wam/
-  // Vercel will serve these files from the dist directory with proper CORS headers
   {
     id: 'pingpong-delay',
     name: 'PingPong Delay',
     vendor: 'Wimmics',
     category: 'effect',
     description: 'Studio-quality stereo delay with ping-pong effect',
-    url: '/wam/pingpong-delay/index.js',
+    url: `${SUPABASE_WAM_BASE}/pingpong-delay/index.js`,
     isLoaded: false,
   },
   {
@@ -47,7 +44,7 @@ export const WAM_PLUGIN_REGISTRY: WAMPluginInfo[] = [
     vendor: 'Burns Audio',
     category: 'effect',
     description: 'High-quality compact reverb for spatial processing',
-    url: '/wam/microverb/index.js',
+    url: `${SUPABASE_WAM_BASE}/microverb/index.js`,
     isLoaded: false,
   },
   {
@@ -56,7 +53,7 @@ export const WAM_PLUGIN_REGISTRY: WAMPluginInfo[] = [
     vendor: 'Wimmics',
     category: 'effect',
     description: 'Visual parametric equalizer for precise frequency control',
-    url: '/wam/graphic-eq/index.js',
+    url: `${SUPABASE_WAM_BASE}/graphic-eq/index.js`,
     isLoaded: false,
   },
   {
@@ -65,7 +62,7 @@ export const WAM_PLUGIN_REGISTRY: WAMPluginInfo[] = [
     vendor: 'Echo Sound Lab',
     category: 'effect',
     description: 'Surgical sibilance and sharpness control for vocals & cymbals',
-    url: '/wam/de-esser/index.js',
+    url: `${SUPABASE_WAM_BASE}/de-esser/index.js`,
     isLoaded: false,
   },
   {
@@ -74,7 +71,7 @@ export const WAM_PLUGIN_REGISTRY: WAMPluginInfo[] = [
     vendor: 'Echo Sound Lab',
     category: 'effect',
     description: 'Dark, intimate Drake-style vocal reverb. Felt, not heard.',
-    url: '/wam/nocturne-space/index.js',
+    url: `${SUPABASE_WAM_BASE}/nocturne-space/index.js`,
     isLoaded: false,
   },
   {
@@ -83,7 +80,7 @@ export const WAM_PLUGIN_REGISTRY: WAMPluginInfo[] = [
     vendor: 'Echo Sound Lab',
     category: 'effect',
     description: 'Warm analog tape saturation. Density, not distortion.',
-    url: '/wam/gold-reel/index.js',
+    url: `${SUPABASE_WAM_BASE}/gold-reel/index.js`,
     isLoaded: false,
   },
   {
@@ -92,7 +89,7 @@ export const WAM_PLUGIN_REGISTRY: WAMPluginInfo[] = [
     vendor: 'Echo Sound Lab',
     category: 'effect',
     description: 'Phase-coherent stereo widening for mastering. Mono-safe.',
-    url: '/wam/stereo-width/index.js',
+    url: `${SUPABASE_WAM_BASE}/stereo-width/index.js`,
     isLoaded: false,
   },
 ];
@@ -556,3 +553,171 @@ class WAMPluginService {
 
 // Export singleton instance
 export const wamPluginService = new WAMPluginService();
+
+// ============================================================
+// WAM Slot Manager — Sprint 4E
+// 3 master slots + per-stem insert slots
+// ============================================================
+
+export type StemName = 'vocals' | 'drums' | 'bass' | 'other';
+
+export interface WAMSlot {
+  pluginId: string | null;
+  instance: any | null;
+  parameters: Record<string, number>;
+  bypassed: boolean;
+}
+
+function emptySlot(): WAMSlot {
+  return { pluginId: null, instance: null, parameters: {}, bypassed: false };
+}
+
+const SLOT_STORAGE_KEY = 'echo.wamSlots.v1';
+
+interface SlotState {
+  masterSlots: [WAMSlot, WAMSlot, WAMSlot];
+  stemInserts: Record<StemName, WAMSlot>;
+}
+
+function loadSlotState(): SlotState {
+  try {
+    const raw = localStorage.getItem(SLOT_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        masterSlots: parsed.masterSlots ?? [emptySlot(), emptySlot(), emptySlot()],
+        stemInserts: parsed.stemInserts ?? {
+          vocals: emptySlot(),
+          drums: emptySlot(),
+          bass: emptySlot(),
+          other: emptySlot(),
+        },
+      };
+    }
+  } catch { /* ignore */ }
+  return {
+    masterSlots: [emptySlot(), emptySlot(), emptySlot()],
+    stemInserts: {
+      vocals: emptySlot(),
+      drums: emptySlot(),
+      bass: emptySlot(),
+      other: emptySlot(),
+    },
+  };
+}
+
+function persistSlotState(state: SlotState): void {
+  try {
+    // Strip non-serializable instance refs before saving
+    const serializable: SlotState = {
+      masterSlots: state.masterSlots.map(s => ({
+        ...s,
+        instance: null,
+      })) as SlotState['masterSlots'],
+      stemInserts: Object.fromEntries(
+        Object.entries(state.stemInserts).map(([k, v]) => [k, { ...v, instance: null }])
+      ) as Record<StemName, WAMSlot>,
+    };
+    localStorage.setItem(SLOT_STORAGE_KEY, JSON.stringify(serializable));
+  } catch { /* ignore */ }
+}
+
+class WAMSlotManagerClass {
+  private state: SlotState = loadSlotState();
+
+  getState(): SlotState {
+    return { ...this.state };
+  }
+
+  getMasterSlots(): [WAMSlot, WAMSlot, WAMSlot] {
+    return [...this.state.masterSlots] as [WAMSlot, WAMSlot, WAMSlot];
+  }
+
+  getStemInserts(): Record<StemName, WAMSlot> {
+    return { ...this.state.stemInserts };
+  }
+
+  /** Load a plugin into a master slot (0-2) */
+  async loadPluginIntoMasterSlot(slotIndex: 0 | 1 | 2, pluginId: string): Promise<boolean> {
+    // Unload existing if present
+    const existing = this.state.masterSlots[slotIndex];
+    if (existing.pluginId) {
+      await this.unloadMasterSlot(slotIndex);
+    }
+
+    const instance = await wamPluginService.loadPlugin(pluginId);
+    if (!instance) return false;
+
+    this.state.masterSlots[slotIndex] = {
+      pluginId,
+      instance,
+      parameters: {},
+      bypassed: false,
+    };
+    persistSlotState(this.state);
+    return true;
+  }
+
+  /** Unload a master slot */
+  async unloadMasterSlot(slotIndex: 0 | 1 | 2): Promise<void> {
+    const slot = this.state.masterSlots[slotIndex];
+    if (slot.pluginId) {
+      await wamPluginService.unloadPlugin(slot.pluginId);
+    }
+    this.state.masterSlots[slotIndex] = emptySlot();
+    persistSlotState(this.state);
+  }
+
+  /** Load a plugin into a stem insert slot */
+  async loadPluginIntoStemInsert(stem: StemName, pluginId: string): Promise<boolean> {
+    const existing = this.state.stemInserts[stem];
+    if (existing.pluginId) {
+      await this.unloadStemInsert(stem);
+    }
+
+    const instance = await wamPluginService.loadPlugin(pluginId);
+    if (!instance) return false;
+
+    this.state.stemInserts[stem] = {
+      pluginId,
+      instance,
+      parameters: {},
+      bypassed: false,
+    };
+    persistSlotState(this.state);
+    return true;
+  }
+
+  /** Unload a stem insert slot */
+  async unloadStemInsert(stem: StemName): Promise<void> {
+    const slot = this.state.stemInserts[stem];
+    if (slot.pluginId) {
+      await wamPluginService.unloadPlugin(slot.pluginId);
+    }
+    this.state.stemInserts[stem] = emptySlot();
+    persistSlotState(this.state);
+  }
+
+  /** Set a parameter on a master slot */
+  async setMasterSlotParameter(slotIndex: 0 | 1 | 2, paramId: string, value: number): Promise<void> {
+    const slot = this.state.masterSlots[slotIndex];
+    if (!slot.pluginId) return;
+    await wamPluginService.setPluginParameter(slot.pluginId, paramId, value);
+    this.state.masterSlots[slotIndex].parameters[paramId] = value;
+    persistSlotState(this.state);
+  }
+
+  /** Bypass / un-bypass a master slot */
+  bypassMasterSlot(slotIndex: 0 | 1 | 2, bypassed: boolean): void {
+    this.state.masterSlots[slotIndex].bypassed = bypassed;
+    persistSlotState(this.state);
+  }
+
+  /** Bypass / un-bypass a stem insert */
+  bypassStemInsert(stem: StemName, bypassed: boolean): void {
+    this.state.stemInserts[stem].bypassed = bypassed;
+    persistSlotState(this.state);
+  }
+}
+
+export const wamSlotManager = new WAMSlotManagerClass();

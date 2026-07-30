@@ -82,8 +82,8 @@ export const useRecorder = () => {
 
             console.log('[Recorder] Using mime type:', mimeType || 'browser default');
 
-            const options = mimeType ? { mimeType } : undefined;
-            mediaRecorder.current = new MediaRecorder(stream, options);
+            const mediaRecorderOptions = mimeType ? { mimeType } : undefined;
+            mediaRecorder.current = new MediaRecorder(stream, mediaRecorderOptions);
             chunks.current = [];
 
             console.log('[Recorder] MediaRecorder state:', mediaRecorder.current.state, 'Stream active:', stream.active);

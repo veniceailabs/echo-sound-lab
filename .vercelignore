@@ -1,0 +1,16 @@
+node_modules
+dist-electron
+electron
+*.dmg
+*.exe
+*.AppImage
+backend
+test-results
+artifacts
+echo-bridge
+archive
+*.log
+*.flac
+*.aiff
+*.ogg
+test_real_audio_exports

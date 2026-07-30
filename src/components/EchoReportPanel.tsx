@@ -642,7 +642,7 @@ const EchoActionCard: React.FC<{
               {normalizedType}
             </span>
             <h4 className="font-bold text-white text-lg tracking-tight">{action.label}</h4>
-            {isApplied && <span className="text-green-400 font-bold ml-2 text-sm flex items-center gap-1">âœ“ Applied</span>}
+            {isApplied && <span className="text-green-400 font-bold ml-2 text-sm flex items-center gap-1">âœApplied</span>}
           </div>
           <p className="text-sm text-slate-200/90 max-w-[90%] leading-relaxed">{action.description}</p>
         </div>
@@ -815,7 +815,7 @@ export const EchoReportPanel: React.FC<EchoReportPanelProps> = ({
       parts.push(paramSummary);
     }
 
-    const details = parts.length > 0 ? parts.join(' Â· ') : action.description;
+    const details = parts.length > 0 ? parts.join(' Â') : action.description;
     return `${describeAction(action)}${details ? ` (${details})` : ''}`;
   };
 
@@ -1013,7 +1013,7 @@ export const EchoReportPanel: React.FC<EchoReportPanelProps> = ({
             }`}
             title={configChanged ? 'Score may have changed - refresh to update' : 'Refresh Analysis'}
           >
-            {configChanged ? 'âš¡ Refresh' : 'Refresh'}
+            {configChanged ? 'âšRefresh' : 'Refresh'}
           </button>
         </div>
       </div>

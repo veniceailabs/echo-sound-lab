@@ -29,6 +29,13 @@ What we care about most:
 - Confusing UX moments
 - The top 1-2 changes you'd want before launch
 
+Pricing note (post-beta):
+- Beta is free for testers.
+- Artist (Pro): $19/month.
+- Founding Defender: $199 one-time, limited to first 500 users.
+- Founding Defender license grants lifetime access within the v2.x lifecycle.
+- Unlimited use is for human creators; bot/headless high-frequency rendering is not permitted on standard licenses.
+
 Thank you for helping shape this release.
 
 - Echo Sound Lab Team

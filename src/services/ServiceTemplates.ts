@@ -68,6 +68,27 @@ const SERVICE_TEMPLATE_REGISTRY: ServiceTemplate[] = [
           },
         },
       },
+      {
+        type: 'GAIN_ADJUSTMENT',
+        description: 'Lift spoken program into an assertive delivery lane',
+        parameters: {
+          gainDb: 4.5,
+        },
+      },
+      {
+        type: 'NORMALIZATION',
+        description: 'Normalize spoken program toward JellyFish-safe headroom',
+        parameters: {
+          targetLUFS: -14.4,
+        },
+      },
+      {
+        type: 'LIMITING',
+        description: 'Apply conservative true-peak ceiling for spoken export',
+        parameters: {
+          threshold: -3.0,
+        },
+      },
     ],
   },
   {
@@ -139,6 +160,27 @@ const SERVICE_TEMPLATE_REGISTRY: ServiceTemplate[] = [
           },
         },
       },
+      {
+        type: 'GAIN_ADJUSTMENT',
+        description: 'Trim vocal print before final loudness targeting',
+        parameters: {
+          gainDb: -1.5,
+        },
+      },
+      {
+        type: 'NORMALIZATION',
+        description: 'Normalize vocal print toward JellyFish mastering band',
+        parameters: {
+          targetLUFS: -14.7,
+        },
+      },
+      {
+        type: 'LIMITING',
+        description: 'Apply true-peak ceiling for polished vocal delivery',
+        parameters: {
+          threshold: -3.0,
+        },
+      },
     ],
   },
   {
@@ -154,9 +196,9 @@ const SERVICE_TEMPLATE_REGISTRY: ServiceTemplate[] = [
           manifestId: 'echo.bus.glue',
           instanceId: 'tpl-master-glue',
           parameters: {
-            threshold: -12,
-            ratio: 4,
-            makeup: 1,
+            threshold: -18,
+            ratio: 6,
+            makeup: 4,
           },
         },
       },
@@ -167,21 +209,41 @@ const SERVICE_TEMPLATE_REGISTRY: ServiceTemplate[] = [
           manifestId: 'echo.master.multiband',
           instanceId: 'tpl-master-multiband',
           parameters: {
-            lowGain: 1,
-            midGain: 0,
-            highGain: 1.2,
+            lowGain: 1.4,
+            midGain: 0.8,
+            highGain: 1.4,
           },
         },
       },
       {
         type: 'ADD_PLUGIN',
-        description: 'Insert LUFS target stage',
+        description: 'Insert mastering soft clipper',
         parameters: {
-          manifestId: 'echo.master.lufs',
-          instanceId: 'tpl-master-lufs',
+          manifestId: 'echo.master.clipper',
+          instanceId: 'tpl-master-clipper',
           parameters: {
-            target: -14,
+            drive: 28,
+            knee: 84,
+            mix: 0.9,
           },
+        },
+      },
+      {
+        type: 'ADD_PLUGIN',
+        description: 'Insert pre-limiter utility drive',
+        parameters: {
+          manifestId: 'echo.utility.gain.v1',
+          instanceId: 'tpl-master-pre-drive',
+          parameters: {
+            gainDb: 9,
+          },
+        },
+      },
+      {
+        type: 'GAIN_ADJUSTMENT',
+        description: 'Drive the print into a competitive mastering lane',
+        parameters: {
+          gainDb: 10,
         },
       },
       {
@@ -191,9 +253,23 @@ const SERVICE_TEMPLATE_REGISTRY: ServiceTemplate[] = [
           manifestId: 'echo.master.limiter.brick',
           instanceId: 'tpl-master-limiter',
           parameters: {
-            ceiling: -0.9,
-            release: 0.1,
+            ceiling: -3.0,
+            release: 0.08,
           },
+        },
+      },
+      {
+        type: 'NORMALIZATION',
+        description: 'Normalize master toward JellyFish reference loudness',
+        parameters: {
+          targetLUFS: -13.4,
+        },
+      },
+      {
+        type: 'LIMITING',
+        description: 'Apply JellyFish-style true-peak ceiling',
+        parameters: {
+          threshold: -3.0,
         },
       },
     ],

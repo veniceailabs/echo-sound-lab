@@ -50,6 +50,9 @@ test('golden master workflow: upload -> AI propose -> ACC authorize -> export wi
   await page.getByTestId('single-upload-input').setInputFiles(audioPath);
   await expect(page.getByText('Sonic Analysis')).toBeVisible({ timeout: 60_000 });
 
+  await page.getByTestId('engine-mode-toggle').click();
+  await expect(page.getByText('Advanced Mode')).toBeVisible({ timeout: 10_000 });
+
   const intentInput = page.getByPlaceholder('Describe intent (e.g., make vocals aggressive)').first();
   await expect(intentInput).toBeVisible({ timeout: 30_000 });
   await intentInput.fill('Make vocals aggressive with more air and add slap delay');

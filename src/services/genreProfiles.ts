@@ -19,6 +19,23 @@ export interface GenreProfile {
     vocalPlacement: { forward: boolean; wetness: 'dry' | 'moderate' | 'wet'; description: string };
   };
 
+  // Precise engineering targets — documented from pro engineer interviews/publications
+  engineeringTargets?: {
+    kickFreq?: number;          // Primary kick EQ center (Hz)
+    snareFreq?: number;         // Snare snap frequency (Hz)
+    vocalPresenceFreq?: number; // Vocal presence boost center (Hz)
+    vocalPresenceGain?: number; // dB
+    bassFreq?: number;          // Bass fundamental (Hz)
+    compressionRatio?: number;  // Recommended bus compression ratio
+    compressionAttack?: number; // ms
+    compressionRelease?: number;// ms
+    saturationAmount?: number;  // % tape saturation
+    reverbDecay?: number;       // seconds
+    monoCompatMin?: number;     // Minimum mono compatibility score (0-100)
+    truePeakMax?: number;       // dBTP ceiling
+    notes?: string;             // Documented technique notes
+  };
+
   // Artistic guidance
   aesthetic: {
     vibe: string;
@@ -27,7 +44,7 @@ export interface GenreProfile {
     reference: string[];
   };
 
-  // Analysis prompts - how AI should judge this style
+  // Analysis context — how automation should judge this style
   analysisContext: string;
 
   // Common "mistakes" for this genre
@@ -47,6 +64,20 @@ export const GENRE_PROFILES: GenreProfile[] = [
       highEnd: { brightness: 'dark', airFreq: 12000, description: 'Rolled off highs, smooth not crispy' },
       stereoWidth: { narrow: 60, wide: 85, description: 'Intimate center, wide atmospherics' },
       vocalPlacement: { forward: true, wetness: 'dry', description: 'Close, intimate, minimal verb' },
+    },
+    // 40's documented approach: restrained processing, space over loudness
+    engineeringTargets: {
+      vocalPresenceFreq: 3500,
+      vocalPresenceGain: 1.5,
+      bassFreq: 55,
+      compressionRatio: 2.5,
+      compressionAttack: 15,
+      compressionRelease: 120,
+      saturationAmount: 8,
+      reverbDecay: 1.4,
+      monoCompatMin: 85,
+      truePeakMax: -1.0,
+      notes: '40 (Noah Shebib): minimal compression, space is the mix. Sub sits at 55Hz. Vocal sits -10 to -10.8 LUFS integrated. No harsh presence peaks — smooth 3.5kHz lift only.',
     },
     aesthetic: {
       vibe: '3am in the city, emotional but confident',
@@ -79,6 +110,21 @@ typical - this style values smooth over present.`,
       highEnd: { brightness: 'bright', airFreq: 14000, description: 'Crispy hats, present highs' },
       stereoWidth: { narrow: 70, wide: 100, description: 'Wide and aggressive' },
       vocalPlacement: { forward: true, wetness: 'moderate', description: 'Aggressive, in your face' },
+    },
+    // MixedByAli documented: parallel compression heavy, 808 sidechain to kick
+    engineeringTargets: {
+      kickFreq: 60,
+      snareFreq: 200,
+      vocalPresenceFreq: 5000,
+      vocalPresenceGain: 2.5,
+      bassFreq: 45,
+      compressionRatio: 8,
+      compressionAttack: 3,
+      compressionRelease: 80,
+      saturationAmount: 18,
+      monoCompatMin: 75,
+      truePeakMax: -0.3,
+      notes: 'MixedByAli (TDE): parallel comp ratio 8:1, saturation 18-22%, 808 sidechain to kick at 45Hz. Vocal sits -5 to -6 LUFS. Hats boosted +3dB at 14kHz shelf.',
     },
     aesthetic: {
       vibe: 'Club energy, aggressive confidence',
@@ -164,6 +210,140 @@ this should bang on any system.`,
     ],
   },
   {
+    id: 'mainstream-pop',
+    name: 'Mainstream Pop',
+    description: 'Clean, polished, vocal-forward with wide appeal',
+    icon: 'POP',
+    targets: {
+      lufsIntegrated: { min: -11, max: -8, ideal: -9 },
+      dynamics: { min: 5, max: 9, description: 'Controlled but not crushed' },
+      lowEnd: { emphasis: 'balanced', subFreq: 60, description: 'Tight controlled bass, kick-focused' },
+      highEnd: { brightness: 'bright', airFreq: 14000, description: 'Airy and open, polished sheen' },
+      stereoWidth: { narrow: 70, wide: 95, description: 'Wide and enveloping, mono-safe' },
+      vocalPlacement: { forward: true, wetness: 'moderate', description: 'Center, polished, subtle reverb' },
+    },
+    // Manny Marroquin documented: vocal parallel comp, SSL bus glue, presence at 5kHz
+    engineeringTargets: {
+      kickFreq: 80,
+      snareFreq: 250,
+      vocalPresenceFreq: 5200,
+      vocalPresenceGain: 1.8,
+      bassFreq: 60,
+      compressionRatio: 3,
+      compressionAttack: 8,
+      compressionRelease: 100,
+      saturationAmount: 10,
+      reverbDecay: 1.2,
+      monoCompatMin: 88,
+      truePeakMax: -1.0,
+      notes: 'Manny Marroquin: SSL bus comp 3:1 for glue, vocal presence at 5.2kHz Q=1.3, parallel compression on drums (NY compression). Mix LUFS -8 to -10. Vocal -3dB to -6dB above bus.',
+    },
+    aesthetic: {
+      vibe: 'Radio-ready, broadly appealing, professional polish',
+      space: 'Full but not cluttered. Clarity above all.',
+      energy: 'Consistent energy, big chorus lift',
+      reference: ['Doja Cat - Say So', 'Olivia Rodrigo', 'Harry Styles', 'Ariana Grande'],
+    },
+    analysisContext: `This mix should sound polished and radio-ready. Every element serves the vocal.
+The drop into the chorus should feel like a lift. Low end is clean and controlled.
+High end is airy but not harsh. Stereo is wide enough to feel enveloping on headphones
+but mono-compatible for phone speakers. Judge clarity and translation critically.`,
+    commonIssues: [
+      'Low end too muddy — needs tight, controlled bass',
+      'Vocal not bright enough — mainstream pop needs presence and air',
+      'Chorus doesn\'t lift — needs separation from verse',
+      'Mix not mono-compatible — must work on phone speakers',
+      'Over-compressed — dynamics make choruses land harder',
+    ],
+  },
+  {
+    id: 'jazz',
+    name: 'Jazz',
+    description: 'Natural dynamics, acoustic warmth, spatial depth',
+    icon: 'JZZ',
+    targets: {
+      lufsIntegrated: { min: -18, max: -14, ideal: -16 },
+      dynamics: { min: 12, max: 20, description: 'Wide dynamics, preserve all nuance' },
+      lowEnd: { emphasis: 'light', subFreq: 80, description: 'Upright bass warmth, not boomy' },
+      highEnd: { brightness: 'neutral', airFreq: 12000, description: 'Natural, not enhanced' },
+      stereoWidth: { narrow: 60, wide: 85, description: 'Natural room, instrument placement' },
+      vocalPlacement: { forward: false, wetness: 'moderate', description: 'Sits in the ensemble' },
+    },
+    engineeringTargets: {
+      kickFreq: 100,
+      bassFreq: 85,
+      compressionRatio: 1.5,
+      compressionAttack: 20,
+      compressionRelease: 250,
+      saturationAmount: 3,
+      reverbDecay: 1.6,
+      monoCompatMin: 90,
+      truePeakMax: -1.5,
+      notes: 'Jazz mixing: minimal processing is correct. Attack 20ms+ preserves transients (kit breath). Ratio 1.5:1 max. No saturation except subtle tape. Room reverb 1.4-1.8s. Upright bass centered, sax/trumpet panned naturally.',
+    },
+    aesthetic: {
+      vibe: 'Live, natural, musicians in a room together',
+      space: 'Real space. Let the room breathe.',
+      energy: 'Conversational, dynamic interplay',
+      reference: ['Miles Davis - Kind of Blue', 'John Coltrane - A Love Supreme', 'Bill Evans - Waltz for Debby'],
+    },
+    analysisContext: `Jazz values natural dynamics above all else. Compression should be
+nearly invisible. The goal is capturing musicians in a room, not a produced record.
+Attack transients must be preserved — they carry the feel. Stereo represents real
+instrument placement. Any processing that makes it sound "produced" is wrong.
+Judge how natural and dynamic it sounds, not how loud or polished.`,
+    commonIssues: [
+      'Over-compressed — destroys the dynamic feel and pocket',
+      'Too loud — jazz breathes quietly, -16 LUFS is right',
+      'Saturation making it sound produced — keep it natural',
+      'Bass too prominent — upright should sit, not dominate',
+      'Reverb too short — needs room to feel like a real space',
+    ],
+  },
+  {
+    id: 'classical',
+    name: 'Classical / Orchestral',
+    description: 'Transparent, wide dynamics, pristine acoustic capture',
+    icon: 'CLS',
+    targets: {
+      lufsIntegrated: { min: -23, max: -16, ideal: -20 },
+      dynamics: { min: 20, max: 40, description: 'Maximum dynamic range preserved' },
+      lowEnd: { emphasis: 'light', subFreq: 60, description: 'Orchestral weight, not boosted' },
+      highEnd: { brightness: 'neutral', airFreq: 16000, description: 'Extended natural response' },
+      stereoWidth: { narrow: 80, wide: 100, description: 'Full orchestral width, natural placement' },
+      vocalPlacement: { forward: false, wetness: 'wet', description: 'Sits in the hall naturally' },
+    },
+    engineeringTargets: {
+      bassFreq: 60,
+      compressionRatio: 1.1,
+      compressionAttack: 50,
+      compressionRelease: 500,
+      saturationAmount: 0,
+      reverbDecay: 2.4,
+      monoCompatMin: 95,
+      truePeakMax: -3.0,
+      notes: 'Classical mastering: NO saturation. Compression barely perceptible (1.1:1 maximum). Preserve full dynamic range. Hall reverb 2-3s pre-delay 20ms. True peak -3dBTP minimum headroom for conductor peaks. Mono compatibility critical for broadcast.',
+    },
+    aesthetic: {
+      vibe: 'Concert hall experience, acoustic perfection',
+      space: 'The hall IS the mix. Never fight the natural acoustics.',
+      energy: 'Full arc from pianissimo to fortissimo',
+      reference: ['Deutsche Grammophon recordings', 'ECM Records aesthetic'],
+    },
+    analysisContext: `Classical recording values complete transparency. Any processing
+artifact is a mistake. The dynamic range from soft passages to loud peaks is a
+feature, not a problem to fix. True peak ceiling must be generous (at least -3dBTP)
+to handle fortissimo peaks without limiting. Stereo represents the actual hall.
+Never add saturation. Judge transparency and dynamic preservation above all.`,
+    commonIssues: [
+      'ANY saturation — completely wrong for this genre',
+      'Over-limited — dynamic range is the entire point',
+      'Too loud — classical is quiet compared to pop, that is correct',
+      'Narrow stereo — should represent full hall width',
+      'Reverb too short — needs hall acoustics, not a studio room',
+    ],
+  },
+  {
     id: 'rnb-ballad',
     name: 'R&B Ballad',
     description: 'Vocal-forward, lush, emotional depth with space',
@@ -175,6 +355,20 @@ this should bang on any system.`,
       highEnd: { brightness: 'neutral', airFreq: 14000, description: 'Airy, silky top end' },
       stereoWidth: { narrow: 70, wide: 95, description: 'Lush and wide, enveloping' },
       vocalPlacement: { forward: true, wetness: 'moderate', description: 'Center stage, tasteful verb' },
+    },
+    // Rian Lewis documented approach: vocal as the entire story, lush width
+    engineeringTargets: {
+      vocalPresenceFreq: 4000,
+      vocalPresenceGain: 2.0,
+      bassFreq: 55,
+      compressionRatio: 2.5,
+      compressionAttack: 12,
+      compressionRelease: 150,
+      saturationAmount: 7,
+      reverbDecay: 1.8,
+      monoCompatMin: 82,
+      truePeakMax: -1.0,
+      notes: 'Rian Lewis / R&B approach: vocal is the product. Plate reverb 1.6-2s for silk. 4kHz presence for intimacy, not harshness. Harmonies -6dB to -9dB below lead. Bass low-pass at 200Hz for warmth without mud.',
     },
     aesthetic: {
       vibe: 'Emotional, sensual, vulnerable',

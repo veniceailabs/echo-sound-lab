@@ -13,7 +13,7 @@
  */
 
 import React, { useState } from 'react';
-import { ConfirmationToken } from '../services/CapabilityAccBridge';
+import type { ConfirmationToken } from '../services/capabilityAccBridge';
 
 export interface CapabilityACCModalProps {
   isOpen: boolean;
@@ -70,8 +70,8 @@ export function CapabilityACCModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4 p-6">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-stretch sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-white rounded-none sm:rounded-lg shadow-lg w-full h-[100dvh] sm:h-auto sm:max-w-md p-6 overflow-y-auto pt-[calc(18px+var(--esl-safe-top))] sm:pt-6 pb-[calc(18px+var(--esl-safe-bottom))] sm:pb-6">
         {/* Header */}
         <h2 className="text-lg font-semibold text-gray-900 mb-2">
           Confirmation Required

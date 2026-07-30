@@ -1,10 +1,16 @@
 import {
+  createSidechainCompressor,
+  type SidechainNode,
+} from './advancedDsp';
+import {
   ReplayPluginInstance,
   ReplayRegionState,
   ReplayState,
+  ReplayTrackSend,
   ReplayTrackState,
 } from './deterministicReplayService';
 import { assetRegistry, DecodedAssetBuffer } from './AssetRegistry';
+import { estimatePluginLatencyMs } from './plugins/pluginRegistry';
 
 export interface AudioParamLike {
   value: number;
@@ -75,10 +81,12 @@ export interface AnalyserNodeLike extends AudioNodeLike {
 
 export interface AudioBufferLike {
   duration: number;
-  length?: number;
-  sampleRate?: number;
-  numberOfChannels?: number;
-  getChannelData?: (channel: number) => Float32Array;
+  length: number;
+  sampleRate: number;
+  numberOfChannels: number;
+  getChannelData(channel: number): Float32Array;
+  copyFromChannel?(destination: Float32Array, channelNumber: number, startInChannel?: number): void;
+  copyToChannel?(source: Float32Array, channelNumber: number, startInChannel?: number): void;
 }
 
 export interface AudioBufferSourceNodeLike extends AudioNodeLike {
@@ -119,6 +127,7 @@ export interface AudioPlaybackPluginDebug {
   outputNode: AudioNodeLike;
   gainValue: number | null;
   panValue: number | null;
+  estimatedLatencyMs: number;
   dspSnapshot: Record<string, number | string | boolean | null>;
 }
 
@@ -130,9 +139,14 @@ export interface AudioPlaybackTrackDebug {
   panNode: StereoPannerNodeLike | null;
   trackGainValue: number;
   trackPanValue: number | null;
+  outputBusId: string | null;
+  sends: Array<{ sendId: string; targetTrackId: string; levelDb: number; preFader: boolean; enabled: boolean; mode: 'aux' | 'sidechain'; gainValue: number }>;
+  estimatedLatencyMs: number;
+  compensationMs: number;
   pluginOrder: string[];
   plugins: AudioPlaybackPluginDebug[];
   activeSources: Array<{ regionId: string; node: AudioBufferSourceNodeLike }>;
+  sidechainActive: boolean;
 }
 
 interface PluginRuntime {
@@ -157,11 +171,18 @@ interface TrackRuntime {
   gainNode: GainNodeLike;
   panNode: StereoPannerNodeLike | null;
   outputNode: AudioNodeLike;
+  compensationDelayNode: DelayNodeLike | null;
+  sidechainNode: SidechainNode | null;
   plugins: Map<string, PluginRuntime>;
   pluginOrder: string[];
   pluginOrderKey: string;
   regions: ReplayRegionState[];
   activeSources: Map<string, AudioBufferSourceNodeLike>;
+  outputBusId: string | null;
+  sendOrderKey: string;
+  sendNodes: Map<string, { gainNode: GainNodeLike; delayNode: DelayNodeLike | null; send: ReplayTrackSend }>;
+  estimatedLatencyMs: number;
+  compensationMs: number;
 }
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -187,6 +208,10 @@ function toBoolean(value: unknown, fallback = false): boolean {
     if (normalized === 'false' || normalized === '0' || normalized === 'no' || normalized === 'off') return false;
   }
   return fallback;
+}
+
+function isSidechainSend(send: ReplayTrackSend): boolean {
+  return send.mode === 'sidechain';
 }
 
 function isDecodedAssetBuffer(buffer: AudioBufferLike): buffer is AudioBufferLike & DecodedAssetBuffer {
@@ -359,6 +384,14 @@ export class AudioPlaybackEngine {
       this.applyTrackChannelValues(runtime, track);
       this.reconcileTrackPlugins(runtime, track.inserts || []);
     }
+
+    this.applyLatencyCompensation(state.tracks);
+
+    for (const track of state.tracks) {
+      const runtime = this.trackRuntimes.get(track.trackId);
+      if (!runtime) continue;
+      this.reconcileTrackRouting(runtime, track, state.tracks);
+    }
   }
 
   private async ensureRegionBuffersDecoded(regions: ReplayRegionState[]): Promise<void> {
@@ -408,7 +441,15 @@ export class AudioPlaybackEngine {
         const source = context.createBufferSource();
         source.buffer = buffer;
         source.onended = null;
-        this.connectNodes(source, runtime.inputNode);
+        const regionGainDb = toNumber(region.gainDb, 0);
+        if (Math.abs(regionGainDb) > 0.0001) {
+          const regionGainNode = context.createGain();
+          regionGainNode.gain.value = dbToLinear(regionGainDb);
+          this.connectNodes(source, regionGainNode);
+          this.connectNodes(regionGainNode, runtime.inputNode);
+        } else {
+          this.connectNodes(source, runtime.inputNode);
+        }
 
         const startOffsetIntoRegion = Math.max(0, clampedStart - region.startTimeSec);
         const when = context.currentTime + Math.max(0, region.startTimeSec - clampedStart);
@@ -475,20 +516,34 @@ export class AudioPlaybackEngine {
         outputNode: plugin.outputNode,
         gainValue: plugin.gainNode ? plugin.gainNode.gain.value : null,
         panValue: plugin.panNode ? plugin.panNode.pan.value : null,
+        estimatedLatencyMs: estimatePluginLatencyMs(plugin.manifestId, plugin.dspSnapshot()),
         dspSnapshot: plugin.dspSnapshot(),
       }));
 
     return {
       trackId,
       inputNode: runtime.inputNode,
-      outputNode: runtime.outputNode,
+      outputNode: runtime.compensationDelayNode || runtime.outputNode,
       gainNode: runtime.gainNode,
       panNode: runtime.panNode,
       trackGainValue: runtime.gainNode.gain.value,
       trackPanValue: runtime.panNode ? runtime.panNode.pan.value : null,
+      outputBusId: runtime.outputBusId,
+      sends: [...runtime.sendNodes.values()].map((entry) => ({
+        sendId: entry.send.sendId,
+        targetTrackId: entry.send.targetTrackId,
+        levelDb: entry.send.levelDb,
+        preFader: entry.send.preFader,
+        enabled: entry.send.enabled,
+        mode: entry.send.mode || 'aux',
+        gainValue: entry.gainNode.gain.value,
+      })),
+      estimatedLatencyMs: runtime.estimatedLatencyMs,
+      compensationMs: runtime.compensationMs,
       pluginOrder: [...runtime.pluginOrder],
       plugins,
       activeSources: Array.from(runtime.activeSources.entries()).map(([regionId, node]) => ({ regionId, node })),
+      sidechainActive: Boolean(runtime.sidechainNode),
     };
   }
 
@@ -561,14 +616,57 @@ export class AudioPlaybackEngine {
     runtime: TrackRuntime,
     parameter: string
   ): { audioParam: AudioParamLike; mapValue: (value: number) => number } | null {
-    if (parameter === 'volumeDb' || parameter === 'track:volumeDb') {
+    if (
+      parameter === 'volumeDb' ||
+      parameter === 'track:volumeDb' ||
+      parameter === 'track_gain_db' ||
+      parameter === 'track:gainDb' ||
+      parameter === 'track:gain_db'
+    ) {
       return {
         audioParam: runtime.gainNode.gain,
         mapValue: (value) => dbToLinear(value),
       };
     }
 
-    if (parameter === 'pan' || parameter === 'track:pan') {
+    if (
+      parameter === 'master:normalizedTargetLUFS' ||
+      parameter === 'master:targetLufs' ||
+      parameter === 'master:lufs'
+    ) {
+      return {
+        audioParam: runtime.gainNode.gain,
+        mapValue: (value) => dbToLinear(-14 - clamp(value, -24, -6)),
+      };
+    }
+
+    if (
+      parameter === 'master:limiterThresholdDb' ||
+      parameter === 'master:ceiling' ||
+      parameter === 'master:limiterThreshold'
+    ) {
+      const limiterTarget = this.resolvePluginAutomationHandle(
+        runtime,
+        ['ceiling', 'threshold', 'peakReduction'],
+        (plugin) => plugin.nodeKind === 'dynamics-compressor'
+      );
+      if (limiterTarget) {
+        return {
+          audioParam: limiterTarget.audioParam,
+          mapValue: (value) => clamp(value, -12, 0),
+        };
+      }
+      return {
+        audioParam: runtime.gainNode.gain,
+        mapValue: (value) => dbToLinear(clamp(value, -12, 0)),
+      };
+    }
+
+    if (
+      parameter === 'pan' ||
+      parameter === 'track:pan' ||
+      parameter === 'track_pan'
+    ) {
       if (!runtime.panNode) return null;
       return {
         audioParam: runtime.panNode.pan,
@@ -576,16 +674,129 @@ export class AudioPlaybackEngine {
       };
     }
 
+    if (parameter.startsWith('send:')) {
+      const parts = parameter.split(':');
+      if (parts.length >= 3 && parts[1] && parts[2]) {
+        const sendId = parts[1];
+        const sendParam = parts.slice(2).join(':');
+        const sendEntry = runtime.sendNodes.get(sendId);
+        if (!sendEntry) return null;
+
+        if (sendParam === 'levelDb' || sendParam === 'gainDb' || sendParam === 'mix') {
+          return {
+            audioParam: sendEntry.gainNode.gain,
+            mapValue: (value) => dbToLinear(value),
+          };
+        }
+
+        if (sendParam === 'enabled' || sendParam === 'bypass') {
+          return {
+            audioParam: sendEntry.gainNode.gain,
+            mapValue: (value) => (value >= 0.5 ? dbToLinear(sendEntry.send.levelDb) : 0),
+          };
+        }
+      }
+    }
+
+    if (parameter === 'stereo_width' || parameter === 'hook_stereo_width' || parameter === 'width') {
+      const widthPluginTarget = this.resolvePluginAutomationHandle(
+        runtime,
+        ['width'],
+        (plugin) => plugin.nodeKind === 'delay-mod' || plugin.nodeKind === 'delay-slap'
+      );
+      if (widthPluginTarget) {
+        return {
+          audioParam: widthPluginTarget.audioParam,
+          mapValue: (value) => clamp((value - 1) * 1.5, -1, 1),
+        };
+      }
+      if (runtime.panNode) {
+        return {
+          audioParam: runtime.panNode.pan,
+          mapValue: (value) => clamp((value - 1) * 2, -1, 1),
+        };
+      }
+    }
+
+    if (parameter === 'delay_mix' || parameter === 'delay' || parameter === 'hook_delay_mix') {
+      const delayTarget = this.resolvePluginAutomationHandle(
+        runtime,
+        ['mix', 'wet', 'depth'],
+        (plugin) => plugin.nodeKind === 'delay-mod' || plugin.nodeKind === 'delay-slap' || plugin.nodeKind === 'delay'
+      );
+      if (delayTarget) {
+        return {
+          audioParam: delayTarget.audioParam,
+          mapValue: (value) => clamp(value, 0, 1),
+        };
+      }
+    }
+
+    if (parameter === 'hook_lift') {
+      return {
+        audioParam: runtime.gainNode.gain,
+        mapValue: (value) => dbToLinear(clamp(-3 + value * 8, -6, 4)),
+      };
+    }
+
+    if (parameter === 'adlib_depth') {
+      return {
+        audioParam: runtime.gainNode.gain,
+        mapValue: (value) => dbToLinear(clamp(value, -24, 0)),
+      };
+    }
+
     const pluginTarget = this.parsePluginAutomationTarget(parameter);
     if (!pluginTarget) return null;
     const plugin = runtime.plugins.get(pluginTarget.instanceId);
     if (!plugin) return null;
+    if (pluginTarget.paramId === 'enabled' || pluginTarget.paramId === 'bypass') {
+      if (!plugin.gainNode) return null;
+      return {
+        audioParam: plugin.gainNode.gain,
+        mapValue: (value) => (value >= 0.5 ? 1 : 0),
+      };
+    }
     const audioParam = plugin.resolveAutomationParam(pluginTarget.paramId);
     if (!audioParam) return null;
     return {
       audioParam,
       mapValue: (value) => plugin.mapAutomationValue(pluginTarget.paramId, value),
     };
+  }
+
+  private resolvePluginAutomationTarget(
+    runtime: TrackRuntime,
+    paramIds: string[]
+  ): { audioParam: AudioParamLike; mapValue: (value: number) => number } | null {
+    const handle = this.resolvePluginAutomationHandle(runtime, paramIds);
+    if (!handle) return null;
+    return {
+      audioParam: handle.audioParam,
+      mapValue: (value) => handle.plugin.mapAutomationValue(handle.paramId, value),
+    };
+  }
+
+  private resolvePluginAutomationHandle(
+    runtime: TrackRuntime,
+    paramIds: string[],
+    predicate?: (plugin: PluginRuntime) => boolean
+  ): { plugin: PluginRuntime; paramId: string; audioParam: AudioParamLike } | null {
+    for (const instanceId of runtime.pluginOrder) {
+      const plugin = runtime.plugins.get(instanceId);
+      if (!plugin) continue;
+      if (predicate && !predicate(plugin)) continue;
+      for (const paramId of paramIds) {
+        const audioParam = plugin.resolveAutomationParam(paramId);
+        if (!audioParam) continue;
+        return {
+          plugin,
+          paramId,
+          audioParam,
+        };
+      }
+    }
+    return null;
   }
 
   private parsePluginAutomationTarget(parameter: string): { instanceId: string; paramId: string } | null {
@@ -659,7 +870,14 @@ export class AudioPlaybackEngine {
       outputNode = panNode;
       this.connectNodes(panNode, gainNode);
     }
-    this.connectNodes(gainNode, masterGain);
+
+    const compensationDelayNode = context.createDelay ? context.createDelay(5) : null;
+    if (compensationDelayNode) {
+      compensationDelayNode.delayTime.value = 0;
+      this.connectNodes(gainNode, compensationDelayNode);
+    } else {
+      this.connectNodes(gainNode, masterGain);
+    }
     this.connectNodes(inputNode, outputNode);
 
     const runtime: TrackRuntime = {
@@ -668,15 +886,42 @@ export class AudioPlaybackEngine {
       gainNode,
       panNode,
       outputNode,
+      compensationDelayNode,
+      sidechainNode: null,
       plugins: new Map(),
       pluginOrder: [],
       pluginOrderKey: '',
       regions: [],
       activeSources: new Map(),
+      outputBusId: track.outputBusId ?? null,
+      sendOrderKey: '',
+      sendNodes: new Map(),
+      estimatedLatencyMs: 0,
+      compensationMs: 0,
     };
 
     this.trackRuntimes.set(track.trackId, runtime);
     return runtime;
+  }
+
+  private ensureSidechainNode(runtime: TrackRuntime): SidechainNode | null {
+    if (runtime.sidechainNode) return runtime.sidechainNode;
+    const context = this.requireContext();
+    if (!context.createDynamicsCompressor || !context.createAnalyser) return null;
+    try {
+      runtime.sidechainNode = createSidechainCompressor(context as unknown as BaseAudioContext, {
+        threshold: -18,
+        ratio: 4,
+        attack: 0.004,
+        release: 0.16,
+        knee: 4,
+        makeupGain: 0,
+      });
+      return runtime.sidechainNode;
+    } catch {
+      runtime.sidechainNode = null;
+      return null;
+    }
   }
 
   private applyTrackChannelValues(runtime: TrackRuntime, track: ReplayTrackState): void {
@@ -684,6 +929,61 @@ export class AudioPlaybackEngine {
     runtime.gainNode.gain.value = gainLinear;
     if (runtime.panNode) {
       runtime.panNode.pan.value = clamp(toNumber(track.pan, 0), -1, 1);
+    }
+  }
+
+  private calculateTrackLocalLatencyMs(runtime: TrackRuntime): number {
+    let total = 0;
+    for (const instanceId of runtime.pluginOrder) {
+      const plugin = runtime.plugins.get(instanceId);
+      if (!plugin) continue;
+      total += estimatePluginLatencyMs(plugin.manifestId, plugin.dspSnapshot());
+    }
+    return Math.max(0, total);
+  }
+
+  private applyLatencyCompensation(tracks: ReplayTrackState[]): void {
+    const pathLatencyMemo = new Map<string, number>();
+    const visiting = new Set<string>();
+
+    const resolvePathLatency = (trackId: string): number => {
+      const cached = pathLatencyMemo.get(trackId);
+      if (cached !== undefined) return cached;
+      if (visiting.has(trackId)) return 0;
+      visiting.add(trackId);
+
+      const runtime = this.trackRuntimes.get(trackId);
+      const track = tracks.find((candidate) => candidate.trackId === trackId);
+      let total = runtime ? this.calculateTrackLocalLatencyMs(runtime) : 0;
+      const nextId = runtime?.outputBusId || track?.outputBusId || null;
+      if (nextId && nextId !== trackId && nextId !== 'master') {
+        total += resolvePathLatency(nextId);
+      }
+
+      visiting.delete(trackId);
+      pathLatencyMemo.set(trackId, total);
+      return total;
+    };
+
+    let maxPathLatency = 0;
+    for (const track of tracks) {
+      maxPathLatency = Math.max(maxPathLatency, resolvePathLatency(track.trackId));
+    }
+
+    for (const track of tracks) {
+      const runtime = this.trackRuntimes.get(track.trackId);
+      if (!runtime) continue;
+      const pathLatencyMs = pathLatencyMemo.get(track.trackId) ?? 0;
+      runtime.estimatedLatencyMs = Math.max(0, pathLatencyMs);
+      runtime.compensationMs = Math.max(0, maxPathLatency - pathLatencyMs);
+      if (runtime.compensationDelayNode) {
+        runtime.compensationDelayNode.delayTime.value = Math.max(0, runtime.compensationMs / 1000);
+      }
+      for (const entry of runtime.sendNodes.values()) {
+        if (entry.delayNode) {
+          entry.delayNode.delayTime.value = Math.max(0, runtime.compensationMs / 1000);
+        }
+      }
     }
   }
 
@@ -746,6 +1046,94 @@ export class AudioPlaybackEngine {
     }
 
     this.connectNodes(orderedPlugins[orderedPlugins.length - 1].outputNode, runtime.outputNode);
+  }
+
+  private reconcileTrackRouting(runtime: TrackRuntime, track: ReplayTrackState, tracks: ReplayTrackState[]): void {
+    runtime.outputBusId = track.outputBusId ?? null;
+    const sendOrderKey = (track.sends || [])
+      .map((send) => `${send.sendId}:${send.targetTrackId}:${send.levelDb}:${send.preFader}:${send.enabled}:${send.mode || 'aux'}`)
+      .join('|');
+
+    const desiredSends = new Map<string, { gainNode: GainNodeLike; delayNode: DelayNodeLike | null; send: ReplayTrackSend }>();
+    for (const send of track.sends || []) {
+      const existing = runtime.sendNodes.get(send.sendId) || {
+        gainNode: this.requireContext().createGain(),
+        delayNode: this.requireContext().createDelay ? this.requireContext().createDelay(5) : null,
+        send: { ...send, mode: send.mode === 'sidechain' ? 'sidechain' : 'aux' },
+      };
+      existing.send = { ...send, mode: send.mode === 'sidechain' ? 'sidechain' : 'aux' };
+      existing.gainNode.gain.value = send.enabled ? dbToLinear(send.levelDb) : 0;
+      if (existing.delayNode) {
+        existing.delayNode.delayTime.value = Math.max(0, runtime.compensationMs / 1000);
+      }
+      desiredSends.set(send.sendId, existing);
+    }
+
+    for (const [sendId, entry] of runtime.sendNodes.entries()) {
+      if (!desiredSends.has(sendId)) {
+        this.disconnectNode(entry.gainNode);
+        if (entry.delayNode) this.disconnectNode(entry.delayNode);
+      }
+    }
+    runtime.sendNodes = desiredSends;
+    runtime.sendOrderKey = sendOrderKey;
+
+    const routeSource = runtime.compensationDelayNode || runtime.gainNode;
+    this.disconnectNode(routeSource);
+
+    const targetTrackId = runtime.outputBusId && runtime.outputBusId !== runtime.trackId ? runtime.outputBusId : null;
+    const targetTrack = targetTrackId ? tracks.find((candidate) => candidate.trackId === targetTrackId) : null;
+    const targetRuntime = targetTrack ? this.trackRuntimes.get(targetTrack.trackId) || this.ensureTrackRuntime(targetTrack) : null;
+    const directTarget = targetRuntime?.inputNode || this.requireMasterGainNode();
+
+    const hasIncomingSidechain = tracks.some((candidate) =>
+      (candidate.sends || []).some(
+        (send) => send.enabled && isSidechainSend(send) && send.targetTrackId === runtime.trackId
+      )
+    );
+
+    if (hasIncomingSidechain) {
+      const sidechainNode = this.ensureSidechainNode(runtime);
+      if (sidechainNode) {
+        this.disconnectNode(sidechainNode.target);
+        this.disconnectNode(sidechainNode.output);
+        this.connectNodes(routeSource, sidechainNode.target);
+        this.connectNodes(sidechainNode.output, directTarget);
+      } else {
+        this.connectNodes(routeSource, directTarget);
+      }
+    } else {
+      if (runtime.sidechainNode) {
+        runtime.sidechainNode.disconnect();
+        runtime.sidechainNode = null;
+      }
+      this.connectNodes(routeSource, directTarget);
+    }
+
+    for (const entry of runtime.sendNodes.values()) {
+      const sendSource = entry.send.preFader ? runtime.inputNode : runtime.gainNode;
+      this.disconnectNode(entry.gainNode);
+      if (entry.delayNode) {
+        this.disconnectNode(entry.delayNode);
+      }
+      this.connectNodes(sendSource, entry.gainNode);
+      const sendTargetTrack = entry.send.targetTrackId && entry.send.targetTrackId !== 'master'
+        ? tracks.find((candidate) => candidate.trackId === entry.send.targetTrackId) || null
+        : null;
+      const sendTargetRuntime = sendTargetTrack
+        ? this.trackRuntimes.get(sendTargetTrack.trackId) || this.ensureTrackRuntime(sendTargetTrack)
+        : null;
+      const sendTarget = sendTargetRuntime?.inputNode || this.requireMasterGainNode();
+      const sidechainTarget = entry.send.mode === 'sidechain'
+        ? sendTargetRuntime?.sidechainNode?.sidechain || (sendTargetRuntime ? this.ensureSidechainNode(sendTargetRuntime)?.sidechain || null : null)
+        : null;
+      if (entry.delayNode) {
+        this.connectNodes(entry.gainNode, entry.delayNode);
+        this.connectNodes(entry.delayNode, sidechainTarget || sendTarget);
+      } else {
+        this.connectNodes(entry.gainNode, sidechainTarget || sendTarget);
+      }
+    }
   }
 
   private buildPluginRuntime(insert: ReplayPluginInstance): PluginRuntime {
@@ -1964,44 +2352,174 @@ export class AudioPlaybackEngine {
     };
   }
 
+  /**
+   * Generate a synthetic plate reverb impulse response.
+   * Uses a dense multi-tap network to approximate the diffuse reflections
+   * of a large steel plate (EMT 140 character: bright, smooth, long tail).
+   */
+  private buildSyntheticPlateIR(
+    context: AudioContextLike,
+    decaySeconds: number,
+    sampleRate: number
+  ): AudioBuffer {
+    const length    = Math.max(1, Math.floor(sampleRate * decaySeconds));
+    const ir        = context.createBuffer(2, length, sampleRate);
+    const left      = ir.getChannelData(0);
+    const right     = ir.getChannelData(1);
+
+    // Pre-delay (1.5ms) — signature of a plate vs room
+    const preDelay  = Math.floor(0.0015 * sampleRate);
+
+    // Dense early-tap network (EMT 140 has ~5000 reflections/sec at 100ms)
+    // Schroeder prime delays (samples) for a large plate
+    const taps = [
+      { del: 113, fb: 0.83, pan: -0.6 },
+      { del: 162, fb: 0.81, pan:  0.5 },
+      { del: 241, fb: 0.79, pan: -0.3 },
+      { del: 399, fb: 0.77, pan:  0.7 },
+      { del: 521, fb: 0.75, pan: -0.8 },
+      { del: 643, fb: 0.73, pan:  0.2 },
+      { del: 769, fb: 0.71, pan: -0.5 },
+      { del: 907, fb: 0.69, pan:  0.9 },
+    ].map(t => ({ ...t, buf: new Float32Array(t.del + 1), idx: 0 }));
+
+    // High-frequency damping (plate is brighter than rooms — light damping)
+    const hfDamp = 0.15;
+    let lpL = 0, lpR = 0;
+
+    for (let i = preDelay; i < length; i++) {
+      const t       = i / sampleRate;
+      const decay   = Math.exp(-6.91 * t / decaySeconds); // -60dB at decaySeconds
+      const noise   = (Math.random() * 2 - 1) * decay;
+
+      // Accumulate tap contributions
+      let wetL = 0, wetR = 0;
+      for (const tap of taps) {
+        const delayed = tap.buf[tap.idx];
+        tap.buf[tap.idx] = noise + delayed * tap.fb * decay;
+        tap.idx = (tap.idx + 1) % (tap.del + 1);
+
+        // Pan the tap: pan in [-1,1] → L/R gain using constant-power law
+        const gainL = Math.cos((tap.pan + 1) * Math.PI / 4);
+        const gainR = Math.sin((tap.pan + 1) * Math.PI / 4);
+        wetL += delayed * gainL;
+        wetR += delayed * gainR;
+      }
+      wetL /= taps.length;
+      wetR /= taps.length;
+
+      // Gentle HF roll-off (one-pole LP)
+      lpL += hfDamp * (wetL - lpL);
+      lpR += hfDamp * (wetR - lpR);
+
+      left[i]  = lpL;
+      right[i] = lpR;
+    }
+
+    // Normalize IR to peak=0.9 so it doesn't clip on application
+    let peak = 0;
+    for (let i = 0; i < length; i++) peak = Math.max(peak, Math.abs(left[i]), Math.abs(right[i]));
+    if (peak > 0) {
+      const norm = 0.9 / peak;
+      for (let i = 0; i < length; i++) { left[i] *= norm; right[i] *= norm; }
+    }
+
+    return ir as unknown as AudioBuffer;
+  }
+
+  private buildDeEsserRuntime(
+    insert: ReplayPluginInstance,
+    context: AudioContextLike
+  ): PluginRuntime {
+    return this.buildEqRuntime(insert, context, 'harshness');
+  }
+
   private buildPlatePlaceholderRuntime(
     insert: ReplayPluginInstance,
     context: AudioContextLike
   ): PluginRuntime {
-    const plateGain = context.createGain();
-    plateGain.gain.value = 1;
+    if (!context.createConvolver || !context.createBuffer) {
+      // Last resort: passthrough if context doesn't support convolution
+      const fallback = context.createGain();
+      return {
+        instanceId: insert.instanceId, manifestId: insert.manifestId,
+        inputNode: fallback, outputNode: fallback, nodeKind: 'plate-passthrough',
+        gainNode: fallback, panNode: null,
+        rewireInternal: () => {},
+        dspSnapshot: () => ({}),
+        resolveAutomationParam: () => null,
+        mapAutomationValue: (_p: string, v: number) => v,
+        apply: () => {},
+        dispose: () => { this.disconnectNode(fallback); },
+      };
+    }
+
+    const sr        = context.sampleRate || 44100;
+    const inputGain = context.createGain();
+    const dryGain   = context.createGain();
+    const wetGain   = context.createGain();
+    const outputGain = context.createGain();
+    const convolver = context.createConvolver();
+    convolver.normalize = false; // we normalize our IR manually
+
+    // Wire: input → dry → output
+    //       input → convolver → wet → output
+    this.connectNodes(inputGain, dryGain);
+    this.connectNodes(dryGain, outputGain);
+    this.connectNodes(inputGain, convolver);
+    this.connectNodes(convolver, wetGain);
+    this.connectNodes(wetGain, outputGain);
+
+    // Build initial IR (1.8s plate)
+    convolver.buffer = this.buildSyntheticPlateIR(context, 1.8, sr);
+    dryGain.gain.value = 1;
+    wetGain.gain.value = 0.2;
+
     return {
       instanceId: insert.instanceId,
       manifestId: insert.manifestId,
-      inputNode: plateGain,
-      outputNode: plateGain,
-      nodeKind: 'plate-placeholder',
-      gainNode: plateGain,
-      panNode: null,
+      inputNode:  inputGain,
+      outputNode: outputGain,
+      nodeKind:   'plate-convolver',
+      gainNode:   wetGain,
+      panNode:    null,
       rewireInternal: () => {
-        // single-node plugin
+        this.connectNodes(inputGain, dryGain);
+        this.connectNodes(dryGain, outputGain);
+        this.connectNodes(inputGain, convolver);
+        this.connectNodes(convolver, wetGain);
+        this.connectNodes(wetGain, outputGain);
       },
       dspSnapshot: () => ({
-        gain: plateGain.gain.value,
+        wet: wetGain.gain.value,
+        dry: dryGain.gain.value,
+        hasIR: Boolean(convolver.buffer),
       }),
       resolveAutomationParam: (paramId: string) => {
-        if (paramId === 'mix' || paramId === 'decay') return plateGain.gain;
+        if (paramId === 'mix') return wetGain.gain;
         return null;
       },
-      mapAutomationValue: (paramId: string, value: number) => {
-        if (paramId === 'mix') return 1 + clamp(value, 0, 1) * 0.2;
-        if (paramId === 'decay') return 1 + clamp(value, 0.5, 5) * 0.02;
-        return value;
-      },
+      mapAutomationValue: (_paramId: string, value: number) => clamp(value, 0, 1),
       apply: (instance: ReplayPluginInstance) => {
         const enabled = instance.enabled !== false;
-        const mix = clamp(toNumber(instance.parameters.mix, 0.2), 0, 1);
-        const decay = clamp(toNumber(instance.parameters.decay, 1.8), 0.5, 5);
-        const contour = 1 + (decay - 1) * 0.02;
-        plateGain.gain.value = enabled ? 1 + mix * (contour - 1) : 1;
+        const mix     = clamp(toNumber(instance.parameters.mix, 0.2), 0, 1);
+        const decay   = clamp(toNumber(instance.parameters.decay, 1.8), 0.3, 8);
+
+        // Rebuild IR when decay changes meaningfully
+        const currentDecay = (convolver.buffer?.duration ?? 1.8);
+        if (Math.abs(currentDecay - decay) > 0.05) {
+          convolver.buffer = this.buildSyntheticPlateIR(context, decay, sr);
+        }
+
+        wetGain.gain.value = enabled ? mix : 0;
+        dryGain.gain.value = 1;
       },
       dispose: () => {
-        this.disconnectNode(plateGain);
+        this.disconnectNode(inputGain);
+        this.disconnectNode(outputGain);
+        this.disconnectNode(dryGain);
+        this.disconnectNode(wetGain);
+        this.disconnectNode(convolver);
       },
     };
   }
@@ -2067,6 +2585,11 @@ export class AudioPlaybackEngine {
       this.disconnectNode(source);
     }
     runtime.activeSources.clear();
+    for (const entry of runtime.sendNodes.values()) {
+      this.disconnectNode(entry.gainNode);
+      if (entry.delayNode) this.disconnectNode(entry.delayNode);
+    }
+    runtime.sendNodes.clear();
     for (const plugin of runtime.plugins.values()) {
       plugin.dispose();
     }
@@ -2074,6 +2597,11 @@ export class AudioPlaybackEngine {
     this.disconnectNode(runtime.inputNode);
     if (runtime.panNode) this.disconnectNode(runtime.panNode);
     this.disconnectNode(runtime.gainNode);
+    if (runtime.compensationDelayNode) this.disconnectNode(runtime.compensationDelayNode);
+    if (runtime.sidechainNode) {
+      runtime.sidechainNode.disconnect();
+      runtime.sidechainNode = null;
+    }
   }
 
   private stopActiveSources(): void {

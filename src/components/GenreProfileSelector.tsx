@@ -4,6 +4,7 @@
 
 import React, { useState } from 'react';
 import { GENRE_PROFILES, GenreProfile } from '../services/genreProfiles';
+import { useViewport } from '../context/ViewportContext';
 
 interface GenreProfileSelectorProps {
   selectedProfileId: string | null;
@@ -141,6 +142,7 @@ export const GenreProfileInlineSelector: React.FC<GenreProfileSelectorProps> = (
   onProfileSelect,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const { isPhone } = useViewport();
   const selectedProfile = GENRE_PROFILES.find(p => p.id === selectedProfileId);
 
   return (
@@ -173,52 +175,115 @@ export const GenreProfileInlineSelector: React.FC<GenreProfileSelectorProps> = (
           />
 
           {/* Dropdown */}
-          <div className="absolute top-full left-0 mt-2 w-72 bg-slate-900 rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
-            <div className="p-2 border-b border-white/5">
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold px-2">
-                Select Target Aesthetic
-              </p>
-            </div>
-            <div className="max-h-80 overflow-y-auto p-2 space-y-1">
-              {/* None option */}
-              <button
-                onClick={() => {
-                  onProfileSelect(null);
-                  setIsOpen(false);
-                }}
-                className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
-                  !selectedProfileId
-                    ? 'bg-white/10 text-white'
-                    : 'hover:bg-white/5 text-slate-400'
-                }`}
-              >
-                <span className="text-sm">Generic (no specific vibe)</span>
-              </button>
+          {isPhone ? (
+            <div className="fixed inset-0 z-50 flex items-end">
+              <div
+                className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+                onClick={() => setIsOpen(false)}
+              />
+              <div className="relative w-full bg-slate-950/90 border-t border-white/10 rounded-t-3xl shadow-[0_-30px_80px_rgba(0,0,0,0.6)] max-h-[88dvh] overflow-hidden">
+                <div className="px-5 pt-[calc(14px+var(--esl-safe-top))] pb-4 border-b border-white/10 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Target</p>
+                    <p className="text-base font-semibold text-white">Select Aesthetic</p>
+                  </div>
+                  <button
+                    onClick={() => setIsOpen(false)}
+                    className="w-10 h-10 min-h-[44px] min-w-[44px] rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white transition-all"
+                    aria-label="Close"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="overflow-y-auto pb-[calc(18px+var(--esl-safe-bottom))] max-h-[calc(88dvh-72px)] p-3 space-y-1">
+                  <button
+                    onClick={() => {
+                      onProfileSelect(null);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-3 min-h-[44px] rounded-xl transition-all border ${
+                      !selectedProfileId
+                        ? 'bg-white/10 text-white border-white/10'
+                        : 'hover:bg-white/5 text-slate-300 border-transparent'
+                    }`}
+                  >
+                    <div className="text-sm font-medium">Generic</div>
+                    <div className="text-[11px] text-slate-500">No specific vibe target</div>
+                  </button>
 
-              {GENRE_PROFILES.map(profile => (
+                  {GENRE_PROFILES.map(profile => (
+                    <button
+                      key={profile.id}
+                      onClick={() => {
+                        onProfileSelect(profile);
+                        setIsOpen(false);
+                      }}
+                      className={`w-full text-left px-4 py-3 min-h-[44px] rounded-xl transition-all border ${
+                        profile.id === selectedProfileId
+                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/25'
+                          : 'hover:bg-white/5 text-slate-200 border-transparent'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg">{profile.icon}</span>
+                        <div>
+                          <div className="text-sm font-medium">{profile.name}</div>
+                          <div className="text-[11px] text-slate-500">{profile.description}</div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="absolute top-full left-0 mt-2 w-72 bg-slate-900 rounded-xl border border-white/10 shadow-2xl z-50 overflow-hidden">
+              <div className="p-2 border-b border-white/5">
+                <p className="text-[10px] text-slate-500 uppercase tracking-wider font-bold px-2">
+                  Select Target Aesthetic
+                </p>
+              </div>
+              <div className="max-h-80 overflow-y-auto p-2 space-y-1">
+                {/* None option */}
                 <button
-                  key={profile.id}
                   onClick={() => {
-                    onProfileSelect(profile);
+                    onProfileSelect(null);
                     setIsOpen(false);
                   }}
-                  className={`w-full text-left px-3 py-2 rounded-lg transition-all ${
-                    profile.id === selectedProfileId
-                      ? 'bg-amber-500/20 text-amber-400'
-                      : 'hover:bg-white/5 text-slate-300'
+                  className={`w-full text-left px-3 py-2 min-h-[44px] rounded-lg transition-all ${
+                    !selectedProfileId
+                      ? 'bg-white/10 text-white'
+                      : 'hover:bg-white/5 text-slate-400'
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <span>{profile.icon}</span>
-                    <div>
-                      <span className="text-sm font-medium">{profile.name}</span>
-                      <p className="text-[10px] text-slate-500">{profile.description}</p>
-                    </div>
-                  </div>
+                  <span className="text-sm">Generic (no specific vibe)</span>
                 </button>
-              ))}
+
+                {GENRE_PROFILES.map(profile => (
+                  <button
+                    key={profile.id}
+                    onClick={() => {
+                      onProfileSelect(profile);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 min-h-[44px] rounded-lg transition-all ${
+                      profile.id === selectedProfileId
+                        ? 'bg-amber-500/20 text-amber-400'
+                        : 'hover:bg-white/5 text-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{profile.icon}</span>
+                      <div>
+                        <span className="text-sm font-medium">{profile.name}</span>
+                        <p className="text-[10px] text-slate-500">{profile.description}</p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
     </div>

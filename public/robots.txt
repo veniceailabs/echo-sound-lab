@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+# Priority crawl paths
+Allow: /sitemap.xml
+Allow: /og-image.jpg
+
+# Block dev/build artifacts
+Disallow: /src/
+Disallow: /__tests__/
+Disallow: /node_modules/
+
+Sitemap: https://echosoundlab.com/sitemap.xml

@@ -12,11 +12,16 @@ interface FloatingControlsProps {
   onTogglePlayback: () => void;
   currentTime: number;
   duration: number;
+  onStepBack?: () => void;
   isAbComparing: boolean;
   onToggleAB: () => void;
   hasAppliedChanges: boolean;
   abLabel: string;
   abDisabled?: boolean;
+  workflowLabel?: string;
+  workflowHint?: string;
+  onToggleWorkflowMode?: () => void;
+  canStepBack?: boolean;
   onSeek?: (time: number) => void;
 }
 
@@ -25,11 +30,16 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
   onTogglePlayback,
   currentTime,
   duration,
+  onStepBack,
   isAbComparing,
   onToggleAB,
   hasAppliedChanges,
   abLabel,
   abDisabled,
+  workflowLabel,
+  workflowHint,
+  onToggleWorkflowMode,
+  canStepBack = true,
   onSeek
 }) => {
   const formatTime = (time: number) => {
@@ -50,10 +60,21 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
     onSeek(newTime);
   };
 
+  const progress = duration > 0 ? Math.min(1, currentTime / duration) : 0;
+
+  const handleProgressClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!onSeek || duration === 0) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    onSeek(Math.max(0, Math.min(duration, ratio * duration)));
+  };
+
   return (
     <>
       <style>{blinkStyle}</style>
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3 bg-slate-900/90 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 fade-in duration-500">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[110] flex flex-col items-center gap-1.5">
+        {/* Transport pill */}
+        <div className="flex items-center gap-3 bg-slate-900/90 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-10 fade-in duration-500">
 
       {/* Time Display */}
       <div className="font-mono text-xs text-slate-400 min-w-[80px] text-center hidden sm:block">
@@ -109,26 +130,73 @@ export const FloatingControls: React.FC<FloatingControlsProps> = ({
         <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
           <path d="M12 1v4l5-5-5-5v4c-4.42 0-8 3.58-8 8h2c0-3.31 2.69-6 6-6zm6 12c0 3.31-2.69 6-6 6s-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8h-2z" transform="translate(0, 6)"/>
           <text x="9" y="16" fontSize="8" fill="currentColor" fontWeight="bold">10</text>
-        </svg>
+          </svg>
       </button>
 
-      {/* A/B Toggle */}
-      <div className="h-8 w-px bg-white/10 mx-2" />
-      
+      {/* Step Back Button */}
       <button
-        onClick={onToggleAB}
-        disabled={abDisabled ?? !hasAppliedChanges}
-        className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
-          (abDisabled ?? !hasAppliedChanges)
-            ? 'text-slate-600 cursor-not-allowed'
-            : isAbComparing
-              ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]'
-              : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border border-orange-500/50'
+        onClick={onStepBack}
+        disabled={!onStepBack || !canStepBack}
+        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-[0.18em] transition-all border ${
+          !onStepBack || !canStepBack
+            ? 'text-slate-600 border-white/5 cursor-not-allowed'
+            : 'bg-slate-800/70 hover:bg-slate-700/70 text-slate-200 border-white/10 hover:text-white'
         }`}
+        title="Step back one workflow change"
       >
-        {abLabel}
+        Step Back
       </button>
-    </div>
+
+      {/* Autonomy Toggle */}
+      {onToggleWorkflowMode && workflowLabel ? (
+        <button
+          onClick={onToggleWorkflowMode}
+          className="px-3 py-1.5 rounded-full border border-orange-400/25 bg-orange-500/10 text-orange-200 hover:bg-orange-500/15 hover:text-orange-100 transition-all"
+          title={workflowHint || 'Switch between autonomous and manual control'}
+        >
+          <span className="block text-[8px] uppercase tracking-[0.22em] text-orange-200/70">Mode</span>
+          <span className="block text-[10px] font-bold uppercase tracking-[0.16em] leading-tight">
+            {workflowLabel}
+          </span>
+        </button>
+      ) : null}
+
+        {/* A/B Toggle */}
+        <div className="h-8 w-px bg-white/10 mx-2" />
+
+        <button
+          onClick={onToggleAB}
+          disabled={abDisabled ?? !hasAppliedChanges}
+          className={`min-w-[128px] px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all flex flex-col items-center gap-0.5 ${
+            (abDisabled ?? !hasAppliedChanges)
+              ? 'text-slate-600 cursor-not-allowed'
+              : isAbComparing
+                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-[0_0_10px_rgba(6,182,212,0.3)]'
+                : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 border border-orange-500/50'
+          }`}
+        >
+          <span className="text-[8px] uppercase tracking-[0.24em] text-current/70">A/B</span>
+          <span className="text-[10px] leading-tight">{abLabel}</span>
+        </button>
+        </div>
+
+        {/* Progress bar below pill */}
+        <div
+          className="w-full max-w-[280px] px-3"
+          onClick={handleProgressClick}
+          style={{ cursor: onSeek && duration > 0 ? 'pointer' : 'default' }}
+        >
+          <div className="h-0.5 w-full bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-100"
+              style={{
+                width: `${progress * 100}%`,
+                background: progress > 0.85 ? 'rgb(6,182,212)' : 'rgba(255,255,255,0.35)',
+              }}
+            />
+          </div>
+        </div>
+      </div>
     </>
   );
 };

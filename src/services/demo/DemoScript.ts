@@ -65,6 +65,7 @@ export class DemoScript {
    */
   static fromPrompt(prompt: string): DemoScript {
     const config: DemoScriptConfig = {};
+    const isKillshotDemo = /killshot|shark tank|one-pass|undeniable/i.test(prompt);
 
     // Parse genre
     if (prompt.match(/hip[\s-]?hop|rap/i)) config.genre = 'hip-hop';
@@ -95,6 +96,15 @@ export class DemoScript {
     }
     if (prompt.match(/video|eve/i)) {
       config.includeVideo = true;
+    }
+    if (isKillshotDemo) {
+      config.genre = config.genre || 'hip-hop';
+      config.trackType = config.trackType || 'vocal';
+      config.features = ['eq', 'compression'];
+      config.duration = 'short';
+      config.refinement = false;
+      config.includeMultiStem = false;
+      config.includeVideo = false;
     }
 
     // Parse duration
@@ -146,6 +156,7 @@ export class DemoScript {
   }
 
   private generateUploadPhase(): void {
+    const shortDemo = this.config.duration === 'short';
     this.actions.push({
       type: 'waitFor',
       selector: '#upload-zone',
@@ -166,12 +177,13 @@ export class DemoScript {
 
     this.actions.push({
       type: 'wait',
-      duration: 2000,
+      duration: shortDemo ? 1200 : 2000,
       description: 'Wait for file to load',
     });
   }
 
   private generateAnalysisPhase(): void {
+    const shortDemo = this.config.duration === 'short';
     this.actions.push({
       type: 'waitFor',
       selector: '.sonic-analysis-panel',
@@ -186,12 +198,13 @@ export class DemoScript {
 
     this.actions.push({
       type: 'wait',
-      duration: 1000,
+      duration: shortDemo ? 600 : 1000,
       description: 'Let analysis be visible',
     });
   }
 
   private generateSuggestionPhase(): void {
+    const shortDemo = this.config.duration === 'short';
     this.actions.push({
       type: 'scrollTo',
       selector: '.ai-recommendations-panel',
@@ -217,7 +230,7 @@ export class DemoScript {
 
       this.actions.push({
         type: 'wait',
-        duration: 300,
+        duration: shortDemo ? 180 : 300,
         description: `Highlight ${feature} suggestion`,
       });
 
@@ -229,26 +242,29 @@ export class DemoScript {
 
       this.actions.push({
         type: 'wait',
-        duration: 400,
+        duration: shortDemo ? 220 : 400,
         description: 'Wait after selection',
       });
     }
 
-    // Intentionally skip one suggestion to show user agency
-    this.actions.push({
-      type: 'moveToElement',
-      selector: '[data-suggestion-type="reverb"]',
-      description: 'Move to reverb suggestion (will skip)',
-    });
+    if (!shortDemo) {
+      // Intentionally skip one suggestion to show user agency
+      this.actions.push({
+        type: 'moveToElement',
+        selector: '[data-suggestion-type="reverb"]',
+        description: 'Move to reverb suggestion (will skip)',
+      });
 
-    this.actions.push({
-      type: 'wait',
-      duration: 300,
-      description: 'Show that user can skip suggestions',
-    });
+      this.actions.push({
+        type: 'wait',
+        duration: 300,
+        description: 'Show that user can skip suggestions',
+      });
+    }
   }
 
   private generateProcessingPhase(): void {
+    const shortDemo = this.config.duration === 'short';
     this.actions.push({
       type: 'scrollTo',
       selector: '#apply-fixes-button',
@@ -263,7 +279,7 @@ export class DemoScript {
 
     this.actions.push({
       type: 'wait',
-      duration: 3000,
+      duration: shortDemo ? 1600 : 3000,
       description: 'Wait for processing to complete',
     });
 
@@ -281,12 +297,16 @@ export class DemoScript {
 
     this.actions.push({
       type: 'wait',
-      duration: 1000,
+      duration: shortDemo ? 600 : 1000,
       description: 'Let verdict be visible',
     });
   }
 
   private generateRefinementPhase(): void {
+    if (this.config.duration === 'short' || this.config.refinement === false) {
+      return;
+    }
+
     this.actions.push({
       type: 'click',
       selector: '[data-action="open-plugin-adjustment"]',

@@ -1,0 +1,268 @@
+{
+  "status": "ok",
+  "summary": {
+    "total_capabilities": 32,
+    "implemented_weighted": 21.7,
+    "implementation_progress_percent": 67.8,
+    "market_ready": false,
+    "release_stage": "pre_market"
+  },
+  "capabilities": [
+    {
+      "id": "proof_layer",
+      "label": "Before/after proof layer",
+      "category": "proof",
+      "status": "api_ready",
+      "proof": "Proof report endpoint generates user-facing deltas.",
+      "next_gate": "Attach PDF/visual export."
+    },
+    {
+      "id": "ab_playback",
+      "label": "Level-matched A/B playback",
+      "category": "proof",
+      "status": "frontend_existing",
+      "proof": "Frontend has A/B controls and comparison panels.",
+      "next_gate": "Guarantee clickless switching everywhere."
+    },
+    {
+      "id": "premium_upload",
+      "label": "Premium upload flow",
+      "category": "conversion",
+      "status": "frontend_existing",
+      "proof": "Upload card and copy exist in web app.",
+      "next_gate": "Add demo audio path and upload time estimate."
+    },
+    {
+      "id": "single_product_mode",
+      "label": "One obvious product path",
+      "category": "conversion",
+      "status": "partial",
+      "proof": "Single Track mode is default.",
+      "next_gate": "Hide secondary surfaces until needed."
+    },
+    {
+      "id": "buyer_presets",
+      "label": "Buyer-facing sound targets",
+      "category": "conversion",
+      "status": "partial",
+      "proof": "Engineer styles exist.",
+      "next_gate": "Map all internal profiles to emotional outcome labels."
+    },
+    {
+      "id": "engine_status",
+      "label": "Online/offline engine status",
+      "category": "reliability",
+      "status": "api_ready",
+      "proof": "Health endpoints expose core availability.",
+      "next_gate": "Add queue ETA and device routing."
+    },
+    {
+      "id": "client_intake",
+      "label": "Fiverr client intake",
+      "category": "business",
+      "status": "partial",
+      "proof": "Admin queue and isolated jobs exist.",
+      "next_gate": "Add public intake form and client confirmation page."
+    },
+    {
+      "id": "revisions",
+      "label": "Revision management",
+      "category": "business",
+      "status": "api_ready",
+      "proof": "Revision endpoints persist client change requests.",
+      "next_gate": "Wire client approval UI."
+    },
+    {
+      "id": "premium_export_zip",
+      "label": "Premium export package",
+      "category": "business",
+      "status": "partial",
+      "proof": "Distro packager creates ZIP with audio and notes.",
+      "next_gate": "Add PDF report and changelog."
+    },
+    {
+      "id": "admin_actions",
+      "label": "Admin workflow actions",
+      "category": "business",
+      "status": "partial",
+      "proof": "Admin queue dashboard exists.",
+      "next_gate": "Add rerun/package/deliver buttons."
+    },
+    {
+      "id": "production_auth",
+      "label": "Production-grade admin protection",
+      "category": "security",
+      "status": "partial",
+      "proof": "Admin token check is supported server-side.",
+      "next_gate": "Move to full owner auth and RBAC."
+    },
+    {
+      "id": "upload_security",
+      "label": "Upload validation hardening",
+      "category": "security",
+      "status": "api_ready",
+      "proof": "ffprobe validation endpoint rejects unsafe files.",
+      "next_gate": "Apply validation to every upload path."
+    },
+    {
+      "id": "render_gates",
+      "label": "DSP confidence gates",
+      "category": "safety",
+      "status": "partial",
+      "proof": "ActionAuthority bounds unsafe DSP moves.",
+      "next_gate": "Add post-render harshness/pumping gates."
+    },
+    {
+      "id": "vocal_intelligence",
+      "label": "Vocal intelligence moat",
+      "category": "audio",
+      "status": "partial",
+      "proof": "Vocal sidechain and vocal bus processing exist.",
+      "next_gate": "Add vocal pocket score to proof report."
+    },
+    {
+      "id": "reference_matching_ui",
+      "label": "Reference matching visible to users",
+      "category": "proof",
+      "status": "partial",
+      "proof": "Reference matcher exists in backend/frontend.",
+      "next_gate": "Expose target match breakdown."
+    },
+    {
+      "id": "benchmark_matrix",
+      "label": "Real audio benchmark matrix",
+      "category": "qa",
+      "status": "partial",
+      "proof": "Benchmark scripts exist.",
+      "next_gate": "Run multiple authentic genre fixtures."
+    },
+    {
+      "id": "demo_assets",
+      "label": "Public demo assets",
+      "category": "conversion",
+      "status": "partial",
+      "proof": "Vercel frontend is live.",
+      "next_gate": "Add curated before/after player assets."
+    },
+    {
+      "id": "killer_cta",
+      "label": "One killer CTA",
+      "category": "conversion",
+      "status": "partial",
+      "proof": "Upload is the primary card.",
+      "next_gate": "Remove visual competition around first action."
+    },
+    {
+      "id": "mode_clarity",
+      "label": "Friendly/advanced mode clarity",
+      "category": "ux",
+      "status": "partial",
+      "proof": "Friendly mode exists.",
+      "next_gate": "Rename to Guide Me / Full Control."
+    },
+    {
+      "id": "timeline_editing",
+      "label": "Timeline and editing depth",
+      "category": "daw",
+      "status": "partial",
+      "proof": "Timeline shell and AlbumStudio exist.",
+      "next_gate": "Hard QA region edit reliability."
+    },
+    {
+      "id": "plugin_ecosystem",
+      "label": "Plugin ecosystem",
+      "category": "daw",
+      "status": "partial",
+      "proof": "Plugin rack/WAM surfaces exist.",
+      "next_gate": "Add crash isolation and preset chain saves."
+    },
+    {
+      "id": "hardware_io",
+      "label": "Hardware I/O confidence",
+      "category": "daw",
+      "status": "partial",
+      "proof": "Audio device and hardware panels exist.",
+      "next_gate": "Add calibration wizard."
+    },
+    {
+      "id": "session_trust",
+      "label": "Full session trust",
+      "category": "reliability",
+      "status": "api_ready",
+      "proof": "SQLite WAL ghost save and browser session storage exist.",
+      "next_gate": "Version every persisted schema."
+    },
+    {
+      "id": "mobile_approval",
+      "label": "Mobile approval mode",
+      "category": "business",
+      "status": "partial",
+      "proof": "Responsive app exists.",
+      "next_gate": "Build compact approve/revision/download flow."
+    },
+    {
+      "id": "pricing_clarity",
+      "label": "Pricing clarity",
+      "category": "business",
+      "status": "partial",
+      "proof": "Stripe hooks and pricing pages exist.",
+      "next_gate": "Finalize public tiers."
+    },
+    {
+      "id": "conservative_trust_copy",
+      "label": "Conservative trust copy",
+      "category": "trust",
+      "status": "partial",
+      "proof": "SEO and landing copy exist.",
+      "next_gate": "Audit all overclaims."
+    },
+    {
+      "id": "premium_errors",
+      "label": "Premium error handling",
+      "category": "reliability",
+      "status": "partial",
+      "proof": "API raises structured HTTP errors.",
+      "next_gate": "Map errors to user-facing recovery copy."
+    },
+    {
+      "id": "queue_feedback",
+      "label": "Public queue feedback",
+      "category": "reliability",
+      "status": "api_ready",
+      "proof": "Admin queue and job status endpoints exist.",
+      "next_gate": "Expose user queue ETA."
+    },
+    {
+      "id": "owner_priority",
+      "label": "Owner always works",
+      "category": "reliability",
+      "status": "partial",
+      "proof": "Owner mode exists in worker payloads.",
+      "next_gate": "Add owner-priority scheduler."
+    },
+    {
+      "id": "conversion_analytics",
+      "label": "Conversion analytics",
+      "category": "growth",
+      "status": "api_ready",
+      "proof": "Analytics endpoint records funnel events.",
+      "next_gate": "Add dashboard charts."
+    },
+    {
+      "id": "app_polish",
+      "label": "App-of-the-year polish",
+      "category": "ux",
+      "status": "partial",
+      "proof": "Live UI improvements deployed.",
+      "next_gate": "Run visual regression and console cleanup."
+    },
+    {
+      "id": "product_os_roadmap",
+      "label": "Unified Product OS roadmap",
+      "category": "strategy",
+      "status": "api_ready",
+      "proof": "This registry exposes the full 32-feature system.",
+      "next_gate": "Continuously enforce gates in CI."
+    }
+  ]
+}

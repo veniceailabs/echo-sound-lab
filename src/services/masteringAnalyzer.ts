@@ -339,10 +339,22 @@ export function analyzeMastering(metrics: AudioMetrics): EchoReport {
     issues.push('Mastering compression recommended for cohesion');
   }
 
-  // If the mix is already release-ready, do not recommend processing.
-  if (score >= 90) {
-    actions.length = 0;
-    issues.length = 0;
+  // If the mix is already release-ready, provide a subtle polish instead of doing nothing.
+  if (actions.length === 0 || score >= 90) {
+    if (actions.length === 0) {
+      actions.push({
+        id: `polish-exciter-${Date.now()}`,
+        label: 'Analog Polish',
+        description: 'Track is already in great shape. Adding subtle harmonic excitement and width.',
+        type: 'Exciter',
+        refinementType: 'parameters',
+        params: [
+          { name: 'drive', value: 2.0, unit: '%', min: 0, max: 10, step: 0.1, type: 'number', enabledByDefault: true },
+          { name: 'width', value: 1.1, unit: 'x', min: 1, max: 2, step: 0.1, type: 'number', enabledByDefault: true }
+        ]
+      });
+      issues.push('Track is release-ready. Applying subtle analog polish.');
+    }
   }
 
   const lufs = metrics.lufs?.integrated || (metrics.rms + 3);

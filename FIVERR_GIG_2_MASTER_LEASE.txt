@@ -1,0 +1,50 @@
+═══════════════════════════════════════════════════════════════════════
+GIG 2: MASTER LEASE
+═══════════════════════════════════════════════════════════════════════
+
+TITLE:
+I will build a real estate financial analysis dashboard in React
+
+CATEGORY:
+Programming & Tech > Web Programming > Web Applications
+
+SEARCH TAGS:
+Real Estate App, FinTech, Dashboard, React Calculator, PropTech
+
+═══════════════════════════════════════════════════════════════════════
+DESCRIPTION (Copy everything below):
+═══════════════════════════════════════════════════════════════════════
+
+REAL ESTATE IS A NUMBERS GAME. WIN IT.
+
+Most real estate apps are just pretty pictures. You need a financial weapon. I build Algorithmic Dashboards that process complex deal flow in real-time.
+
+I am the creator of MASTER LEASE, a deal evaluation engine that calculates spread, break-even occupancy, and Net Operating Income (NOI) instantly in the browser.
+
+WHAT YOU GET:
+
+📊 Live Deal Analyzer: Reactive calculations (change one variable, everything updates).
+💾 Local Persistence: Saves deal history to the browser (IndexedDB). No database bills.
+🏠 Comp Logic: Built-in averaging for room/home comparables.
+📱 Responsive Design: Works perfectly on mobile for field agents.
+🔒 Data Sovereignty: Financial data never leaves the device.
+
+PERFECT FOR:
+
+PropTech MVPs.
+Wholesalers & Investors.
+Co-living Operators.
+
+THE VENICE GUARANTEE:
+
+Precision matters. My algorithms are unit-tested and financially accurate. Don't trust your deal analysis to a buggy script.
+
+PRICING TIERS:
+
+BASIC ($295): The Algo Audit. I review your spreadsheet logic and convert it into a TypeScript algorithm ready for coding.
+STANDARD ($1,500): The Dashboard. I deploy the Master Lease engine branded for your agency.
+PREMIUM ($3,800): The Full Platform. I build a custom PropTech app with your specific financial models, export to PDF, and CRM integration.
+
+═══════════════════════════════════════════════════════════════════════
+DELIVERY TIME: 3-5 days for STANDARD tier, 7-10 days for PREMIUM
+═══════════════════════════════════════════════════════════════════════

@@ -9,7 +9,6 @@
  * Reversible actions (PARAMETER_ADJUSTMENT) usually pass through.
  */
 
-import { AudioBuffer } from 'web-audio-api';
 import { ProcessingAction, ProcessingConfig, AudioMetrics } from '../types';
 import { audioProcessingPipeline, ProcessingResult } from './audioProcessingPipeline';
 import ESLCapabilityAdapter from './eslCapabilityAdapter';

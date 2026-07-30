@@ -1,0 +1,69 @@
+{
+  "meta": {
+    "id": "paper-perfector-test",
+    "title": "Paper Perfector - TEST (10s)",
+    "duration_target": 10,
+    "style": "professional",
+    "useHybridFeatures": true
+  },
+  "voice": {
+    "provider": "auto",
+    "persona": "professional"
+  },
+  "intro": {
+    "enabled": false,
+    "prompt": "Clean white paper with elegant typography, AI analyzing documents, blue accents, professional aesthetic",
+    "style": "cinematic",
+    "duration": 3,
+    "music": true,
+    "effects": "all",
+    "branding": {
+      "textOverlay": "Paper Perfector",
+      "position": "bottom-right",
+      "fontSize": 48
+    }
+  },
+  "scenes": [
+    {
+      "id": 1,
+      "time": "0:00",
+      "action": "WAIT",
+      "voiceover": "Paper Perfector test. AI document analysis.",
+      "duration": 2
+    },
+    {
+      "id": 2,
+      "time": "0:02",
+      "action": "CLICK",
+      "targetSelector": "[data-testid='file-upload'], #upload-button, .upload-area, [role='button']",
+      "voiceover": "Upload your document.",
+      "duration": 2,
+      "visualEffects": {
+        "highlightSelector": "[data-testid='file-upload'], #upload-button, .upload-area"
+      }
+    },
+    {
+      "id": 3,
+      "time": "0:04",
+      "action": "WAIT",
+      "voiceover": "Analysis in progress.",
+      "duration": 2
+    },
+    {
+      "id": 4,
+      "time": "0:06",
+      "action": "SCROLL",
+      "targetSelector": "[data-testid='results'], .results-panel, [data-testid='analysis'], .analysis-results",
+      "voiceover": "View results instantly.",
+      "duration": 2
+    }
+  ],
+  "postProduction": {
+    "fadeOutDuration": 1,
+    "credits": {
+      "enabled": false,
+      "text": "Paper Perfector",
+      "duration": 1
+    }
+  }
+}
