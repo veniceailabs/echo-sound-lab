@@ -1,0 +1,35 @@
+{
+  "name": "echo-sound-lab-core",
+  "version": "1.0.0",
+  "description": "Echo Sound Lab - Shared C++ mastering engine for Node.js, WASM, and VST/AU plugins",
+  "main": "native/echo-sound-lab.node",
+  "scripts": {
+    "build": "node-gyp configure && node-gyp build",
+    "build:debug": "node-gyp configure --debug && node-gyp build",
+    "clean": "node-gyp clean",
+    "test": "node tests/smoke.js && node tests/accuracy.js && node tests/crossover.js && node tests/stereo.js && node tests/vocal.js",
+    "build:wasm": "bash build/emscripten-build.sh",
+    "benchmark": "npm run build && node benchmark/run-benchmarks.js",
+    "master": "node master.js",
+    "vocal": "node vocal.js"
+  },
+  "keywords": [
+    "audio",
+    "mastering",
+    "dsp",
+    "vst",
+    "au",
+    "wasm",
+    "electron"
+  ],
+  "author": "Echo Sound Lab Team",
+  "license": "MIT",
+  "devDependencies": {
+    "node-addon-api": "^8.9.0",
+    "node-gyp": "^13.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "gypfile": true
+}
